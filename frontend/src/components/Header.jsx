@@ -13,7 +13,10 @@ function Header() {
     // Si la ruta actual es /login, no renderizamos el header
     if (location.pathname === '/login') {
         return null;
+    }else if(location.pathname === '/signin'){
+        return null;
     }
+
 
     return (
         <header style={bgGradient} className="flex justify-between items-center px-6 py-4 backdrop-blur-md text-white fixed top-0 left-0 right-0 z-50 border-b border-white/10">
@@ -28,7 +31,6 @@ function Header() {
                 </h1>
             </Link>
 
-            {/* Tu componente Navbar con la lógica de navigate que pasaste */}
             <Navbar />
         </header>
     );
