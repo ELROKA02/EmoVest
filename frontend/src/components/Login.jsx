@@ -12,7 +12,7 @@ const Login = () => {
                 <img
                     src={logo}
                     alt="EmoVest Logo"
-                    className="w-24 h-auto object-contain"
+                    className="w-40 h-auto object-contain"
                 />
             </div>
 
@@ -28,7 +28,7 @@ const Login = () => {
                 <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
                     <input
                         type="email"
-                        placeholder="Correo electrónico"
+                        placeholder="Correo electrónico / Nickname"
                         className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
                         required
                     />

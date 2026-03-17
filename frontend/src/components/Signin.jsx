@@ -5,14 +5,14 @@ import { Link } from 'react-router-dom';
 const Signin = () => {
     return (
 
-        <div className="fixed inset-0 w-full h-full flex flex-col justify-center items-center bg-[#050a10] overflow-hidden p-3 sm:p-4">
+        <div className="fixed inset-0 w-full h-full flex flex-col justify-center items-center bg-[#050a10] p-3 sm:p-4 overflow-y-auto">
             
             {/* Logo */}
             <div className="mb-4 flex justify-center">
                 <img
                     src={logo}
                     alt="EmoVest Logo"
-                    className="w-24 h-auto object-contain"
+                    className="w-40 h-auto object-contain"
                 />
             </div>
 
@@ -29,6 +29,12 @@ const Signin = () => {
                     <input
                         type="text"
                         placeholder="Nombre completo"
+                        className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
+                        required
+                    />
+                    <input
+                        type="text"
+                        placeholder="Nickname"
                         className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
                         required
                     />

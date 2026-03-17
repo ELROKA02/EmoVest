@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [hoveredButton, setHoveredButton] = useState(null);
   const navigate = useNavigate();
 
   const handleButtonClick = () => {
@@ -37,16 +38,32 @@ function Navbar() {
         ))}
         <li className="ml-4 lg:ml-6">
           <button 
-            onClick={handleButtonClick} 
-            className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider"
+            onClick={handleButtonClick}
+            onMouseEnter={() => setHoveredButton('login')}
+            onMouseLeave={() => setHoveredButton(null)}
+            className={`bg-gradient-to-r text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider ${
+              hoveredButton === 'login' 
+                ? 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800' 
+                : hoveredButton === 'register'
+                ? 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800'
+                : 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
+            }`}
           >
             Iniciar Sesión
           </button>
         </li>
         <li>
           <button 
-            onClick={handleRegisterClick} 
-            className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold hover:from-green-700 hover:to-green-800 transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider"
+            onClick={handleRegisterClick}
+            onMouseEnter={() => setHoveredButton('register')}
+            onMouseLeave={() => setHoveredButton(null)}
+            className={`bg-gradient-to-r text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider ${
+              hoveredButton === 'register' 
+                ? 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800' 
+                : hoveredButton === 'login'
+                ? 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
+                : 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800'
+            }`}
           >
             Registrarse
           </button>
