@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import logo from '../assets/logoEmoVest.png';
+import logo2 from '../assets/logo-blanco.png';
 
 function Header() {
 

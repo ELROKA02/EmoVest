@@ -22,7 +22,7 @@ const Signin = () => {
                 </h1>
 
                 <p className="text-gray-400 text-xs sm:text-sm mb-6 text-center px-4">
-                    Regístrate en **EmoVest** para comenzar a invertir con inteligencia emocional.
+                    Regístrate en EmoVest para comenzar a invertir con inteligencia emocional.
                 </p>
 
                 <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
@@ -56,6 +56,17 @@ const Signin = () => {
                         className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
                         required
                     />
+
+                    <label className="flex items-start space-x-3 cursor-pointer group">
+                        <input 
+                            type="checkbox" 
+                            className="w-4 h-4 bg-[#0d1117]/90 border border-white/5 rounded text-blue-600 focus:ring-blue-500 focus:ring-2 focus:ring-offset-0 mt-0.5 flex-shrink-0"
+                            required
+                        />
+                        <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
+                            Acepto los <span className="text-blue-400 hover:text-blue-300 underline">términos y condiciones</span> y la <span className="text-blue-400 hover:text-blue-300 underline">política de privacidad</span>
+                        </span>
+                    </label>
 
                     <button
                         type="submit"

@@ -17,7 +17,7 @@ function Navbar() {
   };
 
   const links = [
-    { name: 'Que somos', href: '#que-somos' },
+    { name: 'Quiénes somos', href: '#que-somos' },
     { name: 'Suscripciones', href: '#suscripciones' },
     { name: 'Sobre nosotros', href: '#sobre-nosotros' },
   ];
@@ -30,7 +30,7 @@ function Navbar() {
           <li key={link.name}>
             <a 
               href={link.href} 
-              className="text-[16px] font-medium text-gray-300 hover:text-white transition-all duration-300 hover:scale-105 px-3 py-2 rounded-lg"
+              className="bg-gradient-to-r from-transparent to-transparent text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider hover:from-purple-600 hover:to-purple-700 border border-purple-600/30 hover:border-purple-500"
             >
               {link.name}
             </a>

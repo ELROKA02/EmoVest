@@ -6,7 +6,7 @@ const Hero = () => {
     <div className="min-h-screen bg-gradient-to-br from-[#050a10] via-[#1a364d] to-[#101422]">
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-24 sm:pt-68">
-        <div className="container mx-auto px-6 sm:px-8 lg:px-12 py-20">
+        <div className="container mx-auto px-6 pt-35 pb-70 sm:px-8 lg:px-12 py-20 lg:pt-25">
           <div className="text-center">
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 tracking-tight">
               Invierte con
@@ -24,7 +24,7 @@ const Hero = () => {
               </Link>
               <Link 
                 to="#sobre-nosotros" 
-                className="px-8 py-4 border-2 border-blue-600 text-blue-400 hover:bg-blue-600 hover:text-white font-semibold rounded-full transition-all duration-300"
+                className="px-8 py-4 border-2 border-purple-600/30 text-blue-400 hover:bg-purple-600 hover:text-white font-semibold rounded-full transition-all duration-300"
               >
                 Saber Más
               </Link>
@@ -35,7 +35,7 @@ const Hero = () => {
       </section>
 
       {/* Quienes Somos Section */}
-      <section id="sobre-nosotros" className="py-20 pl-16 pr-16">
+      <section className="py-20 pl-16 pr-16">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
@@ -184,7 +184,7 @@ const Hero = () => {
             Integración personalizada
           </li>
         </ul>
-        <button className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-all duration-300 mt-auto">
+        <button id="sobre-nosotros" className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-all duration-300 mt-auto">
           Contactar
         </button>
       </div>
