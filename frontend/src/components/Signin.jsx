@@ -68,6 +68,36 @@ const Signin = () => {
                         </span>
                     </label>
 
+                    <div className="space-y-3">
+                        <label className="text-[16px] text-gray-400 font-medium">Tipo de cuenta</label>
+                        <div className="space-y-2 pt-4">
+                            <label className="flex items-center space-x-3 cursor-pointer group">
+                                <input 
+                                    type="radio" 
+                                    name="accountType" 
+                                    value="free"
+                                    className="w-4 h-4 bg-[#0d1117]/90 border border-white/5 rounded text-blue-600 focus:ring-blue-500 focus:ring-2 focus:ring-offset-0 flex-shrink-0"
+                                    defaultChecked
+                                />
+                                <span className="text-[14px] text-gray-400 group-hover:text-white transition-colors">
+                                    <span className="text-blue-400 font-semibold">Gratis</span> - Plan básico con funciones limitadas
+                                </span>
+                            </label>
+                            <label className="flex items-center space-x-3 cursor-pointer group">
+                                <input 
+                                    type="radio" 
+                                    name="accountType" 
+                                    value="paid"
+                                    className="w-4 h-4 bg-[#0d1117]/90 border border-white/5 rounded text-blue-600 focus:ring-blue-500 focus:ring-2 focus:ring-offset-0 flex-shrink-0"
+                                    checked
+                                />
+                                <span className="text-[14px] text-gray-400 group-hover:text-white transition-colors">
+                                    <span className="text-green-400 font-semibold">Premium</span> - Acceso completo a todas las funciones
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
                     <button
                         type="submit"
                         className="w-full bg-[#2563eb] hover:bg-green-600 text-white font-bold py-3 mt-4 rounded-xl active:scale-[0.98] transition-all text-[10px] sm:text-[11px] md:text-[12px] uppercase tracking-wider shadow-lg shadow-blue-900/20"

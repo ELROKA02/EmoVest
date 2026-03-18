@@ -204,7 +204,7 @@ const Hero = () => {
                 Fundada en 2026, EmoVest nació de una simple pero poderosa idea: las decisiones financieras no deben basarse únicamente en datos fríos y análisis técnicos. Las emociones juegan un papel crucial en cómo invertimos, y entenderlas es la clave del éxito.
               </p>
               <p className="text-gray-300 mb-6">
-                Nuestra plataforma combina algoritmos de inteligencia artificial avanzada con principios de psicología financiera para proporcionar ayuda a nuestros usuarios a tomar mejores decisiones de inversión.
+                Nuestra plataforma combina algoritmos de inteligencia artificial para proporcionar ayuda a nuestros usuarios a tomar mejores decisiones de inversión.
               </p>
               <div className="flex flex-wrap gap-4">
                 <div className="text-center">
