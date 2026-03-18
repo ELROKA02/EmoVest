@@ -8,7 +8,7 @@ const Signin = () => {
         <div className="fixed inset-0 w-full h-full flex flex-col justify-center items-center bg-[#050a10] p-3 sm:p-4 overflow-y-auto">
             
             {/* Logo */}
-            <div className="mb-4 flex justify-center">
+            <div className="mb-4 flex justify-center pt-60">
                 <img
                     src={logo}
                     alt="EmoVest Logo"
@@ -17,15 +17,15 @@ const Signin = () => {
             </div>
 
             <div className="w-full max-w-[350px] sm:max-w-[400px] bg-white/5 backdrop-blur-xl rounded-[32px] p-4 sm:p-6 shadow-2xl border border-white/10 animate-in fade-in zoom-in duration-500">
-                <h1 className="text-xl sm:text-2xl font-bold text-white mb-1 text-center tracking-tight pb-2">
+                <h1 className="text-xl sm:text-2xl font-bold text-white mb-4 text-center tracking-tight">
                     Crear Cuenta
                 </h1>
 
-                <p className="text-gray-400 text-xs sm:text-sm mb-5 text-center px-4">
+                <p className="text-gray-400 text-xs sm:text-sm mb-6 text-center px-4">
                     Regístrate en **EmoVest** para comenzar a invertir con inteligencia emocional.
                 </p>
 
-                <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
+                <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
                     <input
                         type="text"
                         placeholder="Nombre completo"
@@ -34,7 +34,7 @@ const Signin = () => {
                     />
                     <input
                         type="text"
-                        placeholder="Nickname"
+                        placeholder="Username"
                         className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
                         required
                     />
@@ -53,31 +53,31 @@ const Signin = () => {
                     <input
                         type="password"
                         placeholder="Confirmar contraseña"
-                        className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 md:p-4 rounded-xl outline-none text-sm text-white"
+                        className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
                         required
                     />
 
                     <button
                         type="submit"
-                        className="w-full bg-[#2563eb] hover:bg-green-600 text-white font-bold py-3 mt-2 rounded-xl active:scale-[0.98] transition-all text-[10px] sm:text-[11px] md:text-[12px] uppercase tracking-wider shadow-lg shadow-blue-900/20"
+                        className="w-full bg-[#2563eb] hover:bg-green-600 text-white font-bold py-3 mt-4 rounded-xl active:scale-[0.98] transition-all text-[10px] sm:text-[11px] md:text-[12px] uppercase tracking-wider shadow-lg shadow-blue-900/20"
                     >
                         Registrarse
                     </button>
                 </form>
 
-                <div className="mt-4 sm:mt-5 md:mt-6 text-center">
+                <div className="mt-6 text-center">
                     <p className="text-xs sm:text-sm md:text-base text-gray-400">
                         ¿Ya tienes cuenta? <Link to="/login" className="text-white font-bold hover:underline">Inicia Sesión</Link>
                     </p>
                 </div>
 
-                <div className="mt-5 pt-4 border-t border-white/5 text-center">
+                <div className="mt-6 pt-4 border-t border-white/5 text-center">
                     <p className="text-[10px] sm:text-[12px] text-gray-500 uppercase mb-1">EmoVest Ecosystem</p>
                     <p className="text-[10px] sm:text-[12px] text-gray-600">Al registrarte, aceptas nuestras Condiciones y Privacidad.</p>
                 </div>
             </div>
             
-            <Link to="/" className="mt-4 text-gray-500 text-[12px] sm:text-[14px] hover:text-white transition-colors">
+            <Link to="/" className="mt-4 text-gray-500 text-[12px] sm:text-[14px] hover:text-white transition-colors pb-10">
                 — VOLVER AL INICIO —
             </Link>
         </div>

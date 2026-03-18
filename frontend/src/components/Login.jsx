@@ -22,13 +22,13 @@ const Login = () => {
                 </h1>
 
                 <p className="text-gray-400 text-xs sm:text-sm mb-5 text-center px-4">
-                    Ingresa tus credenciales para acceder a **EmoVest**.
+                    Ingresa tus credenciales para acceder a EmoVest
                 </p>
 
                 <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
                     <input
                         type="email"
-                        placeholder="Correo electrónico / Nickname"
+                        placeholder="Correo electrónico / Username"
                         className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
                         required
                     />
@@ -39,7 +39,16 @@ const Login = () => {
                             className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
                             required
                         />
-                        <div className="text-right">
+                        <div className="flex items-center justify-between">
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="w-4 h-4 bg-[#0d1117]/90 border border-white/5 rounded text-blue-600 focus:ring-blue-500 focus:ring-2 focus:ring-offset-0"
+                                />
+                                <span className="text-xs text-gray-400 hover:text-white transition-colors">
+                                    Recordar usuario
+                                </span>
+                            </label>
                             <a href="#" className="text-[10px] sm:text-[12px] text-blue-400/80 hover:text-blue-300 transition-colors">
                                 ¿Olvidaste tu contraseña?
                             </a>

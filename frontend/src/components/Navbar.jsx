@@ -17,9 +17,9 @@ function Navbar() {
   };
 
   const links = [
-    { name: 'Sobre Nosotros', href: '#sobre-nosotros' },
-    { name: 'Servicios', href: '#servicios' },
-    { name: 'Ubicación', href: '#ubicacion' },
+    { name: 'Que somos', href: '#que-somos' },
+    { name: 'Suscripciones', href: '#suscripciones' },
+    { name: 'Sobre nosotros', href: '#sobre-nosotros' },
   ];
 
   return (
@@ -30,7 +30,7 @@ function Navbar() {
           <li key={link.name}>
             <a 
               href={link.href} 
-              className="text-sm font-medium text-gray-300 hover:text-white transition-all duration-300 hover:scale-105 px-3 py-2 rounded-lg"
+              className="text-[16px] font-medium text-gray-300 hover:text-white transition-all duration-300 hover:scale-105 px-3 py-2 rounded-lg"
             >
               {link.name}
             </a>
