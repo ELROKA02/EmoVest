@@ -115,7 +115,7 @@ const Hero = () => {
           </li>
         </ul>
         <button 
-          onClick={() => window.location.href = '/login'}
+          onClick={() => window.location.href = '/signin'}
           className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 mt-auto cursor-pointer"
         >
           Empezar
@@ -152,7 +152,7 @@ const Hero = () => {
           </li>
         </ul>
         <button 
-          onClick={() => window.location.href = '/login'}
+          onClick={() => window.location.href = '/signin'}
           className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-all duration-300 mt-auto cursor-pointer"
         >
           Empezar
@@ -161,15 +161,15 @@ const Hero = () => {
 
       {/* Plan Enterprise */}
       <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 hover:border-purple-500/50 transition-all duration-300 flex flex-col">
-        <h3 className="text-2xl font-bold text-white mb-2">Enterprise</h3>
-        <p className="text-gray-400 mb-6">Para instituciones</p>
-        <div className="text-4xl font-bold text-white mb-6">
-          99€<span className="text-lg text-gray-400 font-normal">/mes</span>
+        <h3 className="text-2xl font-bold text-white mb-2">Partners / Academia</h3>
+        <p className="text-gray-400 mb-6">Para instituciones, escuelas o Academias</p>
+        <div className="text-2xl font-bold text-white mb-6">
+          Cupos por volúmenes<span className="text-lg text-gray-400 font-normal"></span>
         </div>
         <ul className="space-y-3 mb-8 flex-grow">
           <li className="flex items-start text-gray-300">
             <span className="text-green-400 mr-2">✓</span>
-            Todo lo profesional +
+            Acceso premium para estudiantes
           </li>
           <li className="flex items-start text-gray-300">
             <span className="text-green-400 mr-2">✓</span>

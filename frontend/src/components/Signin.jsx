@@ -68,7 +68,7 @@ const Signin = () => {
                         </span>
                     </label>
 
-                    <div className="space-y-3">
+                    <div className="space-y-3 pt-4">
                         <label className="text-[16px] text-gray-400 font-medium">Tipo de cuenta</label>
                         <div className="space-y-2 pt-4">
                             <label className="flex items-center space-x-3 cursor-pointer group">
