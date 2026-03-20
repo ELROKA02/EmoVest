@@ -1,8 +1,14 @@
 from fastapi import FastAPI
-from database import engine
-from models import Base
+from routers import auth
 
-app = FastAPI()
+app = FastAPI(
+    title="API de Emovest",
+    description="La maravillosa API de una plataforma que mejora el control de las inversiones para los inverosres",
+    version="0.0.1"
+)
+
+# Routers
+app.include_router(auth.router)
 
 @app.get("/")
 def root():
