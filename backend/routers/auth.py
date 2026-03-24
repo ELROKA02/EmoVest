@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from schemas import SignUp
-from database import SessionLocal
+from database import get_db
 from models import Usuario, Suscripcion
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
@@ -35,13 +35,6 @@ def crear_usuario(db: Session, nombre: str, correo_electronico: str, contrasena:
 def obtener_correo_usuario(db: Session, email:str):
     return db.query(Usuario).filter(Usuario.correo_electronico == email).first()
 
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 
