@@ -1,8 +1,46 @@
-import React from 'react'; 
+import React, { useState } from 'react'; 
 import logo from '../assets/logoEmoVest.png'; 
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Login = () => {
+    const [email, setEmail] = useState(() => localStorage.getItem('rememberedEmail') || '');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('rememberedEmail'));
+    const navigate = useNavigate();
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        try {
+            const response = await fetch('http://localhost:8000/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    correo_electronico: email,
+                    contrasena: password,
+                }),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('token', data.access_token);
+                if (rememberMe) {
+                    localStorage.setItem('rememberedEmail', email);
+                } else {
+                    localStorage.removeItem('rememberedEmail');
+                }
+                navigate('/dashboard');
+            } else {
+                const errorData = await response.json();
+                setError(errorData.detail || 'Error en el login');
+            }
+        } catch {
+            setError('Error de conexión al servidor');
+        }
+    };
+
     return (
         /* fixed inset-0 fuerza al componente a ocupar toda la pantalla sin desbordar */
         <div className="fixed inset-0 w-full h-full flex flex-col justify-center items-center bg-[#050a10] overflow-hidden p-3 sm:p-4">
@@ -25,11 +63,13 @@ const Login = () => {
                     Ingresa tus credenciales para acceder a EmoVest
                 </p>
 
-                <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
+                <form className="space-y-3" onSubmit={handleSubmit}>
                     <input
                         type="email"
-                        placeholder="Correo electrónico / Username"
+                        placeholder="Correo electrónico"
                         className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         required
                     />
                     <div className="space-y-3">
@@ -37,6 +77,8 @@ const Login = () => {
                             type="password"
                             placeholder="Contraseña"
                             className="w-full bg-[#0d1117]/90 border border-white/5 focus:border-blue-500/50 p-2.5 sm:p-3 rounded-xl outline-none text-sm text-white"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                             required
                         />
                         <div className="flex items-center justify-between">
@@ -44,6 +86,8 @@ const Login = () => {
                                 <input
                                     type="checkbox"
                                     className="w-4 h-4 bg-[#0d1117]/90 border border-white/5 rounded text-blue-600 focus:ring-blue-500 focus:ring-2 focus:ring-offset-0"
+                                    checked={rememberMe}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
                                 />
                                 <span className="text-xs text-gray-400 hover:text-white transition-colors">
                                     Recordar usuario
@@ -62,6 +106,8 @@ const Login = () => {
                         Iniciar Sesión
                     </button>
                 </form>
+
+                {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
 
                 <div className="mt-4 text-center">
                     <p className="text-xs sm:text-sm md:text-base text-gray-400">
