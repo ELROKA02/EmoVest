@@ -94,7 +94,7 @@ const Hero = () => {
 
     <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
       {/* Plan Gratis */}
-      <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 hover:border-blue-500/50 transition-all duration-300 flex flex-col">
+      <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 hover:border-blue-500/50 transition-all duration-300 flex flex-col text-center">
         <h3 className="text-2xl font-bold text-white mb-2">Gratis</h3>
         <p className="text-gray-400 mb-6">Plan idóneo para probar Emovest.</p>
         <div className="text-4xl font-bold text-white mb-6">
@@ -123,7 +123,7 @@ const Hero = () => {
       </div>
 
       {/* Plan Profesional */}
-      <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border-2 border-green-500/50 hover:border-green-400 transition-all duration-300 relative flex flex-col scale-105 z-10">
+      <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border-2 border-green-500/50 hover:border-green-400 transition-all duration-300 relative flex flex-col scale-105 z-10 text-center">
         <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-1 rounded-full text-sm font-semibold whitespace-nowrap">
           Recomendado
         </div>
@@ -160,7 +160,7 @@ const Hero = () => {
       </div>
 
       {/* Plan Enterprise */}
-      <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 hover:border-purple-500/50 transition-all duration-300 flex flex-col">
+      <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 hover:border-purple-500/50 transition-all duration-300 flex flex-col text-center">
         <h3 className="text-2xl font-bold text-white mb-2">Partners / Academia</h3>
         <p className="text-gray-400 mb-6">Para instituciones, escuelas o Academias</p>
         <div className="text-2xl font-bold text-white mb-6">
@@ -174,10 +174,6 @@ const Hero = () => {
           <li className="flex items-start text-gray-300">
             <span className="text-green-400 mr-2">✓</span>
             API completa
-          </li>
-          <li className="flex items-start text-gray-300">
-            <span className="text-green-400 mr-2">✓</span>
-            Soporte prioritario
           </li>
           <li className="flex items-start text-gray-300">
             <span className="text-green-400 mr-2">✓</span>
