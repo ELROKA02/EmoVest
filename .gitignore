@@ -1,3 +1,20 @@
 .env
 venv
 backend/__pycache__
+# Dependencias
+node_modules/
+
+# Logs
+*.log
+
+# Archivos temporales
+*.tmp
+*.cache
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# IDEs (opcionales)
+.vscode/
+
