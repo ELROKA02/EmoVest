@@ -23,7 +23,7 @@ function Navbar() {
     localStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
     setIsOpen(false);
-    navigate('/');
+    navigate('/login');
   };
 
   const links = [
