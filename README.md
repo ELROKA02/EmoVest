@@ -21,7 +21,7 @@ EMOVEST busca:
 
 ## 🧠 Cómo funciona
 
-1. El usuario escribe sus operaciones en formato libre (diario de trading)
+1. El usuario escribe sus operaciones, ademas de como se siente.
 2. La IA analiza el texto para detectar:
    - Estado emocional
    - Sesgos cognitivos
