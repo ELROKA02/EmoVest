@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 const Hero = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#050a10] via-[#1a364d] to-[#101422]">
-      {/* Hero Section */}
+      {}
       <section className="relative overflow-hidden pt-24 sm:pt-68">
         <div className="container mx-auto px-6 pt-35 pb-70 sm:px-8 lg:px-12 py-20 lg:pt-25">
           <div className="text-center">
@@ -34,7 +34,7 @@ const Hero = () => {
         </div>
       </section>
 
-      {/* Quienes Somos Section */}
+      {/* Quienes Somos  */}
       <section className="py-20 pl-16 pr-16">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <div className="text-center mb-12">
@@ -80,7 +80,7 @@ const Hero = () => {
         </div>
       </section>
 
-      {/* Suscripciones Section */}
+      {/* Suscripciones  */}
       <section id="suscripciones" className="py-20 bg-black/20">
   <div className="container mx-auto px-6 sm:px-8 lg:px-12">
     <div className="text-center mb-12">
@@ -188,7 +188,7 @@ const Hero = () => {
   </div>
 </section>
 
-      {/* Sobre Nosotros Section */}
+      {/* Sobre Nosotros  */}
       <section className="py-20 pl-16 pr-16">
         <div className="container mx-auto px-6 sm:px-8 lg:px-12">
           <div className="grid lg:grid-cols-2 gap-12 items-center">

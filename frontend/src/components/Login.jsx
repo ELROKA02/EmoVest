@@ -42,10 +42,10 @@ const Login = () => {
     };
 
     return (
-        /* fixed inset-0 fuerza al componente a ocupar toda la pantalla sin desbordar */
+       
         <div className="fixed inset-0 w-full h-full flex flex-col justify-center items-center bg-[#050a10] overflow-hidden p-3 sm:p-4">
             
-            {/* Logo - Reducido un poco para ganar espacio */}
+            {}
             <div className="mb-4 flex justify-center">
                 <img
                     src={logo}
