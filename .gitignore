@@ -18,3 +18,6 @@ Thumbs.db
 # IDEs (opcionales)
 .vscode/
 
+# Configuracion local 
+.github/
+

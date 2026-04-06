@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from schemas import SignUp, login
 from database import get_db
@@ -18,9 +18,9 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-router = APIRouter()
+router = APIRouter(tags=["usuarios"])
 
 pwd_context = CryptContext(schemes=["bcrypt"])
 
@@ -74,28 +74,59 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
 
 
-@router.post("/signup",
-             summary="Registrar a un usuario",
-             description="Registra a un nuevo usuario en el sistema con email unico",
-             responses={
-                400: {
-                    "description": "Correo Registrado",
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "detail": {
-                                        "type": "string",
-                                        "example": "El correo ya está registrado"
-                                    }
-                                }
+@router.post(
+    "/signup",
+    summary="Registrar un usuario",
+    description=(
+        "Crea un nuevo usuario con un correo electronico unico y genera su "
+        "suscripcion inicial en funcion del plan enviado."
+    ),
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Usuario creado correctamente.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "msg": "Usuario creado correctamente"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "El correo electronico ya esta registrado.",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "detail": {
+                                "type": "string",
+                                "example": "El correo ya esta registrado"
                             }
                         }
                     }
                 }
-             }
-            )
+            }
+        },
+        500: {
+            "description": "Se produjo un error interno durante el registro.",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "detail": {
+                                "type": "string",
+                                "example": "Error creando usuario"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 def signup(usuario: SignUp, db: Session = Depends(get_db)):
     usuario_existente = obtener_correo_usuario(db, usuario.correo_electronico)
 
@@ -135,12 +166,60 @@ def signup(usuario: SignUp, db: Session = Depends(get_db)):
 
         return {"msg": "Usuario creado correctamente"}
 
-    except Exception as e:
+    except Exception:
         db.rollback()
         raise HTTPException(500, "Error creando usuario")
     
     #login de usuario
-@router.post("/login",summary="Iniciar sesión")
+@router.post(
+    "/login",
+    summary="Iniciar sesion",
+    description="Valida las credenciales del usuario y devuelve un token JWT de acceso.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Inicio de sesion completado correctamente.",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "access_token": {
+                                "type": "string",
+                                "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                            },
+                            "token_type": {
+                                "type": "string",
+                                "example": "bearer"
+                            },
+                            "user": {
+                                "type": "string",
+                                "format": "email",
+                                "example": "usuario@emovest.dev"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Las credenciales no son validas.",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "detail": {
+                                "type": "string",
+                                "example": "Credenciales incorrectas"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 def login(credentials: login, db: Session = Depends(get_db)):
     '''Inicia sesión con correo y contraseña, devuelve un token JWT si las credenciales son correctas.'''
     # Buscar usuario en DB
