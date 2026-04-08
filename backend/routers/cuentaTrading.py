@@ -287,7 +287,13 @@ def eliminar_cuenta(
     }
 )
 def actualizar_cuenta(
-    cuenta_id: Annotated[int, Path(description="Identificador numerico de la cuenta de trading a actualizar.", example=1)],
+    cuenta_id: Annotated[
+        int,
+        Path(
+            description="Identificador numerico de la cuenta de trading a actualizar.",
+            examples={"example": {"value": 1}}
+        )
+    ],
     cuenta: updateCuentaTrading,
     usuario: str = Depends(get_current_user),
     db: Session = Depends(get_db)
