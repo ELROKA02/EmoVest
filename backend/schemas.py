@@ -30,3 +30,11 @@ class OperacionUpdate(BaseModel):
     precio_salida: Optional[float] = None
     notas: Optional[str] = None
 
+class createCuentaTrading(BaseModel):
+    nombre_cuenta: str
+    divisa: Literal["EUR","USD"]
+    saldo_inicial: Optional[float] = None
+    
+class updateCuentaTrading(BaseModel):
+    nombre_cuenta: Optional[str] = None
+    saldo_actual: Optional[float] = None

@@ -7,6 +7,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordRequestForm
 from dotenv import load_dotenv
 import os
 
@@ -58,13 +59,23 @@ def crear_usuario(db: Session, nombre: str, correo_electronico: str, contrasena:
 
     return usuario
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user = payload.get("sub")
+        user_email = payload.get("sub")
+
+        if user_email is None:
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+        user = db.query(Usuario).filter(
+            Usuario.correo_electronico == user_email
+        ).first()
 
         if user is None:
-            raise HTTPException(status_code=401, detail="Token inválido")
+            raise HTTPException(status_code=401, detail="Usuario no encontrado")
 
         return user
 
@@ -220,11 +231,11 @@ def signup(usuario: SignUp, db: Session = Depends(get_db)):
         }
     }
 )
-def login(credentials: login, db: Session = Depends(get_db)):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     '''Inicia sesión con correo y contraseña, devuelve un token JWT si las credenciales son correctas.'''
     # Buscar usuario en DB
     user = db.query(Usuario).filter(
-        Usuario.correo_electronico == credentials.correo_electronico
+        Usuario.correo_electronico == form_data.username
     ).first()
 
     # Usuario no existe
@@ -232,7 +243,7 @@ def login(credentials: login, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
     # Contraseña incorrecta
-    if not verify_password(credentials.contrasena, user.contrasena):
+    if not verify_password(form_data.password, user.contrasena):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
     access_token = create_access_token(
