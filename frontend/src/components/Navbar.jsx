@@ -16,7 +16,7 @@ function Navbar() {
 
   const handleRegisterClick = () => {
     setIsOpen(false); 
-    navigate('/signin'); 
+    navigate('/signup'); 
   };
 
   const handleLogout = () => {
@@ -32,6 +32,11 @@ function Navbar() {
     { name: 'Sobre nosotros', href: '#sobre-nosotros' },
   ];
 
+  const handleTradingClick = () => {
+    setIsOpen(false);
+    navigate('/trading');
+  };
+
   return (
     <nav className="relative">
       {/* Desktop Menu */}
@@ -46,6 +51,16 @@ function Navbar() {
             </a>
           </li>
         ))}
+        {isLoggedIn && (
+          <li>
+            <button
+              onClick={handleTradingClick}
+              className="bg-gradient-to-r from-transparent to-transparent text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider hover:from-purple-600 hover:to-purple-700 border border-purple-600/30 hover:border-purple-500"
+            >
+              Trading
+            </button>
+          </li>
+        )}
         {showLogout ? (
           <li className="ml-4 lg:ml-6">
             <button 

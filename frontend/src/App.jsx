@@ -3,7 +3,8 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import Hero from './components/Hero';
 import Login from './components/Login';
-import Signin from './components/Signin';
+import Signup from './components/Signup';
+import OperacionesTrading from './components/OperacionesTrading';
 
 
 
@@ -22,7 +23,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Hero />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/signin" element={<Signin />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/trading" element={<OperacionesTrading />} />
           </Routes>
         </main>
         <Footer />

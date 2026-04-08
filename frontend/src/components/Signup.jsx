@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import logo from '../assets/logoEmoVest.png'; 
 import { Link, useNavigate } from 'react-router-dom';
 
-const Signin = () => {
+const Signup = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -237,4 +237,4 @@ const Signin = () => {
     );
 };
 
-export default Signin;
+export default Signup;

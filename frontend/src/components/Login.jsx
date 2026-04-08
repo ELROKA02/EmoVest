@@ -31,7 +31,7 @@ const Login = () => {
                 } else {
                     localStorage.removeItem('rememberedEmail');
                 }
-                navigate('/dashboard');
+                navigate('/trading');
             } else {
                 const errorData = await response.json();
                 setError(errorData.detail || 'Error en el login');
@@ -111,7 +111,7 @@ const Login = () => {
 
                 <div className="mt-4 text-center">
                     <p className="text-xs sm:text-sm md:text-base text-gray-400">
-                        ¿No tienes cuenta? <Link to="/signin" className="text-white font-bold hover:underline">Regístrate</Link>
+                        ¿No tienes cuenta? <Link to="/signup" className="text-white font-bold hover:underline">Regístrate</Link>
                     </p>
                 </div>
 

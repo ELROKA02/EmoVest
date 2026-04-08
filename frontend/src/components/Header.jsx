@@ -14,7 +14,7 @@ function Header() {
     // Si la ruta actual es /login, no renderizamos el header
     if (location.pathname === '/login') {
         return null;
-    }else if(location.pathname === '/signin'){
+    }else if(location.pathname === '/signup'){
         return null;
     }
 
