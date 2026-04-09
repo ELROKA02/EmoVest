@@ -20,6 +20,12 @@ class OperacionCreate(BaseModel):
     precio_entrada: float
     precio_salida: Optional[float] = None
     notas: Optional[str] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    resultado: Optional[float] = None
+    ratio_rr: Optional[float] = None
+    nivel_confianza: Optional[int] = None
+    screenshot: Optional[bytes] = None
 
 class OperacionUpdate(BaseModel):
     fecha_hora: Optional[datetime] = None
@@ -29,6 +35,12 @@ class OperacionUpdate(BaseModel):
     precio_entrada: Optional[float] = None
     precio_salida: Optional[float] = None
     notas: Optional[str] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    resultado: Optional[float] = None
+    ratio_rr: Optional[float] = None
+    nivel_confianza: Optional[int] = None
+    screenshot: Optional[bytes] = None
 
 class createCuentaTrading(BaseModel):
     nombre_cuenta: str
