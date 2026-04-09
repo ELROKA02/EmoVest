@@ -20,14 +20,14 @@ function Header() {
 
 
     return (
-        <header style={bgGradient} className="flex justify-between items-center px-6 py-4 backdrop-blur-md text-white fixed top-0 left-0 right-0 z-50 border-b border-white/10">
-            <Link to="/" className="flex items-center gap-4">
+        <header style={bgGradient} className="flex justify-between items-center px-6 py-2 backdrop-blur-md text-white fixed top-0 left-0 right-0 z-50 border-b border-white/10">
+            <Link to="/" className="flex items-center gap-3">
                 <img
                     src={logo}
                     alt="Logo"
-                    className="h-[100px] w-auto object-contain transition-transform group-hover:scale-105"
+                    className="h-[50px] w-auto object-contain transition-transform group-hover:scale-105"
                 />
-                <h1 className="font-cinzel text-[40px] font-bold tracking-widest">
+                <h1 className="font-cinzel text-[24px] font-bold tracking-widest">
                     EmoVest
                 </h1>
             </Link>

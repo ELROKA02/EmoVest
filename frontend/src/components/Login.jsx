@@ -13,30 +13,37 @@ const Login = () => {
         e.preventDefault();
         setError('');
         try {
+            const formData = new FormData();
+            formData.append('username', email);
+            formData.append('password', password);
+
             const response = await fetch('http://localhost:8000/login', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    correo_electronico: email,
-                    contrasena: password,
-                }),
+                body: formData, // Enviar como FormData, no JSON
             });
             if (response.ok) {
                 const data = await response.json();
+                console.log('✅ Login exitoso:', data);
                 localStorage.setItem('token', data.access_token);
                 if (rememberMe) {
                     localStorage.setItem('rememberedEmail', email);
                 } else {
                     localStorage.removeItem('rememberedEmail');
                 }
+                console.log('🔄 Navegando a /trading...');
                 navigate('/trading');
             } else {
                 const errorData = await response.json();
-                setError(errorData.detail || 'Error en el login');
+                console.error('❌ Error del backend:', errorData);
+                // Manejar errores de FastAPI correctamente
+                if (errorData.detail && Array.isArray(errorData.detail)) {
+                    setError(errorData.detail[0].msg || 'Error de validación');
+                } else {
+                    setError(errorData.detail || 'Error en el login');
+                }
             }
-        } catch {
+        } catch (err) {
+            console.error('Error de conexión:', err);
             setError('Error de conexión al servidor');
         }
     };
