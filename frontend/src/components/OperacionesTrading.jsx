@@ -190,7 +190,7 @@ const OperacionesTrading = () => {
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="w-full flex items-center justify-center gap-3 px-4 py-2 rounded-lg text-gray-300 hover:bg-white/10 transition-all duration-300"
           >
-            <span className="text-xl">{sidebarOpen ? '??' : '??'}</span>
+            <span className="text-xl">{sidebarOpen ? '›' : '‹'}</span>
             {sidebarOpen && <span className="font-medium">Contraer</span>}
           </button>
         </div>
@@ -240,13 +240,13 @@ const OperacionesTrading = () => {
             <div className="mb-4">
               <button
                 onClick={handleCreate}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full transition-all duration-300"
+                className="mt-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full transition-all duration-300"
               >
                 Crear Operación
               </button>
             </div>
 
-            <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 overflow-x-auto">
+            <div className="mt-12 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-gray-400 border-b border-white/10">
