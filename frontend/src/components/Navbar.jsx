@@ -9,6 +9,9 @@ function Navbar() {
   const isLoggedIn = !!localStorage.getItem('token');
   const showLogout = isLoggedIn && location.pathname === '/dashboard';
 
+  // Obtener el nombre del usuario del localStorage
+  const userName = localStorage.getItem('userName') || 'Usuario';
+
   const handleButtonClick = () => {
     setIsOpen(false); 
     navigate('/login'); 
@@ -26,16 +29,16 @@ function Navbar() {
     navigate('/login');
   };
 
-  const links = [
+  const handleTradingClick = () => {
+    setIsOpen(false);
+    navigate('/dashboard');
+  };
+
+  const links = isLoggedIn ? [] : [
     { name: 'Quiénes somos', href: '#que-somos' },
     { name: 'Suscripciones', href: '#suscripciones' },
     { name: 'Sobre nosotros', href: '#sobre-nosotros' },
   ];
-
-  const handleTradingClick = () => {
-    setIsOpen(false);
-    navigate('/trading');
-  };
 
   return (
     <nav className="relative">
@@ -51,7 +54,7 @@ function Navbar() {
             </a>
           </li>
         ))}
-        {isLoggedIn && (
+        {isLoggedIn && location.pathname !== '/trading' && (
           <li>
             <button
               onClick={handleTradingClick}
@@ -61,18 +64,33 @@ function Navbar() {
             </button>
           </li>
         )}
-        {showLogout ? (
-          <li className="ml-4 lg:ml-6">
-            <button 
-              onClick={handleLogout}
-              onMouseEnter={() => setHoveredButton('logout')}
-              onMouseLeave={() => setHoveredButton(null)}
-              className={`bg-gradient-to-r text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider from-red-600 to-red-700 hover:from-red-700 hover:to-red-800`}
-            >
-              Cerrar Sesión
-            </button>
-          </li>
-        ) : (
+        {isLoggedIn && (
+          <>
+            <li className="flex items-center gap-3 ml-4 lg:ml-6">
+              {/* User Icon */}
+              <div className="flex items-center gap-2 text-gray-300">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span className="font-medium">{userName}</span>
+              </div>
+
+              {/* Logout Button */}
+              <button 
+                onClick={handleLogout}
+                onMouseEnter={() => setHoveredButton('logout')}
+                onMouseLeave={() => setHoveredButton(null)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-full transition-all duration-300 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Cerrar Sesión
+              </button>
+            </li>
+          </>
+        )}
+        {!isLoggedIn && (
           <>
             <li className="ml-4 lg:ml-6">
               <button 

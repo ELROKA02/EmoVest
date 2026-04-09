@@ -11,10 +11,8 @@ function Header() {
 
     const location = useLocation();
 
-    // Si la ruta actual es /login, no renderizamos el header
-    if (location.pathname === '/login') {
-        return null;
-    }else if(location.pathname === '/signup'){
+    // Si la ruta actual es /login, /signup, /dashboard o /trading, no renderizamos el header regular
+    if (location.pathname === '/login' || location.pathname === '/signup' || location.pathname.startsWith('/dashboard') || location.pathname === '/trading') {
         return null;
     }
 

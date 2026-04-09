@@ -30,8 +30,8 @@ const Login = () => {
                 } else {
                     localStorage.removeItem('rememberedEmail');
                 }
-                console.log('🔄 Navegando a /trading...');
-                navigate('/trading');
+                console.log('🔄 Navegando a /dashboard...');
+                navigate('/dashboard');
             } else {
                 const errorData = await response.json();
                 console.error('❌ Error del backend:', errorData);
