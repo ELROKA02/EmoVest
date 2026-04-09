@@ -262,26 +262,26 @@ const OperacionesTrading = () => {
                 </thead>
                 <tbody>
                   {operaciones.map(op => (
-                    <tr key={op.id} className="border-t border-white/10 hover:bg-white/5 transition-colors">
+                    <tr key={op.id} className="border-t text-white border-white/10 hover:bg-white/5 transition-colors">
                       <td className="p-4">{new Date(op.fecha_hora).toLocaleString()}</td>
-                      <td className={`p-4 font-bold ${op.tipo_operacion === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>
+                      <td className={`p-4  font-bold ${op.tipo_operacion === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>
                         {op.tipo_operacion}
                       </td>
-                      <td className="p-4">{op.activo}</td>
-                      <td className="p-4">{op.cantidad}</td>
-                      <td className="p-4 font-mono">${op.precio_entrada}</td>
-                      <td className="p-4 font-mono">{op.precio_salida ? `$${op.precio_salida}` : '-'}</td>
+                      <td className="p-4 text-white">{op.activo}</td>
+                      <td className="p-4 text-white">{op.cantidad}</td>
+                      <td className="p-4 font-mono text-white">${op.precio_entrada}</td>
+                      <td className="p-4 font-mono text-white">{op.precio_salida ? `$${op.precio_salida}` : '-'}</td>
                       <td className="p-4 text-sm text-gray-300">{op.notas || '-'}</td>
                       <td className="p-4 flex gap-2">
                         <button
                           onClick={() => handleEdit(op)}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-full text-sm transition-colors"
+                          className="px-4 py-2 text-white bg-purple-600 hover:bg-purple-700 rounded-full text-sm transition-colors"
                         >
                           Editar
                         </button>
                         <button
                           onClick={() => handleDelete(op.id)}
-                          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-full text-sm transition-colors"
+                          className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-full text-sm transition-colors"
                         >
                           Eliminar
                         </button>
@@ -295,45 +295,45 @@ const OperacionesTrading = () => {
             {showForm && (
               <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                 <div className="bg-[#1a2235] rounded-2xl p-8 border border-white/20 w-full max-w-md shadow-2xl">
-                  <h2 className="text-2xl font-bold mb-6">{editing ? 'Editar Operación' : 'Crear Operación'}</h2>
+                  <h2 className="text-2xl font-bold mb-6 text-white">{editing ? 'Editar Operación' : 'Crear Operación'}</h2>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">Fecha y Hora</label>
+                      <label className="block text-sm text-white mb-1">Fecha y Hora</label>
                       <input
                         type="datetime-local"
                         value={formData.fecha_hora}
                         onChange={(e) => setFormData({...formData, fecha_hora: e.target.value})}
-                        className="w-full p-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
+                        className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
                         required
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm text-gray-400 mb-1">Tipo</label>
+                        <label className="block text-sm text-white mb-1">Tipo</label>
                         <select
                           value={formData.tipo_operacion}
                           onChange={(e) => setFormData({...formData, tipo_operacion: e.target.value})}
-                          className="w-full p-2 bg-[#1a2235] border border-white/10 rounded-lg focus:outline-none"
+                          className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none"
                         >
                           <option value="LONG">LONG</option>
                           <option value="SHORT">SHORT</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-400 mb-1">Activo</label>
+                        <label className="block text-sm text-white mb-1">Activo</label>
                         <input
                           type="text"
                           placeholder="Ej: BTC"
                           value={formData.activo}
                           onChange={(e) => setFormData({...formData, activo: e.target.value})}
-                          className="w-full p-2 bg-white/5 border border-white/10 rounded-lg"
+                          className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg"
                           required
                         />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm text-gray-400 mb-1">Cantidad</label>
+                        <label className="block text-sm text-white mb-1">Cantidad</label>
                         <input
                           type="number"
                           step="any"
@@ -344,19 +344,19 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-400 mb-1">Precio Entrada</label>
+                        <label className="block text-sm text-white mb-1">Precio Entrada</label>
                         <input
                           type="number"
                           step="any"
                           value={formData.precio_entrada}
                           onChange={(e) => setFormData({...formData, precio_entrada: e.target.value})}
-                          className="w-full p-2 bg-white/5 border border-white/10 rounded-lg"
+                          className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg"
                           required
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">Precio Salida (Opcional)</label>
+                      <label className="block text-sm text-white mb-1">Precio Salida (Opcional)</label>
                       <input
                         type="number"
                         step="any"
@@ -366,24 +366,24 @@ const OperacionesTrading = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-400 mb-1">Notas</label>
+                      <label className="block text-sm text-white mb-1">Notas</label>
                       <textarea
                         value={formData.notas}
                         onChange={(e) => setFormData({...formData, notas: e.target.value})}
-                        className="w-full p-2 bg-white/5 border border-white/10 rounded-lg h-20"
+                        className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg h-20"
                       />
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                       <button
                         type="button"
                         onClick={() => setShowForm(false)}
-                        className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-full transition-colors"
+                        className="px-6 py-2 text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors"
                       >
                         Cancelar
                       </button>
                       <button
                         type="submit"
-                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-full transition-colors font-bold"
+                        className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors font-bold"
                       >
                         Guardar
                       </button>
