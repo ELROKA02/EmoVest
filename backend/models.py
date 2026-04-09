@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DECIMAL, DateTime ,ForeignKey, Boolean, Enum
+from sqlalchemy import Column, Integer, String, DECIMAL, DateTime ,ForeignKey, Boolean, Enum, LargeBinary
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -110,6 +110,9 @@ class Estadistica(Base):
     profit_total = Column(DECIMAL(20,6))    #Dinero ganado o perdido
     profit_promedio = Column(DECIMAL(20,6)) # Dinero promedio ganado o perdido
 
+    max_drawdown = Column(DECIMAL(20,6))
+    rr_promedio = Column(DECIMAL(10,4))
+
     cuenta_trading = relationship("Cuenta_Trading", back_populates="estadisticas")
     
 
@@ -125,6 +128,18 @@ class Operacion(Base):
     precio_entrada = Column(DECIMAL(20,6), nullable=False)
     precio_salida = Column(DECIMAL(20,6))
     notas = Column(String(255))
+
+    # NUEVO
+    stop_loss = Column(DECIMAL(20,6), nullable=True)
+    take_profit = Column(DECIMAL(20,6), nullable=True)
+
+    resultado = Column(DECIMAL(20,6), nullable=True)
+    ratio_rr = Column(DECIMAL(10,4), nullable=True)
+
+    nivel_confianza = Column(Integer, nullable=True)  # 1–10
+
+    screenshot = Column(LargeBinary, nullable=True)
+
     
     cuenta_trading = relationship("Cuenta_Trading", back_populates="operaciones")
     registro_emocional = relationship("Registro_emocional", uselist=False, back_populates="operacion")
