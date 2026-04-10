@@ -84,6 +84,14 @@ def get_current_user(
 
 
 
+@router.get("/me")
+def get_me(current_user: Usuario = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "name": current_user.nombre,
+        "email": current_user.correo_electronico
+    }
+
 
 @router.post(
     "/signup",

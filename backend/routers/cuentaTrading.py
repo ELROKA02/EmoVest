@@ -204,7 +204,7 @@ def ver_cuentas(usuario: str = Depends(get_current_user), db: Session = Depends(
     }
 )
 def eliminar_cuenta(
-    cuenta_id: Annotated[int, Path(description="Identificador numerico de la cuenta de trading a eliminar.", example=1)],
+    cuenta_id: Annotated[int, Path(description="Identificador numerico de la cuenta de trading a eliminar.", examples=[1])],
     usuario: str = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

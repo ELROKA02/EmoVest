@@ -1,10 +1,13 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Operacion, Cuenta_Trading
-from schemas import OperacionCreate, OperacionUpdate
+from schemas import (
+    CuentaOperacionPathParams,
+    OperacionCreate,
+    OperacionPathParams,
+    OperacionUpdate,
+)
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/cuentas/{cuenta_id_trading}/operaciones", tags=["operaciones"])
@@ -40,11 +43,11 @@ def get_cuenta_usuario(db: Session, cuenta_id: int, user_id: int) -> Cuenta_Trad
     }
 )
 def get_operaciones(
-    cuenta_id: Annotated[int, Path(description="Identificador de la cuenta de trading.", example=1)],
+    params: CuentaOperacionPathParams = Depends(),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    cuenta = get_cuenta_usuario(db, cuenta_id, current_user.id)
+    cuenta = get_cuenta_usuario(db, params.cuenta_id_trading, current_user.id)
 
     operaciones = db.query(Operacion).filter(Operacion.id_cuenta == cuenta.id).all()
 
@@ -70,29 +73,14 @@ def get_operaciones(
     }
 )
 def create_operacion(
-    cuenta_id: Annotated[int, Path(description="Identificador de la cuenta de trading donde se registrara la operacion.", example=1)],
     operacion: OperacionCreate,
+    params: CuentaOperacionPathParams = Depends(),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    cuenta = get_cuenta_usuario(db, cuenta_id, current_user.id)
+    cuenta = get_cuenta_usuario(db, params.cuenta_id_trading, current_user.id)
 
-    nueva_operacion = Operacion(
-        id_cuenta=cuenta.id,
-        fecha_hora=operacion.fecha_hora,
-        tipo_operacion=operacion.tipo_operacion,
-        cantidad=operacion.cantidad,
-        activo=operacion.activo,
-        precio_entrada=operacion.precio_entrada,
-        precio_salida=operacion.precio_salida,
-        notas=operacion.notas,
-        stop_loss=operacion.stop_loss,
-        take_profit=operacion.take_profit,
-        resultado=operacion.resultado,
-        ratio_rr=operacion.ratio_rr,
-        nivel_confianza=operacion.nivel_confianza,
-        screenshot=operacion.screenshot
-    )
+    nueva_operacion = Operacion(id_cuenta=cuenta.id, **operacion.model_dump())
 
     db.add(nueva_operacion)
     db.commit()
@@ -120,15 +108,14 @@ def create_operacion(
     }
 )
 def update_operacion(
-    cuenta_id: Annotated[int, Path(description="Identificador de la cuenta de trading propietaria de la operacion.", example=1)],
-    id: Annotated[int, Path(description="Identificador de la operacion a actualizar.", example=10)],
     operacion: OperacionUpdate,
+    params: OperacionPathParams = Depends(),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    cuenta = get_cuenta_usuario(db, cuenta_id, current_user.id)
+    cuenta = get_cuenta_usuario(db, params.cuenta_id_trading, current_user.id)
 
-    op = db.query(Operacion).filter(Operacion.id == id, Operacion.id_cuenta == cuenta.id).first()
+    op = db.query(Operacion).filter(Operacion.id == params.id, Operacion.id_cuenta == cuenta.id).first()
 
     if not op:
         raise HTTPException(status_code=404, detail="Operacion no encontrada")
@@ -162,16 +149,15 @@ def update_operacion(
     }
 )
 def delete_operacion(
-    cuenta_id: Annotated[int, Path(description="Identificador de la cuenta de trading propietaria de la operacion.", example=1)],
-    id: Annotated[int, Path(description="Identificador de la operacion a eliminar.", example=10)],
+    params: OperacionPathParams = Depends(),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    cuenta = get_cuenta_usuario(db, cuenta_id, current_user.id)
+    cuenta = get_cuenta_usuario(db, params.cuenta_id_trading, current_user.id)
 
-    op = db.query(Operacion).filter(Operacion.id == id, Operacion.id_cuenta == cuenta.id).first()
+    op = db.query(Operacion).filter(Operacion.id == params.id, Operacion.id_cuenta == cuenta.id).first()
     if not op:
         raise HTTPException(status_code=404, detail="Operacion no encontrada")
     db.delete(op)
     db.commit()
-    return {"message": "Operacion eliminada exitosamente", "operacion_id": id, "cuenta_id": cuenta.id}
+    return {"message": "Operacion eliminada exitosamente", "operacion_id": params.id, "cuenta_id": cuenta.id}

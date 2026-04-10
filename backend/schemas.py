@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr
 from typing import Literal, Optional
 from datetime import datetime
+
+from pydantic import BaseModel, EmailStr
 
 class SignUp(BaseModel):
     nombre: str
@@ -41,6 +42,15 @@ class OperacionUpdate(BaseModel):
     ratio_rr: Optional[float] = None
     nivel_confianza: Optional[int] = None
     screenshot: Optional[bytes] = None
+
+
+class CuentaOperacionPathParams(BaseModel):
+    cuenta_id_trading: int
+
+
+class OperacionPathParams(BaseModel):
+    cuenta_id_trading: int
+    id: int
 
 class createCuentaTrading(BaseModel):
     nombre_cuenta: str
