@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Operacion, Cuenta_Trading
+from routers.ia import guardar_registro_emocional
 from schemas import (
     CuentaOperacionPathParams,
     OperacionCreate,
@@ -82,9 +83,35 @@ def create_operacion(
 
     nueva_operacion = Operacion(id_cuenta=cuenta.id, **operacion.model_dump())
 
-    db.add(nueva_operacion)
-    db.commit()
-    db.refresh(nueva_operacion)
+    try:
+        db.add(nueva_operacion)
+        db.flush()
+
+        if operacion.notas:
+            try:
+                guardar_registro_emocional(operacion.notas, nueva_operacion.id, db)
+            except Exception as error:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Fallo en guardar_registro_emocional: {error}",
+                ) from error
+
+        try:
+            db.commit()
+            db.refresh(nueva_operacion)
+        except Exception as error:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Fallo en commit o refresh: {error}",
+            ) from error
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Fallo antes de guardar registro emocional: {error}",
+        ) from error
 
     return {"message": "Operacion creada exitosamente", "operacion_id": nueva_operacion.id, "cuenta_id": cuenta.id}
 
