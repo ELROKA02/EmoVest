@@ -16,19 +16,21 @@ EmoVest cuantifica lo que hasta ahora era intangible: **tu estado emocional en c
 
 ## ⚡ Qué hace EmoVest
 
-EmoVest combina un gestor de operaciones de trading con un motor de análisis emocional basado en IA local. Cada vez que registras una operación con notas, EmoVest clasifica automáticamente tu estado emocional en cinco dimensiones y lo almacena vinculado al resultado financiero.
+Un **diario de trading** es el registro sistemático de cada operación: activo, dirección (LONG/SHORT), precio de entrada y salida, resultado, notas y contexto. Los traders profesionales lo usan para identificar errores repetidos y mejorar su proceso de decisión con datos reales en lugar de intuición.
+
+EmoVest hace eso, y va un paso más allá: cada vez que escribes notas en una operación, **un modelo de IA local analiza el texto y cuantifica tu estado emocional** en cinco dimensiones. El resultado queda vinculado al resultado financiero, convirtiendo el diario en un espejo psicológico de tu trading.
 
 ---
 
 ## 🧠 Cómo funciona
 
 ```mermaid
-flowchart TD
-    A[El usuario registra una operación con notas] --> B[EmoVest envía el texto al modelo de IA local]
-    B --> C[La IA clasifica 5 emociones: confianza · duda · euforia · miedo · neutral]
-    C --> D[Se guarda el registro emocional vinculado a la operación]
-    D --> E[Las estadísticas de la cuenta se actualizan]
-    E --> F[El dashboard muestra la correlación emoción · resultado]
+flowchart LR
+    A[Registra operación\ncon notas] --> B[IA analiza el texto]
+    B --> C[Clasifica 5 emociones\ncon porcentaje]
+    C --> D[Guarda registro\nemocional]
+    D --> E[Actualiza\nestadísticas]
+    E --> F[Dashboard:\nemoción · resultado]
 ```
 
 1. El usuario crea una cuenta de trading y registra sus operaciones (LONG/SHORT).
