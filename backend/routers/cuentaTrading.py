@@ -1,6 +1,6 @@
 from schemas import createCuentaTrading, updateCuentaTrading
 from database import get_db
-from fastapi import Depends, HTTPException, Path, status
+from fastapi import Depends, HTTPException, Path, Query, status
 from fastapi import APIRouter
 from sqlalchemy.orm import Session
 from routers.auth import get_current_user
@@ -9,7 +9,7 @@ from models import Cuenta_Trading
 from typing import Annotated
 
 
-router = APIRouter(tags=["cuentas"])
+router = APIRouter(prefix="/cuentas", tags=["cuentas"])
 
 @router.post(
     "/crearcuenta",
@@ -137,9 +137,18 @@ def crear_cuenta(cuenta: createCuentaTrading, usuario: str = Depends(get_current
         }
     }
 )
-def ver_cuentas(usuario: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    cuentas = db.query(Cuenta_Trading).filter(Cuenta_Trading.id_usuario == usuario.id).all()
-   
+def ver_cuentas(
+    id_usuario: Annotated[int | None, Query(description="Id del usuario cuyas cuentas se desean obtener", example=1)] = None,
+    usuario: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    usuario_id = id_usuario if id_usuario is not None else usuario.id
+
+    if id_usuario is not None and id_usuario != usuario.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para ver las cuentas de otro usuario")
+
+    cuentas = db.query(Cuenta_Trading).filter(Cuenta_Trading.id_usuario == usuario_id).all()
+
     if not cuentas:
         raise HTTPException(status_code=404, detail="No se encontraron cuentas de trading para este usuario")
 

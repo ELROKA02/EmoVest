@@ -1,12 +1,27 @@
 from datetime import datetime
 from decimal import Decimal
 
-from ollama import chat
+try:
+    from ollama import chat
+    _OLLAMA_INSTALLED = True
+except ImportError:
+    chat = None
+    _OLLAMA_INSTALLED = False
+
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session
 
 from models import Registro_emocional
 
+import requests
+
+def ollama_disponible() -> bool:
+    try:
+        r = requests.get("http://localhost:11434")
+        return r.status_code == 200
+    except:
+        return False
+    
 
 class Emociones(BaseModel):
   confianza: Decimal = Field(ge=0, le=100)
@@ -29,6 +44,11 @@ Texto: {texto}
 
 
 def clasificar_emociones(texto: str) -> Emociones:
+    if not _OLLAMA_INSTALLED:
+        raise RuntimeError(
+            "El paquete 'ollama' no está instalado. Instala ollama para usar la clasificación de emociones."
+        )
+
     prompt = construir_prompt_emociones(texto)
 
     response = chat(
@@ -53,9 +73,6 @@ def clasificar_emociones(texto: str) -> Emociones:
 
 
 def guardar_registro_emocional(texto: str, id_operacion: int, db: Session) -> Registro_emocional:
-    emociones = clasificar_emociones(texto)
-    factor_porcentaje = Decimal("100")
-
     registro = db.query(Registro_emocional).filter(
         Registro_emocional.id_operacion == id_operacion
     ).first()
@@ -66,6 +83,28 @@ def guardar_registro_emocional(texto: str, id_operacion: int, db: Session) -> Re
 
     registro.fecha_hora = datetime.now()
     registro.texto_entrada = texto
+
+    if not _OLLAMA_INSTALLED:
+        registro.confianza = Decimal("0")
+        registro.duda = Decimal("0")
+        registro.euforia = Decimal("0")
+        registro.miedo = Decimal("0")
+        registro.neutral = Decimal("0")
+        return registro
+
+    try:
+        emociones = clasificar_emociones(texto)
+    except Exception as error:
+        print(f"Advertencia: Ollama fallo al clasificar emociones, se guardaran valores en cero. Error: {error}")
+        registro.confianza = Decimal("0")
+        registro.duda = Decimal("0")
+        registro.euforia = Decimal("0")
+        registro.miedo = Decimal("0")
+        registro.neutral = Decimal("0")
+        return registro
+
+    factor_porcentaje = Decimal("100")
+
     registro.confianza = emociones.confianza / factor_porcentaje
     registro.duda = emociones.duda / factor_porcentaje
     registro.euforia = emociones.euforia / factor_porcentaje

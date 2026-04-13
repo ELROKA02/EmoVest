@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/logoEmoVest.png';
+import CustomSelect from './CustomSelect';
+
+const API_BASE_URL = 'http://localhost:8000';
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
 
 const OperacionesTrading = () => {
   console.log('OperacionesTrading renderizado');
@@ -13,12 +24,76 @@ const OperacionesTrading = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Estados para backend
+  const [cuentas, setCuentas] = useState([]);
+  const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
   useEffect(() => {
     localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen));
   }, [sidebarOpen]);
 
   // Obtener el nombre del usuario del localStorage
   const userName = localStorage.getItem('userName') || 'Usuario';
+
+  // Cargar cuentas al montar
+  useEffect(() => {
+    cargarCuentas();
+  }, []);
+
+  // Cargar operaciones cuando cambia la cuenta
+  useEffect(() => {
+    if (cuentaSeleccionada) {
+      cargarOperacionesDeCuenta();
+    }
+  }, [cuentaSeleccionada]);
+
+  const cargarCuentas = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/cuentas/vercuentas`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+      if (!response.ok) {
+        throw new Error('Error al cargar cuentas');
+      }
+      const data = await response.json();
+      setCuentas(data);
+      if (data.length > 0) {
+        setCuentaSeleccionada(data[0].id);
+      }
+    } catch (err) {
+      setError(err.message);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cargarOperacionesDeCuenta = async () => {
+    if (!cuentaSeleccionada) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+      if (!response.ok) {
+        throw new Error('Error al cargar operaciones');
+      }
+      const data = await response.json();
+      setOperaciones(data);
+    } catch (err) {
+      setError(err.message);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
@@ -53,28 +128,7 @@ const OperacionesTrading = () => {
     }
   ];
 
-  const [operaciones, setOperaciones] = useState([
-    {
-      id: 1,
-      fecha_hora: '2023-10-01T10:00:00',
-      tipo_operacion: 'LONG',
-      cantidad: 100,
-      activo: 'AAPL',
-      precio_entrada: 150.00,
-      precio_salida: 155.00,
-      notas: 'Operación exitosa'
-    },
-    {
-      id: 2,
-      fecha_hora: '2023-10-02T11:00:00',
-      tipo_operacion: 'SHORT',
-      cantidad: 50,
-      activo: 'GOOGL',
-      precio_entrada: 2800.00,
-      precio_salida: null,
-      notas: 'En progreso'
-    }
-  ]);
+  const [operaciones, setOperaciones] = useState([]);
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -85,7 +139,13 @@ const OperacionesTrading = () => {
     activo: '',
     precio_entrada: '',
     precio_salida: '',
-    notas: ''
+    notas: '',
+    stop_loss: '',
+    take_profit: '',
+    resultado: '',
+    ratio_rr: '',
+    nivel_confianza: '',
+    screenshot: null
   });
 
   const handleCreate = () => {
@@ -97,7 +157,13 @@ const OperacionesTrading = () => {
       activo: '',
       precio_entrada: '',
       precio_salida: '',
-      notas: ''
+      notas: '',
+      stop_loss: '',
+      take_profit: '',
+      resultado: '',
+      ratio_rr: '',
+      nivel_confianza: '',
+      screenshot: null
     });
     setShowForm(true);
   };
@@ -111,34 +177,94 @@ const OperacionesTrading = () => {
       activo: op.activo,
       precio_entrada: op.precio_entrada,
       precio_salida: op.precio_salida || '',
-      notas: op.notas || ''
+      notas: op.notas || '',
+      stop_loss: op.stop_loss || '',
+      take_profit: op.take_profit || '',
+      resultado: op.resultado || '',
+      ratio_rr: op.ratio_rr || '',
+      nivel_confianza: op.nivel_confianza || '',
+      screenshot: op.screenshot || null
     });
     setShowForm(true);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('¿Estás seguro de eliminar esta operación?')) {
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Estás seguro de eliminar esta operación?')) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      if (!response.ok) {
+        throw new Error('Error al eliminar operación');
+      }
       setOperaciones(operaciones.filter(op => op.id !== id));
+    } catch (err) {
+      setError(err.message);
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!cuentaSeleccionada) {
+      setError('Debes seleccionar una cuenta');
+      return;
+    }
+
     const data = {
-      ...formData,
       fecha_hora: new Date(formData.fecha_hora).toISOString(),
+      tipo_operacion: formData.tipo_operacion,
       cantidad: parseFloat(formData.cantidad),
+      activo: formData.activo,
       precio_entrada: parseFloat(formData.precio_entrada),
-      precio_salida: formData.precio_salida ? parseFloat(formData.precio_salida) : null
+      precio_salida: formData.precio_salida ? parseFloat(formData.precio_salida) : null,
+      notas: formData.notas || null,
+      stop_loss: formData.stop_loss ? parseFloat(formData.stop_loss) : null,
+      take_profit: formData.take_profit ? parseFloat(formData.take_profit) : null,
+      resultado: formData.resultado ? parseFloat(formData.resultado) : null,
+      ratio_rr: formData.ratio_rr ? parseFloat(formData.ratio_rr) : null,
+      nivel_confianza: formData.nivel_confianza ? parseInt(formData.nivel_confianza) : null,
+      screenshot: formData.screenshot
     };
 
-    if (editing) {
-      setOperaciones(operaciones.map(op => op.id === editing ? { ...op, ...data, id: editing } : op));
-    } else {
-      const newOp = { ...data, id: Date.now() };
-      setOperaciones([...operaciones, newOp]);
+    setLoading(true);
+    setError(null);
+    try {
+      if (editing) {
+        const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/${editing}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+          throw new Error('Error al actualizar operación');
+        }
+        setOperaciones(operaciones.map(op => op.id === editing ? { ...op, ...data, id: editing } : op));
+      } else {
+        const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+          throw new Error('Error al crear operación');
+        }
+        await cargarOperacionesDeCuenta();
+      }
+      setShowForm(false);
+    } catch (err) {
+      setError(err.message);
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-    setShowForm(false);
   };
 
   return (
@@ -184,6 +310,7 @@ const OperacionesTrading = () => {
           </ul>
         </nav>
 
+            
         {/* Toggle Sidebar Button */}
         <div className="p-4 border-t border-white/10">
           <button
@@ -237,16 +364,47 @@ const OperacionesTrading = () => {
         {/* Content Area */}
         <main className="flex-1 overflow-auto p-8">
           <div className="container mx-auto">
-            <div className="mb-4">
+            {error && (
+              <div className="mb-4 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
+                {error}
+                <button onClick={() => setError(null)} className="ml-4 underline">Cerrar</button>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm text-gray-300">Seleccionar Cuenta:</label>
+                <CustomSelect
+                  value={cuentaSeleccionada ? cuentas.find(c => c.id === cuentaSeleccionada)?.nombre_cuenta + ' (' + cuentas.find(c => c.id === cuentaSeleccionada)?.divisa + ')' : 'Cargando cuentas...'}
+                  onChange={(selectedText) => {
+                    const cuenta = cuentas.find(c => selectedText.includes(c.nombre_cuenta));
+                    if (cuenta) setCuentaSeleccionada(cuenta.id);
+                  }}
+                  options={cuentas.length === 0 ? ['Cargando cuentas...'] : cuentas.map(cuenta => `${cuenta.nombre_cuenta} (${cuenta.divisa})`)}
+                />
+              </div>
+
               <button
                 onClick={handleCreate}
-                className="mt-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full transition-all duration-300"
+                disabled={!cuentaSeleccionada || loading}
+                className="mt-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-all duration-300"
               >
-                Crear Operación
+                {loading ? 'Cargando...' : 'Crear Operación'}
               </button>
             </div>
 
             <div className="mt-12 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 overflow-x-auto">
+              {loading && (
+                <div className="py-8 text-center text-gray-300">
+                  <p>Cargando operaciones...</p>
+                </div>
+              )}
+              
+              {!loading && operaciones.length === 0 ? (
+                <div className="py-8 text-center text-gray-300">
+                  <p>No hay operaciones registradas para esta cuenta.</p>
+                </div>
+              ) : (
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-gray-400 border-b border-white/10">
@@ -275,13 +433,15 @@ const OperacionesTrading = () => {
                       <td className="p-4 flex gap-2">
                         <button
                           onClick={() => handleEdit(op)}
-                          className="px-4 py-2 text-white bg-purple-600 hover:bg-purple-700 rounded-full text-sm transition-colors"
+                          disabled={loading}
+                          className="px-4 py-2 text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 rounded-full text-sm transition-colors disabled:cursor-not-allowed"
                         >
                           Editar
                         </button>
                         <button
                           onClick={() => handleDelete(op.id)}
-                          className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-full text-sm transition-colors"
+                          disabled={loading}
+                          className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 rounded-full text-sm transition-colors disabled:cursor-not-allowed"
                         >
                           Eliminar
                         </button>
@@ -290,102 +450,173 @@ const OperacionesTrading = () => {
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
 
             {showForm && (
-              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                <div className="bg-[#1a2235] rounded-2xl p-8 border border-white/20 w-full max-w-md shadow-2xl">
-                  <h2 className="text-2xl font-bold mb-6 text-white">{editing ? 'Editar Operación' : 'Crear Operación'}</h2>
-                  <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4">
+                <div className="bg-[#1a2235]/80 backdrop-blur-lg rounded-2xl p-6 border border-white/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                  <h2 className="text-2xl font-bold mb-4 text-white">{editing ? 'Editar Operación' : 'Crear Operación'}</h2>
+                  <form onSubmit={handleSubmit} className="space-y-3">
                     <div>
-                      <label className="block text-sm text-white mb-1">Fecha y Hora</label>
+                      <label className="block text-xs text-white mb-1">Fecha y Hora</label>
                       <input
                         type="datetime-local"
                         value={formData.fecha_hora}
                         onChange={(e) => setFormData({...formData, fecha_hora: e.target.value})}
-                        className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
+                        className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                        disabled={loading}
                         required
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-sm text-white mb-1">Tipo</label>
-                        <select
+                        <label className="block text-xs text-white mb-1">Tipo</label>
+                        <CustomSelect
                           value={formData.tipo_operacion}
-                          onChange={(e) => setFormData({...formData, tipo_operacion: e.target.value})}
-                          className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none"
-                        >
-                          <option value="LONG">LONG</option>
-                          <option value="SHORT">SHORT</option>
-                        </select>
+                          onChange={(value) => setFormData({...formData, tipo_operacion: value})}
+                          options={['LONG', 'SHORT']}
+                        />
                       </div>
                       <div>
-                        <label className="block text-sm text-white mb-1">Activo</label>
+                        <label className="block text-xs text-white mb-1">Activo</label>
                         <input
                           type="text"
-                          placeholder="Ej: BTC"
+                          placeholder="BTC"
                           value={formData.activo}
                           onChange={(e) => setFormData({...formData, activo: e.target.value})}
-                          className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg"
+                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                          disabled={loading}
                           required
                         />
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm text-white mb-1">Cantidad</label>
+                        <label className="block text-xs text-white mb-1">Cantidad</label>
                         <input
                           type="number"
                           step="any"
                           value={formData.cantidad}
                           onChange={(e) => setFormData({...formData, cantidad: e.target.value})}
-                          className="w-full p-2 bg-white/5 border border-white/10 rounded-lg"
+                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                          disabled={loading}
                           required
                         />
                       </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-sm text-white mb-1">Precio Entrada</label>
+                        <label className="block text-xs text-white mb-1">Precio Entrada</label>
                         <input
                           type="number"
                           step="any"
                           value={formData.precio_entrada}
                           onChange={(e) => setFormData({...formData, precio_entrada: e.target.value})}
-                          className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg"
+                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                          disabled={loading}
                           required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-white mb-1">Precio Salida</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.precio_salida}
+                          onChange={(e) => setFormData({...formData, precio_salida: e.target.value})}
+                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                          disabled={loading}
+                          placeholder="Opt"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-white mb-1">Stop Loss</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.stop_loss}
+                          onChange={(e) => setFormData({...formData, stop_loss: e.target.value})}
+                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                          disabled={loading}
+                          placeholder="Opt"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-white mb-1">Take Profit</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.take_profit}
+                          onChange={(e) => setFormData({...formData, take_profit: e.target.value})}
+                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                          disabled={loading}
+                          placeholder="Opt"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-white mb-1">Resultado</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.resultado}
+                          onChange={(e) => setFormData({...formData, resultado: e.target.value})}
+                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                          disabled={loading}
+                          placeholder="G/P"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-white mb-1">Ratio RR</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.ratio_rr}
+                          onChange={(e) => setFormData({...formData, ratio_rr: e.target.value})}
+                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                          disabled={loading}
+                          placeholder="R/R"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm text-white mb-1">Precio Salida (Opcional)</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs text-white">Confianza: <span className="text-blue-400 font-bold">{formData.nivel_confianza || 0}%</span></label>
+                      </div>
                       <input
-                        type="number"
-                        step="any"
-                        value={formData.precio_salida}
-                        onChange={(e) => setFormData({...formData, precio_salida: e.target.value})}
-                        className="w-full p-2 bg-white/5 border border-white/10 rounded-lg"
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={formData.nivel_confianza}
+                        onChange={(e) => setFormData({...formData, nivel_confianza: e.target.value})}
+                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        disabled={loading}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-white mb-1">Notas</label>
+                      <label className="block text-xs text-white mb-1">Notas</label>
                       <textarea
                         value={formData.notas}
                         onChange={(e) => setFormData({...formData, notas: e.target.value})}
-                        className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg h-20"
+                        className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500 h-12"
+                        disabled={loading}
                       />
                     </div>
-                    <div className="flex justify-end gap-3 pt-4">
+                    <div className="flex justify-end gap-2 pt-2">
                       <button
                         type="button"
                         onClick={() => setShowForm(false)}
-                        className="px-6 py-2 text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors"
+                        disabled={loading}
+                        className="px-4 py-1.5 text-xs text-white bg-gray-700 hover:bg-gray-600 disabled:bg-gray-700/50 rounded-full transition-colors disabled:cursor-not-allowed"
                       >
                         Cancelar
                       </button>
                       <button
                         type="submit"
-                        className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors font-bold"
+                        disabled={loading}
+                        className="px-4 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 rounded-full transition-colors font-bold disabled:cursor-not-allowed"
                       >
-                        Guardar
+                        {loading ? 'Guardando...' : 'Guardar'}
                       </button>
                     </div>
                   </form>
