@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr
 from typing import Literal, Optional
 from datetime import datetime
+
+from pydantic import BaseModel, EmailStr
 
 class SignUp(BaseModel):
     nombre: str
@@ -20,6 +21,12 @@ class OperacionCreate(BaseModel):
     precio_entrada: float
     precio_salida: Optional[float] = None
     notas: Optional[str] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    resultado: Optional[float] = None
+    ratio_rr: Optional[float] = None
+    nivel_confianza: Optional[int] = None
+    screenshot: Optional[bytes] = None
 
 class OperacionUpdate(BaseModel):
     fecha_hora: Optional[datetime] = None
@@ -29,6 +36,21 @@ class OperacionUpdate(BaseModel):
     precio_entrada: Optional[float] = None
     precio_salida: Optional[float] = None
     notas: Optional[str] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    resultado: Optional[float] = None
+    ratio_rr: Optional[float] = None
+    nivel_confianza: Optional[int] = None
+    screenshot: Optional[bytes] = None
+
+
+class CuentaOperacionPathParams(BaseModel):
+    cuenta_id_trading: int
+
+
+class OperacionPathParams(BaseModel):
+    cuenta_id_trading: int
+    id: int
 
 class createCuentaTrading(BaseModel):
     nombre_cuenta: str
