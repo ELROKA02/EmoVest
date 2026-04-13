@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import OperacionesTrading from './OperacionesTrading';
+import CustomSelect from './CustomSelect';
 import logo from '../assets/logoEmoVest.png';
 
 const Dashboard = () => {
@@ -44,7 +45,7 @@ const Dashboard = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8000/crearcuenta', {
+      const response = await fetch('http://localhost:8000/cuentas/crearcuenta', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +71,7 @@ const Dashboard = () => {
         const fetchTradingAccounts = async () => {
           try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8000/vercuentas', {
+            const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
               method: 'GET',
               headers: {
                 'Authorization': `Bearer ${token}`
@@ -123,7 +124,7 @@ const Dashboard = () => {
     const fetchTradingAccounts = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:8000/vercuentas', {
+        const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -200,79 +201,79 @@ const Dashboard = () => {
           
           <div className="flex items-center gap-2">
             <label className="text-white font-medium">Cuentas:</label>
-            <select
-              value={selectedAccount}
-              onChange={(e) => setSelectedAccount(e.target.value)}
-              className="px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
-            >
-              {tradingAccounts.length === 0 ? (
-                <option value="">No hay cuentas disponibles</option>
-              ) : (
-                tradingAccounts.map(account => (
-                  <option key={account.id} value={account.id}>
-                    {account.nombre_cuenta} ({account.divisa}) - ${account.saldo_inicial.toFixed(2)}
-                  </option>
-                ))
-              )}
-            </select>
+            <CustomSelect
+              value={
+                tradingAccounts.find(account => account.id === selectedAccount)
+                  ? `${tradingAccounts.find(account => account.id === selectedAccount).nombre_cuenta} (${tradingAccounts.find(account => account.id === selectedAccount).divisa}) - $${tradingAccounts.find(account => account.id === selectedAccount).saldo_inicial.toFixed(2)}`
+                  : 'No hay cuentas disponibles'
+              }
+              onChange={(selectedText) => {
+                const selectedAccountObj = tradingAccounts.find(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}` === selectedText);
+                if (selectedAccountObj) {
+                  setSelectedAccount(selectedAccountObj.id);
+                }
+              }}
+              options={
+                tradingAccounts.length === 0
+                  ? ['No hay cuentas disponibles']
+                  : tradingAccounts.map(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}`)
+              }
+            />
           </div>
         </div>
 
         {/* Formulario modal para crear cuenta */}
         {showAccountForm && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-[#1a2235] rounded-2xl p-8 border border-white/20 w-full max-w-md shadow-2xl">
-              <h2 className="text-2xl font-bold mb-6 text-white">Crear Cuenta Trading</h2>
-              <form onSubmit={handleAccountSubmit} className="space-y-4">
+            <div className="bg-[#1a2235] rounded-2xl p-6 border border-white/20 w-full max-w-md shadow-2xl">
+              <h2 className="text-xl font-bold mb-4 text-white">Crear Cuenta Trading</h2>
+              <form onSubmit={handleAccountSubmit} className="space-y-3">
                 <div>
-                  <label className="block text-sm text-white mb-1">Nombre de Cuenta</label>
+                  <label className="block text-xs text-white mb-1">Nombre de Cuenta</label>
                   <input
                     type="text"
                     value={accountData.nombre_cuenta}
                     onChange={(e) => setAccountData({...accountData, nombre_cuenta: e.target.value})}
-                    className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
+                    className="w-full p-2 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
                     placeholder="Ej: Cuenta Principal"
                     required
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm text-white mb-1">Divisa</label>
-                  <select
+                  <label className="block text-xs text-white mb-1">Divisa</label>
+                  <CustomSelect
                     value={accountData.divisa}
-                    onChange={(e) => setAccountData({...accountData, divisa: e.target.value})}
-                    className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none"
-                  >
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                  </select>
+                    onChange={(value) => setAccountData({...accountData, divisa: value})}
+                    options={['EUR', 'USD']}
+                  />
                 </div>
                 
                 <div>
-                  <label className="block text-sm text-white mb-1">Saldo Inicial</label>
+                  <label className="block text-xs text-white mb-1">Saldo Inicial</label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={accountData.saldo_inicial}
                     onChange={(e) => setAccountData({...accountData, saldo_inicial: parseFloat(e.target.value) || 0})}
-                    className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none"
+                    className="w-full p-2 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none"
                     placeholder="0.00"
                     required
                   />
                 </div>
                 
-                <div className="flex justify-end gap-3 pt-4">
+                <div className="flex justify-end gap-2 pt-3">
                   <button
                     type="button"
                     onClick={() => setShowAccountForm(false)}
-                    className="px-6 py-2 text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors"
+                    className="px-4 py-2 text-sm text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors font-bold"
+                    className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors font-semibold"
                   >
                     Crear Cuenta
                   </button>

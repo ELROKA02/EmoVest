@@ -138,7 +138,7 @@ def crear_cuenta(cuenta: createCuentaTrading, usuario: str = Depends(get_current
     }
 )
 def ver_cuentas(
-    id_usuario: Annotated[int | None, Query(description="Id del usuario cuyas cuentas se desean obtener", example=1)] = None,
+    id_usuario: Annotated[int | None, Query(description="Id del usuario cuyas cuentas se desean obtener", examples=[1])] = None,
     usuario: str = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
