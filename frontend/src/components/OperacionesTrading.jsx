@@ -168,7 +168,7 @@ const OperacionesTrading = () => {
               <li key={item.id}>
                 <button
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 ${
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${
                     location.pathname === item.path
                       ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'

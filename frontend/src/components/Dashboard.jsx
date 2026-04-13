@@ -19,6 +19,16 @@ const Dashboard = () => {
   // Obtener el nombre del usuario del localStorage
   const userName = localStorage.getItem('userName') || 'Usuario';
 
+  // Estado para el formulario de crear cuenta
+  const [accountData, setAccountData] = useState({
+    nombre_cuenta: '',
+    divisa: 'EUR',
+    saldo_inicial: 0
+  });
+  const [showAccountForm, setShowAccountForm] = useState(false);
+  const [tradingAccounts, setTradingAccounts] = useState([]);
+  const [selectedAccount, setSelectedAccount] = useState('');
+
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
   };
@@ -28,6 +38,124 @@ const Dashboard = () => {
     localStorage.removeItem('rememberedEmail');
     navigate('/login');
   };
+
+  const handleCreateAccount = async (e) => {
+    e.preventDefault();
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:8000/crearcuenta', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(accountData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Cuenta creada exitosamente:', result);
+        alert('Cuenta de trading creada exitosamente');
+        
+        // Cerrar el modal y resetear el formulario
+        setShowAccountForm(false);
+        setAccountData({
+          nombre_cuenta: '',
+          divisa: 'EUR',
+          saldo_inicial: 0
+        });
+        
+        // Refrescar la lista de cuentas
+        const fetchTradingAccounts = async () => {
+          try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('http://localhost:8000/vercuentas', {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+
+            if (response.ok) {
+              const accounts = await response.json();
+              setTradingAccounts(accounts);
+              if (accounts.length > 0) {
+                setSelectedAccount(accounts[accounts.length - 1].id); // Seleccionar la nueva cuenta
+              }
+            } else if (response.status === 404) {
+              setTradingAccounts([]);
+              setSelectedAccount('');
+            }
+          } catch (error) {
+            console.error('Error al refrescar cuentas:', error);
+          }
+        };
+        
+        fetchTradingAccounts();
+      } else {
+        const errorData = await response.json();
+        console.error('Error al crear cuenta:', errorData);
+        alert('Error al crear la cuenta: ' + (errorData.detail || 'Error desconocido'));
+      }
+    } catch (error) {
+      console.error('Error de conexión:', error);
+      alert('Error de conexión al servidor');
+    }
+  };
+
+  const handleCreateAccountClick = () => {
+    setAccountData({
+      nombre_cuenta: '',
+      divisa: 'EUR',
+      saldo_inicial: 0
+    });
+    setShowAccountForm(true);
+  };
+
+  const handleAccountSubmit = (e) => {
+    e.preventDefault();
+    handleCreateAccount(e);
+  };
+
+  // Fetch trading accounts on component mount
+  useEffect(() => {
+    const fetchTradingAccounts = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('http://localhost:8000/vercuentas', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const accounts = await response.json();
+          console.log('Cuentas recibidas del backend:', accounts);
+          console.log('Número de cuentas:', accounts.length);
+          setTradingAccounts(accounts);
+          if (accounts.length > 0) {
+            console.log('ID de la primera cuenta:', accounts[0].id);
+            setSelectedAccount(accounts[0].id);
+          }
+        } else {
+          // Si es 404, significa que no hay cuentas (es normal)
+          if (response.status === 404) {
+            console.log('No hay cuentas (404 - es normal)');
+            setTradingAccounts([]);
+            setSelectedAccount('');
+          } else {
+            console.error('Error fetching accounts:', response.status);
+          }
+        }
+      } catch (error) {
+        console.error('Error de conexión al obtener cuentas:', error);
+      }
+    };
+
+    fetchTradingAccounts();
+  }, []);
 
   const menuItems = [
     {
@@ -56,13 +184,103 @@ const Dashboard = () => {
     if (location.pathname === '/dashboard/operaciones') {
       return <OperacionesTrading />;
     }
-    
-    // Content vacío por defecto
+
+    // Dashboard content sin grid
+    console.log('Estado actual de tradingAccounts en render:', tradingAccounts);
+    console.log('Longitud de tradingAccounts:', tradingAccounts.length);
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <p className="text-gray-400 text-lg">Selecciona una opción del menú para comenzar</p>
+      <div className="p-14 pl-30 h-full">
+        <div className="mb-6 flex items-center gap-8">
+          <button
+            onClick={handleCreateAccountClick}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full transition-all duration-300"
+          >
+            Crear Cuenta Trading
+          </button>
+          
+          <div className="flex items-center gap-2">
+            <label className="text-white font-medium">Cuentas:</label>
+            <select
+              value={selectedAccount}
+              onChange={(e) => setSelectedAccount(e.target.value)}
+              className="px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
+            >
+              {tradingAccounts.length === 0 ? (
+                <option value="">No hay cuentas disponibles</option>
+              ) : (
+                tradingAccounts.map(account => (
+                  <option key={account.id} value={account.id}>
+                    {account.nombre_cuenta} ({account.divisa}) - ${account.saldo_inicial.toFixed(2)}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
         </div>
+
+        {/* Formulario modal para crear cuenta */}
+        {showAccountForm && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-[#1a2235] rounded-2xl p-8 border border-white/20 w-full max-w-md shadow-2xl">
+              <h2 className="text-2xl font-bold mb-6 text-white">Crear Cuenta Trading</h2>
+              <form onSubmit={handleAccountSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm text-white mb-1">Nombre de Cuenta</label>
+                  <input
+                    type="text"
+                    value={accountData.nombre_cuenta}
+                    onChange={(e) => setAccountData({...accountData, nombre_cuenta: e.target.value})}
+                    className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="Ej: Cuenta Principal"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm text-white mb-1">Divisa</label>
+                  <select
+                    value={accountData.divisa}
+                    onChange={(e) => setAccountData({...accountData, divisa: e.target.value})}
+                    className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none"
+                  >
+                    <option value="EUR">EUR</option>
+                    <option value="USD">USD</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm text-white mb-1">Saldo Inicial</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={accountData.saldo_inicial}
+                    onChange={(e) => setAccountData({...accountData, saldo_inicial: parseFloat(e.target.value) || 0})}
+                    className="w-full p-2 text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                
+                <div className="flex justify-end gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAccountForm(false)}
+                    className="px-6 py-2 text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors font-bold"
+                  >
+                    Crear Cuenta
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -94,11 +312,10 @@ const Dashboard = () => {
               <li key={item.id}>
                 <button
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 ${
-                    location.pathname === item.path
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${location.pathname === item.path
                       ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <span className="flex-shrink-0 flex items-center justify-center">{item.icon}</span>
                   {sidebarOpen && (
