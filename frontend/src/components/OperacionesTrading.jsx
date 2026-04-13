@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/logoEmoVest.png';
 import CustomSelect from './CustomSelect';
+import { fetchAndStoreUserName } from '../utils/userSession';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -34,8 +35,28 @@ const OperacionesTrading = () => {
     localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen));
   }, [sidebarOpen]);
 
-  // Obtener el nombre del usuario del localStorage
-  const userName = localStorage.getItem('userName') || 'Usuario';
+  const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCurrentUser = async () => {
+      try {
+        const name = await fetchAndStoreUserName();
+        if (name && isMounted) {
+          setUserName(name);
+        }
+      } catch (error) {
+        console.error('Error al cargar usuario actual:', error);
+      }
+    };
+
+    loadCurrentUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Cargar cuentas al montar
   useEffect(() => {
@@ -47,6 +68,7 @@ const OperacionesTrading = () => {
     if (cuentaSeleccionada) {
       cargarOperacionesDeCuenta();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cuentaSeleccionada]);
 
   const cargarCuentas = async () => {
@@ -64,6 +86,8 @@ const OperacionesTrading = () => {
       setCuentas(data);
       if (data.length > 0) {
         setCuentaSeleccionada(data[0].id);
+      } else {
+        setError('No se han creado cuentas de trading. Crea una desde el Tablero.');
       }
     } catch (err) {
       setError(err.message);
@@ -102,6 +126,7 @@ const OperacionesTrading = () => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
+    localStorage.removeItem('userName');
     navigate('/login');
   };
 
@@ -144,7 +169,7 @@ const OperacionesTrading = () => {
     take_profit: '',
     resultado: '',
     ratio_rr: '',
-    nivel_confianza: '',
+    nivel_confianza: 0,
     screenshot: null
   });
 
@@ -162,7 +187,7 @@ const OperacionesTrading = () => {
       take_profit: '',
       resultado: '',
       ratio_rr: '',
-      nivel_confianza: '',
+      nivel_confianza: 0,
       screenshot: null
     });
     setShowForm(true);
@@ -182,7 +207,7 @@ const OperacionesTrading = () => {
       take_profit: op.take_profit || '',
       resultado: op.resultado || '',
       ratio_rr: op.ratio_rr || '',
-      nivel_confianza: op.nivel_confianza || '',
+      nivel_confianza: op.nivel_confianza ?? 0,
       screenshot: op.screenshot || null
     });
     setShowForm(true);
@@ -294,7 +319,7 @@ const OperacionesTrading = () => {
               <li key={item.id}>
                 <button
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${
+                  className={`w-full flex items-center justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${
                     location.pathname === item.path
                       ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
@@ -302,7 +327,7 @@ const OperacionesTrading = () => {
                 >
                   <span className="flex-shrink-0 flex items-center justify-center">{item.icon}</span>
                   {sidebarOpen && (
-                    <span className="font-medium">{item.name}</span>
+                    <span className="font-medium pl-1 text-left">{item.name}</span>
                   )}
                 </button>
               </li>
@@ -339,7 +364,7 @@ const OperacionesTrading = () => {
             <h2 className="text-xl font-semibold text-white">Operaciones de Trading</h2>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-8">
             {/* User Icon */}
             <div className="flex items-center gap-2 text-gray-300">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -408,29 +433,31 @@ const OperacionesTrading = () => {
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-gray-400 border-b border-white/10">
-                    <th className="p-4">Fecha</th>
-                    <th className="p-4">Tipo</th>
-                    <th className="p-4">Activo</th>
-                    <th className="p-4">Cantidad</th>
-                    <th className="p-4">Precio Entrada</th>
-                    <th className="p-4">Precio Salida</th>
-                    <th className="p-4">Notas</th>
-                    <th className="p-4">Acciones</th>
+                    <th className="p-4 text-center">Fecha</th>
+                    <th className="p-4 text-center">Tipo</th>
+                    <th className="p-4 text-center">Activo</th>
+                    <th className="p-4 text-center">Cantidad</th>
+                    <th className="p-4 text-center">Precio Entrada</th>
+                    <th className="p-4 text-center">Precio Salida</th>
+                    <th className="p-4 text-center">Profit</th>
+                    <th className="p-4 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {operaciones.map(op => (
                     <tr key={op.id} className="border-t text-white border-white/10 hover:bg-white/5 transition-colors">
-                      <td className="p-4">{new Date(op.fecha_hora).toLocaleString()}</td>
-                      <td className={`p-4  font-bold ${op.tipo_operacion === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>
+                      <td className="p-4 text-center">{new Date(op.fecha_hora).toLocaleString()}</td>
+                      <td className={`p-4 text-center font-bold ${op.tipo_operacion === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>
                         {op.tipo_operacion}
                       </td>
-                      <td className="p-4 text-white">{op.activo}</td>
-                      <td className="p-4 text-white">{op.cantidad}</td>
-                      <td className="p-4 font-mono text-white">${op.precio_entrada}</td>
-                      <td className="p-4 font-mono text-white">{op.precio_salida ? `$${op.precio_salida}` : '-'}</td>
-                      <td className="p-4 text-sm text-gray-300">{op.notas || '-'}</td>
-                      <td className="p-4 flex gap-2">
+                      <td className="p-4 text-center text-white">{op.activo}</td>
+                      <td className="p-4 text-center text-white">{op.cantidad}</td>
+                      <td className="p-4 text-center font-mono text-white">{op.precio_entrada}$</td>
+                      <td className="p-4 text-center font-mono text-white">{op.precio_salida ? `${op.precio_salida}$` : '-'}</td>
+                      <td className={`p-4 text-center font-semibold ${op.resultado > 0 ? 'text-green-400' : op.resultado < 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                        {op.resultado !== null && op.resultado !== undefined ? `${op.resultado}$` : '-'}
+                      </td>
+                      <td className="p-4 flex gap-2 justify-center">
                         <button
                           onClick={() => handleEdit(op)}
                           disabled={loading}

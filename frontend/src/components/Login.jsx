@@ -1,6 +1,7 @@
 import React, { useState } from 'react'; 
 import logo from '../assets/logoEmoVest.png'; 
 import { Link, useNavigate } from 'react-router-dom';
+import { fetchAndStoreUserName } from '../utils/userSession';
 
 const Login = () => {
     const [email, setEmail] = useState(() => localStorage.getItem('rememberedEmail') || '');
@@ -25,6 +26,11 @@ const Login = () => {
                 const data = await response.json();
                 console.log('✅ Login exitoso:', data);
                 localStorage.setItem('token', data.access_token);
+                try {
+                    await fetchAndStoreUserName();
+                } catch (meError) {
+                    console.error('No se pudo obtener /me tras login:', meError);
+                }
                 if (rememberMe) {
                     localStorage.setItem('rememberedEmail', email);
                 } else {

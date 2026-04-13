@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { fetchAndStoreUserName } from '../utils/userSession';
 
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -9,8 +10,30 @@ function Navbar() {
   const isLoggedIn = !!localStorage.getItem('token');
   const showLogout = isLoggedIn && location.pathname === '/dashboard';
 
-  // Obtener el nombre del usuario del localStorage
-  const userName = localStorage.getItem('userName') || 'Usuario';
+  const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCurrentUser = async () => {
+      try {
+        const name = await fetchAndStoreUserName();
+        if (name && isMounted) {
+          setUserName(name);
+        }
+      } catch (error) {
+        console.error('Error al cargar usuario actual:', error);
+      }
+    };
+
+    if (isLoggedIn) {
+      loadCurrentUser();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isLoggedIn]);
 
   const handleButtonClick = () => {
     setIsOpen(false); 
@@ -25,6 +48,7 @@ function Navbar() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
+    localStorage.removeItem('userName');
     setIsOpen(false);
     navigate('/login');
   };

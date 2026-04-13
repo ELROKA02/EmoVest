@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import OperacionesTrading from './OperacionesTrading';
 import CustomSelect from './CustomSelect';
 import logo from '../assets/logoEmoVest.png';
+import { fetchAndStoreUserName } from '../utils/userSession';
 
 const Dashboard = () => {
   // Obtener estado del sidebar desde localStorage o usar true por defecto
@@ -17,14 +18,34 @@ const Dashboard = () => {
     localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen));
   }, [sidebarOpen]);
 
-  // Obtener el nombre del usuario del localStorage
-  const userName = localStorage.getItem('userName') || 'Usuario';
+  const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCurrentUser = async () => {
+      try {
+        const name = await fetchAndStoreUserName();
+        if (name && isMounted) {
+          setUserName(name);
+        }
+      } catch (error) {
+        console.error('Error al cargar usuario actual:', error);
+      }
+    };
+
+    loadCurrentUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Estado para el formulario de crear cuenta
   const [accountData, setAccountData] = useState({
     nombre_cuenta: '',
     divisa: 'EUR',
-    saldo_inicial: 0
+    saldo_inicial: ''
   });
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [tradingAccounts, setTradingAccounts] = useState([]);
@@ -33,10 +54,12 @@ const Dashboard = () => {
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
   };
+  const saldoPlaceholder = accountData.divisa === 'EUR' ? '€ 0.00' : '$ 0.00';
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
+    localStorage.removeItem('userName');
     navigate('/login');
   };
 
@@ -51,7 +74,10 @@ const Dashboard = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(accountData)
+        body: JSON.stringify({
+          ...accountData,
+          saldo_inicial: accountData.saldo_inicial === '' ? 0 : parseFloat(accountData.saldo_inicial)
+        })
       });
 
       if (response.ok) {
@@ -64,7 +90,7 @@ const Dashboard = () => {
         setAccountData({
           nombre_cuenta: '',
           divisa: 'EUR',
-          saldo_inicial: 0
+          saldo_inicial: ''
         });
         
         // Refrescar la lista de cuentas
@@ -109,7 +135,7 @@ const Dashboard = () => {
     setAccountData({
       nombre_cuenta: '',
       divisa: 'EUR',
-      saldo_inicial: 0
+      saldo_inicial: ''
     });
     setShowAccountForm(true);
   };
@@ -253,12 +279,13 @@ const Dashboard = () => {
                   <label className="block text-xs text-white mb-1">Saldo Inicial</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="100"
                     min="0"
                     value={accountData.saldo_inicial}
-                    onChange={(e) => setAccountData({...accountData, saldo_inicial: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => setAccountData({...accountData, saldo_inicial: e.target.value})}
                     className="w-full p-2 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none"
-                    placeholder="0.00"
+                    placeholder={saldoPlaceholder}
+
                     required
                   />
                 </div>
@@ -313,14 +340,14 @@ const Dashboard = () => {
               <li key={item.id}>
                 <button
                   onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${location.pathname === item.path
+                  className={`w-full flex items-center justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${location.pathname === item.path
                       ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30'
                       : 'text-gray-300 hover:bg-white/10 hover:text-white'
                     }`}
                 >
                   <span className="flex-shrink-0 flex items-center justify-center">{item.icon}</span>
                   {sidebarOpen && (
-                    <span className="font-medium">{item.name}</span>
+                    <span className="font-medium pl-1 text-left">{item.name}</span>
                   )}
                 </button>
               </li>
@@ -356,7 +383,7 @@ const Dashboard = () => {
             <h2 className="text-xl font-semibold text-white">Tablero</h2>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-8">
             {/* User Icon */}
             <div className="flex items-center gap-2 text-gray-300">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
