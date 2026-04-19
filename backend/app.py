@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, operaciones, cuentaTrading
+from routers import auth, operaciones, cuentaTrading, estadisticas
 
 app = FastAPI(
     title="EMOVEST API",
@@ -56,6 +56,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(operaciones.router)
 app.include_router(cuentaTrading.router)
+app.include_router(estadisticas.router)
 
 @app.get(
     "/",

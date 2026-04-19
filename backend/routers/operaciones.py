@@ -1,6 +1,8 @@
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Operacion, Cuenta_Trading
@@ -21,6 +23,18 @@ def get_cuenta_usuario(db: Session, cuenta_id_trading: int, user_id: int) -> Cue
         raise HTTPException(status_code=404, detail="Cuenta de trading no encontrada")
 
     return cuenta
+
+
+def actualizar_saldo_cuenta(db: Session, cuenta_id: int, diferencia: Decimal) -> None:
+    if diferencia == 0:
+        return
+
+    db.query(Cuenta_Trading).filter(Cuenta_Trading.id == cuenta_id).update(
+        {
+            Cuenta_Trading.saldo_actual: func.coalesce(Cuenta_Trading.saldo_actual, Decimal("0")) + diferencia
+        },
+        synchronize_session=False,
+    )
 
 
 @router.get(
@@ -99,6 +113,10 @@ def create_operacion(
     db.commit()
     db.refresh(nueva_operacion)
 
+    if operacion.resultado is not None:
+        actualizar_saldo_cuenta(db, cuenta.id, Decimal(str(operacion.resultado)))
+        db.commit()
+
     if operacion.notas:
         try:
             guardar_registro_emocional(operacion.notas, nueva_operacion.id, db)
@@ -141,8 +159,17 @@ def update_operacion(
 
     if not op:
         raise HTTPException(status_code=404, detail="Operacion no encontrada")
-    
-    for key, value in operacion.model_dump(exclude_unset=True).items():
+
+    # model_dump con exclude_unset para obtener solo los campos que se estan actualizando, y asi evitar sobreescribir campos no incluidos en la request con valores por defecto o None
+    datos = operacion.model_dump(exclude_unset=True)
+
+    if "resultado" in datos:
+        resultado_anterior = Decimal(str(op.resultado)) if op.resultado is not None else Decimal("0")
+        resultado_nuevo = Decimal(str(datos["resultado"])) if datos["resultado"] is not None else Decimal("0")
+        diferencia = resultado_nuevo - resultado_anterior
+        actualizar_saldo_cuenta(db, cuenta.id, diferencia)
+
+    for key, value in datos.items():
         setattr(op, key, value)
 
     db.commit()
@@ -181,6 +208,10 @@ def delete_operacion(
     op = db.query(Operacion).filter(Operacion.id == id, Operacion.id_cuenta == cuenta.id).first()
     if not op:
         raise HTTPException(status_code=404, detail="Operacion no encontrada")
+
+    if op.resultado is not None:
+        actualizar_saldo_cuenta(db, cuenta.id, -Decimal(str(op.resultado)))
+
     db.delete(op)
     db.commit()
     return {"message": "Operacion eliminada exitosamente", "operacion_id": id, "cuenta_id": cuenta.id}
