@@ -380,9 +380,97 @@ def calcular_expectativa_mensual(
     
     return expectancy
     
+
+from decimal import Decimal
+
+def get_emocion_principal_operacion(
+    operacion: Operacion
+) -> list[str] | None:
     
+    if operacion.registro_emocional is None:
+        return None
+
+    emociones = {
+        "confianza": operacion.registro_emocional.confianza,
+        "duda": operacion.registro_emocional.duda,
+        "euforia": operacion.registro_emocional.euforia,
+        "miedo": operacion.registro_emocional.miedo,
+        "neutral": operacion.registro_emocional.neutral
+    }
+
+    valor_maximo = max(emociones.values())
+
+    if valor_maximo == Decimal("0"):
+        return None
+
+    emociones_principales = [
+        nombre
+        for nombre, valor in emociones.items()
+        if valor == valor_maximo
+    ]
+
+    return emociones_principales
+
+def get_operaciones_por_emocion_mensual(
+    db: Session,
+    cuenta_id_trading: int
+) -> dict:
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+
+    operaciones_emociones = {
+        "confianza": [],
+        "duda": [],
+        "euforia": [],
+        "miedo": [],
+        "neutral": []
+    }
+
+    for operacion in operaciones:
+        if operacion.registro_emocional is not None:
+            emociones_principales = get_emocion_principal_operacion(operacion)
+
+            if emociones_principales is not None:
+                for emocion in emociones_principales:
+                    operaciones_emociones[emocion].append(operacion)
+
+    return operaciones_emociones
     
-    
+def calcular_winrate_por_emocion_mensual(
+    db: Session,
+    cuenta_id_trading: int
+) -> dict:
+    operaciones_emociones = get_operaciones_por_emocion_mensual(db, cuenta_id_trading)
+
+    winrate_emociones = {
+        "confianza": 0.0,
+        "duda": 0.0,
+        "euforia": 0.0,
+        "miedo": 0.0,
+        "neutral": 0.0
+    }
+
+    for emocion, operaciones in operaciones_emociones.items():
+        if not operaciones:
+            winrate_emociones[emocion] = 0.0
+            continue
+
+        operaciones_ganadoras = 0
+        operaciones_totales = 0
+
+        for operacion in operaciones:
+            if operacion.resultado is not None:
+                operaciones_totales += 1
+                if operacion.resultado > 0:
+                    operaciones_ganadoras += 1
+
+        if operaciones_totales == 0:
+            winrate_emociones[emocion] = 0.0
+            continue
+
+        win_rate = (operaciones_ganadoras / operaciones_totales) * 100
+        winrate_emociones[emocion] = round(win_rate, 2)
+
+    return winrate_emociones
    
 
 @router.get(
@@ -427,3 +515,21 @@ def get_resumen_mensual(
         "dia_semanal_menos_rentable": dia_semanal_menos_rentable,
         "expectativa": expectativa
     }
+
+
+@router.get(
+    "/emociones",
+    summary="Obtener estadisticas de emociones mensuales de una cuenta de trading",
+    description="Calcula y devuelve el win rate mensual desglosado por emocion principal identificada en el registro emocional de cada operacion para una cuenta de trading concreta del usuario autenticado.",
+    tags=["estadisticas", "emociones"]
+)
+def get_estadisticas_emociones_mensuales(
+    cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading.", examples=[1])],
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
+
+    winrate_emociones = calcular_winrate_por_emocion_mensual(db, cuenta.id)
+
+    return winrate_emociones

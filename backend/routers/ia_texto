@@ -1,6 +1,6 @@
 FROM gemma4:e4b
 
-PARAMETER temperature 0.3
+PARAMETER temperature 0.6
 
 PARAMETER top_k 40
 

@@ -52,7 +52,7 @@ def clasificar_emociones(texto: str) -> Emociones:
     prompt = construir_prompt_emociones(texto)
 
     response = chat(
-        model='clasificador_texto:latest',
+        model='clasificador_emociones_gemma4:latest',
         messages=[{'role': 'user', 'content': prompt}],
         format=Emociones.model_json_schema(),
     )
