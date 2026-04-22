@@ -1,14 +1,18 @@
 from datetime import datetime
+
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
 from routers.auth import get_current_user
-from models import Cuenta_Trading, Operacion
+from models import Cuenta_Trading, Estadistica, Operacion
+
+from apscheduler.schedulers.background import BackgroundScheduler
+
 
 
 router = APIRouter(prefix="/cuentas/{cuenta_id_trading}/estadisticas", tags=["estadisticas"])
@@ -34,27 +38,35 @@ def get_inicio_mes_siguiente(fecha_actual: datetime) -> datetime:
 
 
 def get_operaciones_del_mes(
-	db: Session,
-	cuenta_id_trading: int,
-): 
-	now = datetime.now()
-	inicio_mes = datetime(now.year, now.month, 1)
-	inicio_mes_siguiente = get_inicio_mes_siguiente(now)
+    db: Session,
+    cuenta_id_trading: int,
+    year: int = None,
+    month: int = None,
+):
+    if year is None or month is None:
+        now = datetime.now()
+        year = now.year
+        month = now.month
 
-	operaciones = db.query(Operacion).filter(
-		Operacion.id_cuenta == cuenta_id_trading,
-		Operacion.fecha_hora >= inicio_mes,
-		Operacion.fecha_hora < inicio_mes_siguiente,
+    inicio_mes = datetime(year, month, 1)
+    inicio_mes_siguiente = get_inicio_mes_siguiente(inicio_mes)
+
+    operaciones = db.query(Operacion).filter(
+        Operacion.id_cuenta == cuenta_id_trading,
+        Operacion.fecha_hora >= inicio_mes,
+        Operacion.fecha_hora < inicio_mes_siguiente,
     ).order_by(Operacion.fecha_hora.asc(), Operacion.id.asc()).all()
 
-	return operaciones
+    return operaciones
 
 
 def calcular_ganancias_netas_mensuales(
 	db: Session,
 	cuenta_id_trading: int,
+    year: int = None,
+    month: int = None,
 	) -> float:
-	operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+	operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
 	ganancia_neta_decimal = Decimal("0")
 
@@ -67,8 +79,10 @@ def calcular_ganancias_netas_mensuales(
 def calcular_winrate_mensual(
     db: Session,
     cuenta_id_trading: int,
+     year: int = None,
+     month: int = None,
     ) -> float:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     if not operaciones:
         return 0.0
@@ -92,8 +106,10 @@ def calcular_winrate_mensual(
 def calcular_ganancias_promedias_mensuales(
     db: Session,
     cuenta_id_trading: int,
+        year: int = None,
+        month: int = None,
     ) -> float:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     ganancias_totales_decimal = Decimal("0")
     operaciones_ganadoras = 0
@@ -113,8 +129,10 @@ def calcular_ganancias_promedias_mensuales(
 def calcular_perdidas_promedias_mensuales(
     db: Session,
     cuenta_id_trading: int,
+     year: int = None,
+     month: int = None,
     ) -> float:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     perdidas_totales_decimal = Decimal("0")
     operaciones_perdedoras = 0
@@ -130,16 +148,23 @@ def calcular_perdidas_promedias_mensuales(
     perdida_promedio_decimal = perdidas_totales_decimal / Decimal(operaciones_perdedoras)
 
     return float(perdida_promedio_decimal)
-
 def calcular_maximo_drawdown_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
+    
 ) -> dict:
 
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
-    saldo = Decimal("0")
-    pico = Decimal("0")
+    cuenta = db.query(Cuenta_Trading).filter(
+        Cuenta_Trading.id == cuenta_id_trading
+    ).first()
+
+    saldo = Decimal(str(cuenta.saldo_inicial))
+    pico = saldo
+
     max_drawdown_euros = Decimal("0")
     max_drawdown_porcentaje = Decimal("0")
 
@@ -147,21 +172,20 @@ def calcular_maximo_drawdown_mensual(
         if operacion.resultado is None:
             continue
 
-        # Balance acumulado
+        # saldo real
         saldo += Decimal(str(operacion.resultado))
 
-        # Nuevo pico histórico
+        # nuevo pico
         if saldo > pico:
             pico = saldo
 
-        # Drawdown en euros
         drawdown_actual = pico - saldo
 
         if drawdown_actual > max_drawdown_euros:
             max_drawdown_euros = drawdown_actual
 
-        # Drawdown en porcentaje
-        if pico > 0:
+        # porcentaje correcto
+        if pico > 0 and drawdown_actual > 0:
             porcentaje_actual = (drawdown_actual / pico) * Decimal("100")
 
             if porcentaje_actual > max_drawdown_porcentaje:
@@ -174,9 +198,11 @@ def calcular_maximo_drawdown_mensual(
 
 def calcular_media_operaciones_hasta_error_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
 ) -> float:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     rachas_ganadoras = []
     racha_actual = 0
@@ -210,9 +236,11 @@ def calcular_media_operaciones_hasta_error_mensual(
 
 def calcular_media_operaciones_hasta_ganadora_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
 ) -> float:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     rachas_perdedoras = []
     racha_actual = 0
@@ -247,9 +275,11 @@ def calcular_media_operaciones_hasta_ganadora_mensual(
 
 def calcular_operaciones_ganadoras_consecutivas_actuales_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
 ) -> int:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     racha_actual = 0
 
@@ -266,9 +296,12 @@ def calcular_operaciones_ganadoras_consecutivas_actuales_mensual(
 
 def calcular_racha_ganadora_mas_larga_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
+    
 ) -> int:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     racha_ganadora_mas_larga = 0
     racha_actual = 0
@@ -288,9 +321,11 @@ def calcular_racha_ganadora_mas_larga_mensual(
 
 def calcular_racha_perdedora_mas_larga_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
 ) -> int:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     racha_perdedora_mas_larga = 0
     racha_actual = 0
@@ -310,9 +345,11 @@ def calcular_racha_perdedora_mas_larga_mensual(
 
 def calcular_dia_mas_rentable_semanal_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
 ) -> dict:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     ganancias_por_dia = {}
 
@@ -340,9 +377,11 @@ def calcular_dia_mas_rentable_semanal_mensual(
     
 def calcular_dia_menos_rentable_semanal_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
 ) -> dict:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     ganancias_por_dia = {}
 
@@ -370,13 +409,15 @@ def calcular_dia_menos_rentable_semanal_mensual(
 
 def calcular_expectativa_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
 ) -> float:
-    winrate = calcular_winrate_mensual(db, cuenta_id_trading)
-    ganancias_promedio = calcular_ganancias_promedias_mensuales(db, cuenta_id_trading)
-    perdidas_promedio = calcular_perdidas_promedias_mensuales(db, cuenta_id_trading)
+    winrate = calcular_winrate_mensual(db, cuenta_id_trading, year, month)
+    ganancias_promedio = calcular_ganancias_promedias_mensuales(db, cuenta_id_trading, year, month)
+    perdidas_promedio = calcular_perdidas_promedias_mensuales(db, cuenta_id_trading, year, month)
     loserate = 100 - winrate
-    expectancy=(winrate*ganancias_promedio)/100-(loserate*perdidas_promedio)/100
+    expectancy = (winrate * ganancias_promedio) / 100 - (loserate * abs(perdidas_promedio)) / 100
     
     return expectancy
     
@@ -384,7 +425,9 @@ def calcular_expectativa_mensual(
 from decimal import Decimal
 
 def get_emocion_principal_operacion(
-    operacion: Operacion
+    operacion: Operacion,
+    
+    
 ) -> list[str] | None:
     
     if operacion.registro_emocional is None:
@@ -413,9 +456,11 @@ def get_emocion_principal_operacion(
 
 def get_operaciones_por_emocion_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+    month: int = None
 ) -> dict:
-    operaciones = get_operaciones_del_mes(db, cuenta_id_trading)
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     operaciones_emociones = {
         "confianza": [],
@@ -437,9 +482,11 @@ def get_operaciones_por_emocion_mensual(
     
 def calcular_winrate_por_emocion_mensual(
     db: Session,
-    cuenta_id_trading: int
+    cuenta_id_trading: int,
+    year: int = None,
+     month: int = None,
 ) -> dict:
-    operaciones_emociones = get_operaciones_por_emocion_mensual(db, cuenta_id_trading)
+    operaciones_emociones = get_operaciones_por_emocion_mensual(db, cuenta_id_trading, year, month)
 
     winrate_emociones = {
         "confianza": 0.0,
@@ -473,32 +520,121 @@ def calcular_winrate_por_emocion_mensual(
     return winrate_emociones
    
 
-@router.get(
-    "/mensual",
-    summary="Obtener resumen estadistico mensual de una cuenta de trading",
-    description="Calcula y devuelve un resumen estadistico de las operaciones realizadas en el mes actual para una cuenta de trading concreta del usuario autenticado, incluyendo ganancias netas, win rate, ganancias promedio y perdidas promedio.",
-)
+def obtener_resumen_mensual(db: Session, cuenta_id: int, year: int, month: int):
+
+    ganancias_netas = calcular_ganancias_netas_mensuales(db, cuenta_id, year, month)
+    ganancias_promedio = calcular_ganancias_promedias_mensuales(db, cuenta_id, year, month)
+    perdidas_promedio = calcular_perdidas_promedias_mensuales(db, cuenta_id, year, month)
+    max_drawdown = calcular_maximo_drawdown_mensual(db, cuenta_id, year, month)
+
+    operaciones = get_operaciones_del_mes(db, cuenta_id, year, month)
+
+    total_operaciones = 0
+    ganadoras = 0
+    perdedoras = 0
+
+    for op in operaciones:
+        if op.resultado is None:
+            continue
+
+        total_operaciones += 1
+
+        if op.resultado > 0:
+            ganadoras += 1
+        elif op.resultado < 0:
+            perdedoras += 1
+
+    rr_promedio = 0.0
+    if perdidas_promedio != 0:
+        rr_promedio = ganancias_promedio / abs(perdidas_promedio)
+
+    return {
+        "total_operaciones": total_operaciones,
+        "operaciones_ganadoras": ganadoras,
+        "operaciones_perdedoras": perdedoras,
+        "profit_total": ganancias_netas,
+        "profit_promedio": ganancias_promedio,
+        "max_drawdown": max_drawdown["drawdown_euros"],
+        "rr_promedio": rr_promedio,
+    }
+
+def guardar_estadistica(db: Session, cuenta_id: int, stats: dict):
+
+    nueva = Estadistica(
+        id_cuenta=cuenta_id,
+        total_operaciones=stats["total_operaciones"],
+        operaciones_ganadoras=stats["operaciones_ganadoras"],
+        operaciones_perdedoras=stats["operaciones_perdedoras"],
+        profit_total=stats["profit_total"],
+        profit_promedio=stats["profit_promedio"],
+        max_drawdown=stats["max_drawdown"],
+        rr_promedio=stats["rr_promedio"],
+    )
+
+    db.add(nueva)
+    db.commit()
+    
+def ya_existe_estadistica(db: Session, cuenta_id: int, year: int, month: int):
+
+    inicio_mes = datetime(year, month, 1)
+
+    if month == 12:
+        fin_mes = datetime(year + 1, 1, 1)
+    else:
+        fin_mes = datetime(year, month + 1, 1)
+
+    return db.query(Estadistica).filter(
+        Estadistica.id_cuenta == cuenta_id,
+        Estadistica.fecha_creacion >= inicio_mes,
+        Estadistica.fecha_creacion < fin_mes
+    ).first() is not None
+
+def job_estadisticas_mensuales():
+    db = next(get_db())
+
+    now = datetime.now()
+
+    if now.month == 1:
+        year = now.year - 1
+        month = 12
+    else:
+        year = now.year
+        month = now.month - 1
+
+    cuentas = db.query(Cuenta_Trading).all()
+
+    for cuenta in cuentas:
+
+        if ya_existe_estadistica(db, cuenta.id, year, month):
+            continue
+
+        stats = obtener_resumen_mensual(db, cuenta.id, year, month)
+
+        guardar_estadistica(db, cuenta.id, stats)
+        
+@router.get("/mensual")
 def get_resumen_mensual(
-    cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading.", examples=[1])],
+    cuenta_id_trading: Annotated[int, Path(...)],
+    year: int = Query(None),
+    month: int = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
     cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
 
-    ganancias_netas = calcular_ganancias_netas_mensuales(db, cuenta.id)
-    win_rate = calcular_winrate_mensual(db, cuenta.id)
-    ganancias_promedio = calcular_ganancias_promedias_mensuales(db, cuenta.id)
-    perdidas_promedio = calcular_perdidas_promedias_mensuales(db, cuenta.id)
-    max_drawdown = calcular_maximo_drawdown_mensual(db, cuenta.id)
-    media_operaciones_hasta_error = calcular_media_operaciones_hasta_error_mensual(db, cuenta.id)
-    media_operaciones_hasta_ganadora = calcular_media_operaciones_hasta_ganadora_mensual(db, cuenta.id)
-    operaciones_ganadoras_consecutivas_actuales = calcular_operaciones_ganadoras_consecutivas_actuales_mensual(db, cuenta.id)
-    racha_ganadora_mas_larga = calcular_racha_ganadora_mas_larga_mensual(db, cuenta.id)
-    racha_perdedora_mas_larga = calcular_racha_perdedora_mas_larga_mensual(db, cuenta.id)
-    dia_semanal_mas_rentable = calcular_dia_mas_rentable_semanal_mensual(db, cuenta.id)
-    dia_semanal_menos_rentable = calcular_dia_menos_rentable_semanal_mensual(db, cuenta.id)
-    expectativa = calcular_expectativa_mensual(db, cuenta.id)
-    
+    ganancias_netas = calcular_ganancias_netas_mensuales(db, cuenta.id, year, month)
+    win_rate = calcular_winrate_mensual(db, cuenta.id, year, month)
+    ganancias_promedio = calcular_ganancias_promedias_mensuales(db, cuenta.id, year, month)
+    perdidas_promedio = calcular_perdidas_promedias_mensuales(db, cuenta.id, year, month)
+    max_drawdown = calcular_maximo_drawdown_mensual(db, cuenta.id, year, month)
+    media_operaciones_hasta_error = calcular_media_operaciones_hasta_error_mensual(db, cuenta.id, year, month)
+    media_operaciones_hasta_ganadora = calcular_media_operaciones_hasta_ganadora_mensual(db, cuenta.id, year, month)
+    operaciones_ganadoras_consecutivas_actuales = calcular_operaciones_ganadoras_consecutivas_actuales_mensual(db, cuenta.id, year, month)
+    racha_ganadora_mas_larga = calcular_racha_ganadora_mas_larga_mensual(db, cuenta.id, year, month)
+    racha_perdedora_mas_larga = calcular_racha_perdedora_mas_larga_mensual(db, cuenta.id, year, month)
+    dia_semanal_mas_rentable = calcular_dia_mas_rentable_semanal_mensual(db, cuenta.id, year, month)
+    dia_semanal_menos_rentable = calcular_dia_menos_rentable_semanal_mensual(db, cuenta.id, year, month)
+    expectativa = calcular_expectativa_mensual(db, cuenta.id, year, month)
 
     return {
         "ganancias_netas": ganancias_netas,
@@ -516,7 +652,6 @@ def get_resumen_mensual(
         "expectativa": expectativa
     }
 
-
 @router.get(
     "/emociones",
     summary="Obtener estadisticas de emociones mensuales de una cuenta de trading",
@@ -526,10 +661,33 @@ def get_resumen_mensual(
 def get_estadisticas_emociones_mensuales(
     cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading.", examples=[1])],
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
+     year: int = Query(None),
+    month: int = Query(None),
 ):
     cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
 
-    winrate_emociones = calcular_winrate_por_emocion_mensual(db, cuenta.id)
+    winrate_emociones = calcular_winrate_por_emocion_mensual(db, cuenta.id, year, month)
 
     return winrate_emociones
+
+
+
+
+
+scheduler = BackgroundScheduler()
+
+scheduler.add_job(
+    job_estadisticas_mensuales,
+    trigger="cron",
+    day=1,
+    hour=0,
+    minute=0
+)
+
+scheduler.start()
+
+
+
+
+ 
