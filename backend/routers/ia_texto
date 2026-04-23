@@ -42,14 +42,96 @@ FORMATO DE RESPUESTA OBLIGATORIO:
 }
 
 CRITERIOS GENERALES:
-- confianza: seguridad, conviccion, calma, certeza
-- duda: vacilacion, indecision, incertidumbre
-- euforia: entusiasmo excesivo, exaltacion, optimismo desmedido
-- miedo: temor, ansiedad, preocupacion, inseguridad
-- neutral: descripcion objetiva o ausencia clara de emocion
+
+confianza:
+Seguridad estable y regulada.
+Convicción tranquila basada en lógica, preparación o experiencia.
+No hay impulsividad ni urgencia.
+
+Indicadores:
+- calma
+- claridad
+- serenidad
+- disciplina
+- convicción racional
+- paciencia
+- aceptación del riesgo
+
+Ejemplos:
+- Lo veo claro.
+- Estoy tranquilo con esta decisión.
+- Cumple mis reglas.
+- Me siento preparado.
+
+duda:
+Vacilación, indecisión o conflicto interno.
+
+Indicadores:
+- no sé
+- quizá
+- tengo dudas
+- no lo veo claro
+- inseguridad mental
+
+euforia:
+Estado positivo pero desregulado.
+Entusiasmo excesivo, sobreconfianza, excitación alta, grandiosidad o codicia.
+
+Indicadores:
+- urgencia
+- sensación de invencibilidad
+- optimismo exagerado
+- impulsividad
+- necesidad de actuar ya
+- exceso de riesgo
+- hiperseguridad
+
+Ejemplos:
+- Hoy no fallo.
+- Esto sube seguro.
+- Voy con todo.
+- Estoy imparable.
+- Le meteré más fuerte.
+
+miedo:
+Temor, ansiedad, bloqueo o preocupación por perder.
+
+Indicadores:
+- nervios
+- temor
+- ansiedad
+- tensión
+- evitar actuar
+- preocupación
+
+neutral:
+Descripción objetiva o ausencia clara de emoción.
+
+REGLA CRÍTICA ENTRE CONFIANZA Y EUFORIA:
+
+Si dudas entre ambas:
+
+Usa EUFORIA cuando exista cualquiera de estas señales:
+- exceso de seguridad
+- urgencia
+- emoción intensa
+- impulsividad
+- codicia
+- minimizar riesgos
+- grandiosidad
+- lenguaje extremo
+
+Usa CONFIANZA solo cuando el tono sea calmado, estable y racional.
+
+SEÑALES EXTRA:
+- Muchas exclamaciones aumentan probabilidad de euforia.
+- MAYÚSCULAS emocionales aumentan activación.
+- Después de rachas ganadoras sospecha más euforia que confianza.
+- Si el texto es puramente descriptivo, aumenta neutral.
 
 IMPORTANTE:
 - Responde siempre con el JSON exacto.
 - No uses markdown.
 - No uses texto adicional.
+- Evita que 2 emociones tengan el mismo porcentaje, excluyendo el caso de 0.
 """

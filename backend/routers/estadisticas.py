@@ -3,8 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -479,12 +478,75 @@ def get_operaciones_por_emocion_mensual(
                     operaciones_emociones[emocion].append(operacion)
 
     return operaciones_emociones
-    
+
+def calcular_beneficio_total_por_emocion_mensual(
+    db: Session,
+    cuenta_id_trading: int,
+    year: int = None,
+    month: int = None
+) -> dict:
+    operaciones_emociones = get_operaciones_por_emocion_mensual(db, cuenta_id_trading, year, month)
+
+    beneficio_total_emociones = {
+        "confianza": Decimal("0"),
+        "duda": Decimal("0"),
+        "euforia": Decimal("0"),
+        "miedo": Decimal("0"),
+        "neutral": Decimal("0")
+    }
+
+    for emocion, operaciones in operaciones_emociones.items():
+        for operacion in operaciones:
+            if operacion.resultado is not None:
+                beneficio_total_emociones[emocion] += Decimal(str(operacion.resultado))
+
+    beneficio_total_emociones_float = {
+        emocion: round(float(beneficio), 2)
+        for emocion, beneficio in beneficio_total_emociones.items()
+    }
+
+    return beneficio_total_emociones_float    
+
+def calcular_beneficio_promedio_por_emocion_mensual(
+    db: Session,
+    cuenta_id_trading: int,
+    year: int = None,
+    month: int = None
+) -> dict:
+    operaciones_emociones = get_operaciones_por_emocion_mensual(db, cuenta_id_trading, year, month)
+
+    beneficio_promedio_emociones = {
+        "confianza": Decimal("0"),
+        "duda": Decimal("0"),
+        "euforia": Decimal("0"),
+        "miedo": Decimal("0"),
+        "neutral": Decimal("0")
+    }
+
+    for emocion, operaciones in operaciones_emociones.items():
+        beneficio_total_decimal = Decimal("0")
+        operaciones_con_resultado = 0
+
+        for operacion in operaciones:
+            if operacion.resultado is not None:
+                beneficio_total_decimal += Decimal(str(operacion.resultado))
+                operaciones_con_resultado += 1
+
+        if operaciones_con_resultado > 0:
+            beneficio_promedio_emociones[emocion] = beneficio_total_decimal / Decimal(operaciones_con_resultado)
+
+    beneficio_promedio_emociones_float = {
+        emocion: round(float(beneficio), 2)
+        for emocion, beneficio in beneficio_promedio_emociones.items()
+    }
+
+    return beneficio_promedio_emociones_float
+
 def calcular_winrate_por_emocion_mensual(
     db: Session,
     cuenta_id_trading: int,
     year: int = None,
-     month: int = None,
+    month: int = None,
 ) -> dict:
     operaciones_emociones = get_operaciones_por_emocion_mensual(db, cuenta_id_trading, year, month)
 
@@ -612,11 +674,43 @@ def job_estadisticas_mensuales():
 
         guardar_estadistica(db, cuenta.id, stats)
         
-@router.get("/mensual")
+@router.get(
+    "/mensual",
+    summary="Obtener resumen estadistico mensual de una cuenta",
+    description=(
+        "Calcula las metricas estadisticas del mes seleccionado para la cuenta de trading del usuario autenticado. "
+        "Si year y month no se envian, se utiliza el mes actual del servidor."
+    ),
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Resumen mensual calculado correctamente."
+        },
+        401: {
+            "description": "El usuario no esta autenticado o el token no es valido."
+        },
+        404: {
+            "description": "La cuenta indicada no existe o no pertenece al usuario autenticado."
+        },
+        422: {
+            "description": "Los parametros de consulta no son validos."
+        }
+    }
+)
 def get_resumen_mensual(
-    cuenta_id_trading: Annotated[int, Path(...)],
-    year: int = Query(None),
-    month: int = Query(None),
+    cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading.", examples=[1])],
+    year: int = Query(
+        default=None,
+        ge=2000,
+        le=2100,
+        description="Ano a consultar."
+    ),
+    month: int = Query(
+        default=None,
+        ge=1,
+        le=12,
+        description="Mes a consultar (1-12). Si no se envia junto con year, se usa el mes actual."
+    ),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -655,22 +749,52 @@ def get_resumen_mensual(
 @router.get(
     "/emociones",
     summary="Obtener estadisticas de emociones mensuales de una cuenta de trading",
-    description="Calcula y devuelve el win rate mensual desglosado por emocion principal identificada en el registro emocional de cada operacion para una cuenta de trading concreta del usuario autenticado.",
+    description=(
+        "Calcula metricas mensuales por emocion principal de cada operacion con registro emocional. "
+    ),
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Estadisticas emocionales mensuales calculadas correctamente."
+        },
+        401: {
+            "description": "El usuario no esta autenticado o el token no es valido."
+        },
+        404: {
+            "description": "La cuenta indicada no existe o no pertenece al usuario autenticado."
+        },
+        422: {
+            "description": "Los parametros de consulta no son validos."
+        }
+    },
     tags=["estadisticas", "emociones"]
 )
 def get_estadisticas_emociones_mensuales(
     cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading.", examples=[1])],
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-     year: int = Query(None),
-    month: int = Query(None),
+    year: int = Query(
+        default=None,
+        ge=2000,
+        le=2100,
+        description="Ano a consultar."
+    ),
+    month: int = Query(
+        default=None,
+        ge=1,
+        le=12,
+        description="Mes a consultar (1-12). "
+    ),
 ):
     cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
 
     winrate_emociones = calcular_winrate_por_emocion_mensual(db, cuenta.id, year, month)
+    beneficio_total_emociones = calcular_beneficio_total_por_emocion_mensual(db, cuenta.id, year, month)
 
-    return winrate_emociones
-
+    return {
+        "winrate_emociones": winrate_emociones,
+        "beneficio_total_emociones": beneficio_total_emociones
+    }
 
 
 

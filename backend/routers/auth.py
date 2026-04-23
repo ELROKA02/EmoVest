@@ -84,7 +84,20 @@ def get_current_user(
 
 
 
-@router.get("/me")
+@router.get(
+    "/me",
+    summary="Obtener perfil del usuario autenticado",
+    description="Devuelve la informacion basica del usuario autenticado a partir del token JWT enviado.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Perfil recuperado correctamente."
+        },
+        401: {
+            "description": "El token no es valido o no corresponde a un usuario existente."
+        }
+    }
+)
 def get_me(current_user: Usuario = Depends(get_current_user)):
     return {
         "id": current_user.id,

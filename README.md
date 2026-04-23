@@ -16,7 +16,7 @@ EmoVest convierte el diario de trading en inteligencia emocional accionable. Reg
 
 ## 🎯 El Problema
 
-La mayoría de los traders no pierden por falta de estrategia. Pierden porque operan con miedo, euforia o exceso de confianza y no lo saben hasta que ya es tarde.
+La mayoría de traders mide precio y riesgo, pero no mide su estado mental al decidir. Sin ese dato, repiten sesgos con apariencia de estrategia.
 
 EmoVest cuantifica lo que hasta ahora era intangible: **tu estado emocional en cada operación**.
 
@@ -64,15 +64,15 @@ flowchart LR
 
 ## 🚀 Funcionalidades
 
-- Registro e inicio de sesión con autenticación JWT
-- Gestión de múltiples cuentas de trading por usuario (EUR / USD)
-- Registro de operaciones LONG y SHORT con stop loss, take profit, ratio R/R y nivel de confianza
-- Adjuntar screenshot a cada operación
-- **Análisis emocional automático** al registrar notas: confianza, duda, euforia, miedo y neutral
-- Estadísticas por cuenta: total de operaciones, ganadoras, perdedoras, profit total, profit promedio, max drawdown y ratio R/R promedio
-- Sistema de suscripciones con planes FREE, PRO y PARTNER
-- Sistema de trofeos y logros por actividad
-- Notificaciones por usuario
+- Crear tu cuenta y acceder a tu espacio personal de trading.
+- Gestionar varias cuentas de trading desde un mismo perfil.
+- Registrar cada operación con su contexto para llevar un diario real de decisiones.
+- Añadir capturas de pantalla para recordar exactamente qué viste al operar.
+- Escribir notas personales y recibir una lectura emocional automática.
+- Ver de forma clara tus resultados del mes: ganancias, pérdidas y rachas.
+- Detectar en qué días de la semana rindes mejor o peor.
+- Entender qué emociones se relacionan con mejores o peores resultados.
+- Llevar seguimiento de tu evolución con estadísticas que se guardan mes a mes.
 
 ---
 
