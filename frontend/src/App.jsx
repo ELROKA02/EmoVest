@@ -6,14 +6,13 @@ import Login from './components/Login';
 import Signup from './components/Signup';
 import Dashboard from './components/Dashboard';
 import OperacionesTrading from './components/OperacionesTrading';
+import PerfilUsuario from './components/PerfilUsuario';
 
 function AppContent() {
   const location = useLocation();
   const isHomePage = location.pathname === '/';
 
-  const bgGradient = {
-    background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
-  };
+ 
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -26,6 +25,7 @@ function AppContent() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/operaciones" element={<Dashboard />} />
           <Route path="/trading" element={<OperacionesTrading />} />
+          <Route path="/perfil" element={<PerfilUsuario />} />
         </Routes>
       </main>
       {isHomePage && <Footer />}

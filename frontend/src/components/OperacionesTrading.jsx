@@ -14,6 +14,18 @@ const getAuthHeaders = () => {
   };
 };
 
+const InfoIcon = ({ text }) => (
+  <div className="relative group flex items-center">
+    <svg className="w-3.5 h-3.5 text-gray-400 hover:text-blue-400 cursor-help transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-[#1a2235] border border-white/10 text-[10px] text-gray-300 rounded shadow-xl z-50 text-center pointer-events-none">
+      {text}
+      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1a2235]"></div>
+    </div>
+  </div>
+);
+
 const OperacionesTrading = () => {
   console.log('OperacionesTrading renderizado');
 
@@ -172,6 +184,27 @@ const OperacionesTrading = () => {
     nivel_confianza: 0,
     screenshot: null
   });
+
+  // Efecto para calcular el resultado automáticamente
+  useEffect(() => {
+    if (formData.precio_entrada && formData.precio_salida && formData.cantidad) {
+      const pe = parseFloat(formData.precio_entrada);
+      const ps = parseFloat(formData.precio_salida);
+      const qty = parseFloat(formData.cantidad);
+      if (!isNaN(pe) && !isNaN(ps) && !isNaN(qty)) {
+        let res = 0;
+        if (formData.tipo_operacion === 'LONG') {
+          res = (ps - pe) * qty;
+        } else {
+          res = (pe - ps) * qty;
+        }
+        const resStr = res.toFixed(2);
+        if (formData.resultado !== resStr) {
+          setFormData(prev => ({ ...prev, resultado: resStr }));
+        }
+      }
+    }
+  }, [formData.precio_entrada, formData.precio_salida, formData.cantidad, formData.tipo_operacion, formData.resultado]);
 
   const handleCreate = () => {
     setEditing(null);
@@ -366,7 +399,7 @@ const OperacionesTrading = () => {
 
           <div className="flex items-center gap-8">
             {/* User Icon */}
-            <div className="flex items-center gap-2 text-gray-300">
+            <div onClick={() => navigate('/perfil')} className="flex items-center gap-2 text-gray-300 hover:text-white cursor-pointer transition-colors" title="Ver perfil">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
@@ -486,7 +519,10 @@ const OperacionesTrading = () => {
                   <h2 className="text-2xl font-bold mb-4 text-white">{editing ? 'Editar Operación' : 'Crear Operación'}</h2>
                   <form onSubmit={handleSubmit} className="space-y-3">
                     <div>
-                      <label className="block text-xs text-white mb-1">Fecha y Hora</label>
+                      <div className="flex items-center gap-1 mb-1">
+                        <label className="block text-xs text-white">Fecha y Hora</label>
+                        <InfoIcon text="Momento en el que se realizó o registró la operación." />
+                      </div>
                       <input
                         type="datetime-local"
                         value={formData.fecha_hora}
@@ -498,7 +534,10 @@ const OperacionesTrading = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-xs text-white mb-1">Tipo</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Tipo</label>
+                          <InfoIcon text="Dirección de tu inversión (LONG = Compra y luego vende, SHORT = Vende y luego compra)." />
+                        </div>
                         <CustomSelect
                           value={formData.tipo_operacion}
                           onChange={(value) => setFormData({...formData, tipo_operacion: value})}
@@ -506,19 +545,25 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-white mb-1">Activo</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Activo</label>
+                          <InfoIcon text="Símbolo del mercado o par (Ej: BTC, EUR, USD)." />
+                        </div>
                         <input
                           type="text"
                           placeholder="BTC"
                           value={formData.activo}
-                          onChange={(e) => setFormData({...formData, activo: e.target.value})}
+                          onChange={(e) => setFormData({...formData, activo: e.target.value.toUpperCase()})}
                           className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
                           disabled={loading}
                           required
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-white mb-1">Cantidad</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Cantidad</label>
+                          <InfoIcon text="Tamaño de la posición operada (Lotaje o unidades)." />
+                        </div>
                         <input
                           type="number"
                           step="any"
@@ -532,7 +577,10 @@ const OperacionesTrading = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-xs text-white mb-1">Precio Entrada</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Precio Entrada</label>
+                          <InfoIcon text="Precio al que abriste la posición." />
+                        </div>
                         <input
                           type="number"
                           step="any"
@@ -544,7 +592,10 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-white mb-1">Precio Salida</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Precio Salida</label>
+                          <InfoIcon text="Precio al que cerraste la posición." />
+                        </div>
                         <input
                           type="number"
                           step="any"
@@ -556,7 +607,10 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-white mb-1">Stop Loss</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Stop Loss</label>
+                          <InfoIcon text="Precio límite predefinido para cortar pérdidas." />
+                        </div>
                         <input
                           type="number"
                           step="any"
@@ -570,7 +624,10 @@ const OperacionesTrading = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-xs text-white mb-1">Take Profit</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Take Profit</label>
+                          <InfoIcon text="Precio objetivo predefinido para tomar ganancias." />
+                        </div>
                         <input
                           type="number"
                           step="any"
@@ -582,7 +639,10 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-white mb-1">Resultado</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Resultado</label>
+                          <InfoIcon text="Ganancia o pérdida (Calculado automáticamente con la salida)." />
+                        </div>
                         <input
                           type="number"
                           step="any"
@@ -594,7 +654,10 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-white mb-1">Ratio RR</label>
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Ratio RR</label>
+                          <InfoIcon text="Relación de Riesgo / Beneficio (Risk/Reward)." />
+                        </div>
                         <input
                           type="number"
                           step="any"
@@ -608,7 +671,10 @@ const OperacionesTrading = () => {
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="block text-xs text-white">Confianza: <span className="text-blue-400 font-bold">{formData.nivel_confianza || 0}%</span></label>
+                        <div className="flex items-center gap-1">
+                          <label className="block text-xs text-white">Confianza: <span className="text-blue-400 font-bold">{formData.nivel_confianza || 0}%</span></label>
+                          <InfoIcon text="Nivel de seguridad y estado emocional al tomar la decisión." />
+                        </div>
                       </div>
                       <input
                         type="range"
@@ -616,12 +682,18 @@ const OperacionesTrading = () => {
                         max="100"
                         value={formData.nivel_confianza}
                         onChange={(e) => setFormData({...formData, nivel_confianza: e.target.value})}
-                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        style={{
+                          background: `linear-gradient(to right, #3b82f6 ${formData.nivel_confianza || 0}%, rgba(255,255,255,0.1) ${formData.nivel_confianza || 0}%)`
+                        }}
                         disabled={loading}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-white mb-1">Notas</label>
+                      <div className="flex items-center gap-1 mb-1">
+                        <label className="block text-xs text-white">Notas</label>
+                        <InfoIcon text="Contexto y razones de la operación. La Inteligencia Artificial analizará este texto para darte una métrica de tus emociones." />
+                      </div>
                       <textarea
                         value={formData.notas}
                         onChange={(e) => setFormData({...formData, notas: e.target.value})}
