@@ -7,6 +7,7 @@ import Signup from './components/Signup';
 import Dashboard from './components/Dashboard';
 import OperacionesTrading from './components/OperacionesTrading';
 import PerfilUsuario from './components/PerfilUsuario';
+import EstadisticasEmocionales from './components/EstadisticasEmocionales';
 
 function AppContent() {
   const location = useLocation();
@@ -26,6 +27,7 @@ function AppContent() {
           <Route path="/dashboard/operaciones" element={<Dashboard />} />
           <Route path="/trading" element={<OperacionesTrading />} />
           <Route path="/perfil" element={<PerfilUsuario />} />
+          <Route path="/estadisticas" element={<EstadisticasEmocionales />} />
         </Routes>
       </main>
       {isHomePage && <Footer />}
