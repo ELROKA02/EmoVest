@@ -20,4 +20,9 @@ Thumbs.db
 
 # Configuracion local 
 .github/
+.github/ISSUE_TEMPLATE
+
+skills-lock.json
+.agents/
+emovest-video/
 
