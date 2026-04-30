@@ -32,20 +32,48 @@ EmoVest hace eso, y va un paso más allá: cada vez que escribes notas en una op
 
 ## 🧠 Cómo funciona
 
+### Flujo general de EmoVest
+
 ```mermaid
-flowchart LR
-    A[Registra operación\ncon notas] --> B[IA analiza el texto]
-    B --> C[Clasifica 5 emociones\ncon porcentaje]
-    C --> D[Guarda registro\nemocional]
-    D --> E[Actualiza\nestadísticas]
-    E --> F[Dashboard:\nemoción · resultado]
+flowchart TB
+    A[Creas tu cuenta personal] --> B[Entras a tu panel]
+    B --> C[Creas una o varias cuentas de trading]
+    C --> D[Registras cada operacion con sus datos]
+    D --> E[EmoVest actualiza tu saldo automaticamente]
+    E --> F[EmoVest calcula tus metricas del mes]
+    F --> G[Ves rendimiento y patrones por dia]
+    G --> H[Comparas resultados contra tu estado emocional]
+
+    subgraph Datos que registras en cada operacion
+    D1[Activo y direccion]
+    D2[Entrada, salida y resultado]
+    D3[Nivel de confianza y notas]
+    D4[Captura de pantalla opcional]
+    end
+
+    D --> D1
+    D --> D2
+    D --> D3
+    D --> D4
 ```
 
-1. El usuario crea una cuenta de trading y registra sus operaciones (LONG/SHORT).
-2. Al añadir notas a una operación, EmoVest lanza el análisis emocional automáticamente.
-3. El modelo de IA local clasifica el texto en cinco emociones con porcentaje de presencia.
-4. El registro emocional queda vinculado a la operación y a su resultado financiero.
-5. Las estadísticas de la cuenta recogen profit total, ratio R/R, drawdown y más.
+### Flujo emocional (cuando escribes notas)
+
+```mermaid
+flowchart LR
+    N[Escribes notas de la operacion] --> O[EmoVest interpreta el tono emocional]
+    O --> P[Asigna peso a 5 emociones]
+    P --> Q[Vincula emocion con resultado real]
+    Q --> R[Actualiza metricas emocionales del mes]
+    R --> S[Te muestra que emociones coinciden con mejores o peores resultados]
+```
+
+1. Creas tu perfil e inicias sesion para acceder a tu espacio de trabajo.
+2. Registras una o varias cuentas de trading segun tu forma de operar.
+3. Guardas cada operacion con contexto completo para construir tu diario.
+4. EmoVest recalcula tu saldo y tus metricas cada vez que actualizas resultados.
+5. Si añades notas, EmoVest analiza la parte emocional y la cruza con tu rendimiento.
+6. En estadisticas, puedes filtrar por cuenta, mes y ano para detectar patrones de mejora.
 
 ---
 
@@ -64,15 +92,37 @@ flowchart LR
 
 ## 🚀 Funcionalidades
 
-- Crear tu cuenta y acceder a tu espacio personal de trading.
-- Gestionar varias cuentas de trading desde un mismo perfil.
-- Registrar cada operación con su contexto para llevar un diario real de decisiones.
-- Añadir capturas de pantalla para recordar exactamente qué viste al operar.
-- Escribir notas personales y recibir una lectura emocional automática.
-- Ver de forma clara tus resultados del mes: ganancias, pérdidas y rachas.
-- Detectar en qué días de la semana rindes mejor o peor.
-- Entender qué emociones se relacionan con mejores o peores resultados.
-- Llevar seguimiento de tu evolución con estadísticas que se guardan mes a mes.
+### Cuenta y acceso
+
+- Puede crear su cuenta personal con plan inicial y entrar en segundos.
+- Puede mantener la sesion activa para volver sin repetir el correo cada vez.
+- Puede ver su perfil con nombre y correo dentro del panel.
+
+### Gestion de cuentas de trading
+
+- Puede crear varias cuentas de trading para separar estrategias o mercados.
+- Puede editar nombre y saldo de cada cuenta cuando cambie su estructura.
+- Puede eliminar cuentas que ya no use desde su perfil.
+
+### Diario de operaciones
+
+- Puede registrar operaciones LONG o SHORT con fecha, activo, precios y cantidad.
+- Puede anadir contexto real de cada operacion: stop loss, take profit y nivel de confianza.
+- Puede adjuntar una captura para recordar el grafico o escenario exacto.
+- Puede editar o eliminar operaciones y ver la lista por cuenta.
+
+### Rendimiento y seguimiento mensual
+
+- Puede ver sus resultados del mes con ganancias netas, win rate y drawdown.
+- Puede identificar rachas ganadoras y perdedoras para evaluar consistencia.
+- Puede detectar que dias de la semana le generan mejores y peores resultados.
+- Puede seguir su evolucion mensual con un resumen que se conserva en el tiempo.
+
+### Lectura emocional del trading
+
+- Puede escribir notas personales y recibir una lectura emocional de cada operacion.
+- Puede comparar el rendimiento por emocion para entender que estado le favorece.
+- Puede ver un panel emocional por mes con win rate y beneficio total por emocion.
 
 ---
 
