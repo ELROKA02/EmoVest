@@ -58,6 +58,47 @@ def get_operaciones_del_mes(
 
     return operaciones
 
+def calcular_saldo_diario_mensual(
+    db: Session,
+    cuenta_id_trading: int,
+    year: int = None,
+    month: int = None,
+) -> list[dict]:
+    """Calcula el saldo diario de la cuenta durante la fecha indicada, devolviendo la fecha y el saldo al final de cada dia."""
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
+
+    cuenta = db.query(Cuenta_Trading).filter(
+        Cuenta_Trading.id == cuenta_id_trading
+    ).first()
+
+    saldo_diario = []
+    saldo_actual = Decimal(str(cuenta.saldo_inicial))
+    fecha_actual = None
+
+    for operacion in operaciones:
+        if operacion.resultado is None:
+            continue
+
+        if fecha_actual is None:
+            fecha_actual = operacion.fecha_hora.date()
+
+        if operacion.fecha_hora.date() != fecha_actual:
+            saldo_diario.append({
+                "fecha": fecha_actual.isoformat(),
+                "saldo": round(float(saldo_actual), 2)
+            })
+            fecha_actual = operacion.fecha_hora.date()
+
+        saldo_actual += Decimal(str(operacion.resultado))
+
+    if fecha_actual is not None:
+        saldo_diario.append({
+            "fecha": fecha_actual.isoformat(),
+            "saldo": round(float(saldo_actual), 2)
+        })
+
+    return saldo_diario
+
 
 def calcular_ganancias_netas_mensuales(
 	db: Session,
