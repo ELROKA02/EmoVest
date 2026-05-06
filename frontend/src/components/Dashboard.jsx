@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import OperacionesTrading from './OperacionesTrading';
 import CustomSelect from './CustomSelect';
-import logo from '../assets/logoEmoVest.png';
+import Sidebar from './Sidebar';
 import { fetchAndStoreUserName } from '../utils/userSession';
+import { formatCurrency } from '../utils/currency';
 
 const Dashboard = () => {
   // Obtener estado del sidebar desde localStorage o usar true por defecto
@@ -13,10 +14,6 @@ const Dashboard = () => {
   });
   const navigate = useNavigate();
   const location = useLocation();
-
-  useEffect(() => {
-    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen));
-  }, [sidebarOpen]);
 
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
 
@@ -62,7 +59,10 @@ const Dashboard = () => {
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
   };
-  const saldoPlaceholder = accountData.divisa === 'EUR' ? '€ 0.00' : '$ 0.00';
+  const selectedAccountObj = tradingAccounts.find(account => account.id === selectedAccount);
+  const selectedDivisa = selectedAccountObj?.divisa || 'EUR';
+  const accountOptionText = account => `${account.nombre_cuenta} (${account.divisa}) - ${formatCurrency(account.saldo_inicial, account.divisa)}`;
+  const saldoPlaceholder = formatCurrency(0, accountData.divisa);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -273,12 +273,12 @@ const Dashboard = () => {
               <label className="text-white font-medium">Cuentas:</label>
               <CustomSelect
                 value={
-                  tradingAccounts.find(account => account.id === selectedAccount)
-                    ? `${tradingAccounts.find(account => account.id === selectedAccount).nombre_cuenta} (${tradingAccounts.find(account => account.id === selectedAccount).divisa}) - $${tradingAccounts.find(account => account.id === selectedAccount).saldo_inicial.toFixed(2)}`
+                  selectedAccountObj
+                    ? accountOptionText(selectedAccountObj)
                     : 'No hay cuentas disponibles'
                 }
                 onChange={(selectedText) => {
-                  const selectedAccountObj = tradingAccounts.find(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}` === selectedText);
+                  const selectedAccountObj = tradingAccounts.find(account => accountOptionText(account) === selectedText);
                   if (selectedAccountObj) {
                     setSelectedAccount(selectedAccountObj.id);
                   }
@@ -286,7 +286,7 @@ const Dashboard = () => {
                 options={
                   tradingAccounts.length === 0
                     ? ['No hay cuentas disponibles']
-                    : tradingAccounts.map(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}`)
+                    : tradingAccounts.map(account => accountOptionText(account))
                 }
               />
             </div>
@@ -342,7 +342,7 @@ const Dashboard = () => {
                   <h3 className="text-white font-bold text-lg">Ganancias Netas</h3>
                 </div>
                 <div className={`text-4xl font-black ${estadisticasCompletas.ganancias_netas >= 0 ? 'text-green-400' : 'text-red-400'} mb-2`}>
-                  ${estadisticasCompletas.ganancias_netas.toFixed(2)}
+                  {formatCurrency(estadisticasCompletas.ganancias_netas, selectedDivisa)}
                 </div>
                 <div className={`text-sm ${estadisticasCompletas.ganancias_netas >= 0 ? 'text-green-300' : 'text-red-300'} font-medium`}>
                   {estadisticasCompletas.ganancias_netas >= 0 ? 'Beneficio Neto' : 'Pérdida Neta'}
@@ -403,11 +403,11 @@ const Dashboard = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/20">
                     <div className="text-green-400 text-xs mb-1 font-medium">Ganancia</div>
-                    <div className="text-green-300 font-bold text-lg">€{estadisticasCompletas.ganancias_promedio.toFixed(0)}</div>
+                    <div className="text-green-300 font-bold text-lg">{formatCurrency(estadisticasCompletas.ganancias_promedio, selectedDivisa)}</div>
                   </div>
                   <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
                     <div className="text-red-400 text-xs mb-1 font-medium">Pérdida</div>
-                    <div className="text-red-300 font-bold text-lg">€{Math.abs(estadisticasCompletas.perdidas_promedio).toFixed(0)}</div>
+                    <div className="text-red-300 font-bold text-lg">{formatCurrency(Math.abs(estadisticasCompletas.perdidas_promedio), selectedDivisa)}</div>
                   </div>
                 </div>
               </div>
@@ -422,7 +422,7 @@ const Dashboard = () => {
                   <h3 className="text-white font-bold text-lg">Max Drawdown</h3>
                 </div>
                 <div className="text-3xl font-black text-orange-400 mb-2">
-                  ${estadisticasCompletas.max_drawdown.drawdown_euros.toFixed(0)}
+                  {formatCurrency(estadisticasCompletas.max_drawdown.drawdown_euros, selectedDivisa)}
                 </div>
                 <div className="bg-orange-500/20 rounded-lg px-3 py-1 inline-block">
                   <div className="text-orange-300 text-sm font-medium">
@@ -503,7 +503,7 @@ const Dashboard = () => {
                       <span className="text-green-300 font-bold">{estadisticasCompletas.dia_semanal_mas_rentable.dia || 'N/A'}</span>
                     </div>
                     {estadisticasCompletas.dia_semanal_mas_rentable.dia && (
-                      <div className="text-green-300 text-xs mt-1">+${estadisticasCompletas.dia_semanal_mas_rentable.ganancia.toFixed(2)}</div>
+                      <div className="text-green-300 text-xs mt-1">+{formatCurrency(estadisticasCompletas.dia_semanal_mas_rentable.ganancia, selectedDivisa)}</div>
                     )}
                   </div>
                   <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
@@ -512,7 +512,7 @@ const Dashboard = () => {
                       <span className="text-red-300 font-bold">{estadisticasCompletas.dia_semanal_menos_rentable.dia || 'N/A'}</span>
                     </div>
                     {estadisticasCompletas.dia_semanal_menos_rentable.dia && (
-                      <div className="text-red-300 text-xs mt-1">${estadisticasCompletas.dia_semanal_menos_rentable.ganancia.toFixed(2)}</div>
+                      <div className="text-red-300 text-xs mt-1">{formatCurrency(estadisticasCompletas.dia_semanal_menos_rentable.ganancia, selectedDivisa)}</div>
                     )}
                   </div>
                 </div>
@@ -530,7 +530,7 @@ const Dashboard = () => {
                 </div>
                 <div className="flex items-baseline gap-4 mb-3">
                   <div className="text-5xl font-black text-violet-400">
-                    ${estadisticasCompletas.expectativa.toFixed(2)}
+                    {formatCurrency(estadisticasCompletas.expectativa, selectedDivisa)}
                   </div>
                   <div className="text-violet-300 text-sm">
                     por operación
@@ -616,57 +616,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen flex" style={bgGradient}>
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-black/30 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col`}>
-        {/* Logo */}
-        <div className="p-4 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <img
-              src={logo}
-              alt="Logo"
-              className="h-10 w-auto object-contain"
-            />
-            {sidebarOpen && (
-              <h1 className="font-cinzel text-xl font-bold tracking-widest text-white">
-                EmoVest
-              </h1>
-            )}
-          </div>
-        </div>
-
-        {/* Menu Items */}
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {menuItems.map((item) => (
-              <li key={item.id}>
-                <button
-                  onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${location.pathname === item.path
-                      ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30'
-                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                    }`}
-                >
-                  <span className="flex-shrink-0 flex items-center justify-center">{item.icon}</span>
-                  {sidebarOpen && (
-                    <span className="font-medium pl-1 text-left">{item.name}</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        {/* Toggle Sidebar Button */}
-        <div className="p-4 border-t border-white/10">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2 rounded-lg text-gray-300 hover:bg-white/10 transition-all duration-300"
-          >
-            <span className="text-xl">{sidebarOpen ? '›' : '‹'}</span>
-            {sidebarOpen && <span className="font-medium">Contraer</span>}
-          </button>
-        </div>
-      </div>
+      <Sidebar sidebarOpen={sidebarOpen} onToggle={() => setSidebarOpen(prev => !prev)} />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">

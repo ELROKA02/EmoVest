@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import logo from '../assets/logoEmoVest.png';
+import { useNavigate } from 'react-router-dom';
+import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
+import { formatCurrency } from '../utils/currency';
 
 const PerfilUsuario = () => {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -9,7 +10,6 @@ const PerfilUsuario = () => {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [userData, setUserData] = useState({ name: 'Cargando...', email: 'Cargando...' });
   const [loading, setLoading] = useState(true);
@@ -26,10 +26,6 @@ const PerfilUsuario = () => {
     divisa: 'EUR',
     saldo: ''
   });
-
-  useEffect(() => {
-    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen));
-  }, [sidebarOpen]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -127,7 +123,7 @@ const PerfilUsuario = () => {
         alert(errData.detail || 'Error al guardar la cuenta');
       }
     } catch (error) {
-      alert('Error de conexión al servidor', error);
+      alert('Error de conexión al servidor',error);
     }
   };
 
@@ -177,71 +173,9 @@ const PerfilUsuario = () => {
     navigate('/login');
   };
 
-  const menuItems = [
-    {
-      id: 'dashboard',
-      name: 'Tablero',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-      ),
-      path: '/dashboard'
-    },
-    {
-      id: 'operaciones',
-      name: 'Operaciones de Trading',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
-      path: '/trading'
-    },
-    {
-      id: 'estadisticas',
-      name: 'Estadísticas Emocionales',
-      icon: (
-       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-      ),
-      path: '/estadisticas'
-    }
-  ];
-
   return (
     <div className="min-h-screen flex" style={bgGradient}>
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-black/30 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col`}>
-        <div className="p-4 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <img src={logo} alt="Logo" className="h-10 w-auto object-contain" />
-            {sidebarOpen && <h1 className="font-cinzel text-xl font-bold tracking-widest text-white">EmoVest</h1>}
-          </div>
-        </div>
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {menuItems.map((item) => (
-              <li key={item.id}>
-                <button
-                  onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${
-                    location.pathname === item.path ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30' : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  <span className="flex-shrink-0 flex items-center justify-center">{item.icon}</span>
-                  {sidebarOpen && <span className="font-medium pl-1 text-left">{item.name}</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <div className="p-4 border-t border-white/10">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="w-full flex items-center justify-center gap-3 px-4 py-2 rounded-lg text-gray-300 hover:bg-white/10 transition-all duration-300">
-            <span className="text-xl">{sidebarOpen ? '›' : '‹'}</span>
-            {sidebarOpen && <span className="font-medium">Contraer</span>}
-          </button>
-        </div>
-      </div>
+      <Sidebar sidebarOpen={sidebarOpen} onToggle={() => setSidebarOpen(prev => !prev)} />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
@@ -349,7 +283,7 @@ const PerfilUsuario = () => {
                             <h5 className="text-white font-bold text-lg">{cuenta.nombre_cuenta}</h5>
                             <div className="flex items-center gap-4 mt-1">
                               <span className="text-gray-400 text-sm">Divisa: <strong className="text-white">{cuenta.divisa}</strong></span>
-                              <span className="text-gray-400 text-sm">Saldo Actual: <strong className={cuenta.saldo_actual >= cuenta.saldo_inicial ? "text-green-400" : "text-red-400"}>{cuenta.saldo_actual?.toFixed(2)}</strong></span>
+                              <span className="text-gray-400 text-sm">Saldo Actual: <strong className={cuenta.saldo_actual >= cuenta.saldo_inicial ? "text-green-400" : "text-red-400"}>{formatCurrency(cuenta.saldo_actual, cuenta.divisa)}</strong></span>
                             </div>
                           </div>
                           <div className="flex gap-2">
