@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import OperacionesTrading from './OperacionesTrading';
 import CustomSelect from './CustomSelect';
-import logo from '../assets/logoEmoVest.png';
+import Sidebar from './Sidebar';
 import { fetchAndStoreUserName } from '../utils/userSession';
+import { formatCurrency } from '../utils/currency';
 
 const InfoIcon = ({ text }) => (
   <div className="group relative inline-block">
@@ -49,10 +50,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen));
-  }, [sidebarOpen]);
-
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
 
   useEffect(() => {
@@ -84,7 +81,10 @@ const Dashboard = () => {
   });
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [tradingAccounts, setTradingAccounts] = useState([]);
-  const [selectedAccount, setSelectedAccount] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState(() => {
+    const saved = localStorage.getItem('selectedAccountId');
+    return saved ? parseInt(saved) : '';
+  });
 
   // Estados para el selector de fecha y ganancias
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -93,7 +93,148 @@ const Dashboard = () => {
   const [loadingGanancias, setLoadingGanancias] = useState(false);
   const [estadisticasCompletas, setEstadisticasCompletas] = useState(null);
   const [loadingEstadisticas, setLoadingEstadisticas] = useState(false);
-  
+  const [operaciones, setOperaciones] = useState([]);
+
+  // Guardar cuenta seleccionada en localStorage cuando cambia
+  useEffect(() => {
+    if (selectedAccount) {
+      localStorage.setItem('selectedAccountId', selectedAccount);
+    }
+  }, [selectedAccount]);
+
+  // Función para calcular estadísticas desde operaciones
+  const calcularEstadisticasDesdeOperaciones = (ops) => {
+    if (!ops || ops.length === 0) return null;
+
+    const operacionesGanadoras = ops.filter(op => op.resultado > 0);
+    const operacionesPerdedoras = ops.filter(op => op.resultado < 0);
+    const operacionesCerradas = ops.filter(op => op.resultado !== null && op.resultado !== undefined);
+
+    // Ganancias netas
+    const gananciasNetas = ops.reduce((sum, op) => sum + (op.resultado || 0), 0);
+
+    // Win Rate
+    const winRate = operacionesCerradas.length > 0 ? (operacionesGanadoras.length / operacionesCerradas.length) * 100 : 0;
+
+    // Promedios
+    const gananciasPromedio = operacionesGanadoras.length > 0 
+      ? operacionesGanadoras.reduce((sum, op) => sum + op.resultado, 0) / operacionesGanadoras.length 
+      : 0;
+    const perdidasPromedio = operacionesPerdedoras.length > 0 
+      ? operacionesPerdedoras.reduce((sum, op) => sum + op.resultado, 0) / operacionesPerdedoras.length 
+      : 0;
+
+    // Max Drawdown
+    let maxDrawdown = 0;
+    let currentMax = 0;
+    let runningTotal = 0;
+    ops.forEach(op => {
+      if (op.resultado) {
+        runningTotal += op.resultado;
+        if (runningTotal > currentMax) {
+          currentMax = runningTotal;
+        }
+        const drawdown = currentMax - runningTotal;
+        if (drawdown > maxDrawdown) {
+          maxDrawdown = drawdown;
+        }
+      }
+    });
+
+    // Rachas
+    let rachaGanadoraActual = 0;
+    let maxRachaGanadora = 0;
+    let rachaPerdedoraActual = 0;
+    let maxRachaPerdedora = 0;
+
+    ops.forEach(op => {
+      if (op.resultado > 0) {
+        rachaGanadoraActual++;
+        rachaPerdedoraActual = 0;
+        if (rachaGanadoraActual > maxRachaGanadora) {
+          maxRachaGanadora = rachaGanadoraActual;
+        }
+      } else if (op.resultado < 0) {
+        rachaPerdedoraActual++;
+        rachaGanadoraActual = 0;
+        if (rachaPerdedoraActual > maxRachaPerdedora) {
+          maxRachaPerdedora = rachaPerdedoraActual;
+        }
+      }
+    });
+
+    // Medias hasta ganar/perder
+    let operacionesHastaGanadora = 0;
+    let operacionesHastaError = 0;
+    let contadorActual = 0;
+
+    ops.forEach(op => {
+      if (op.resultado > 0) {
+        operacionesHastaError += contadorActual;
+        operacionesHastaGanadora = contadorActual + 1;
+        contadorActual = 0;
+      } else if (op.resultado < 0) {
+        operacionesHastaGanadora += contadorActual;
+        operacionesHastaError = contadorActual + 1;
+        contadorActual = 0;
+      } else {
+        contadorActual++;
+      }
+    });
+
+    const mediaHastaGanadora = operacionesHastaGanadora > 0 ? operacionesHastaGanadora / operacionesGanadoras.length : 0;
+    const mediaHastaError = operacionesHastaError > 0 ? operacionesHastaError / operacionesPerdedoras.length : 0;
+
+    // Días rentables
+    const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const gananciasPorDia = {};
+
+    ops.forEach(op => {
+      if (op.resultado && op.fecha_hora) {
+        const dia = new Date(op.fecha_hora).getDay();
+        const nombreDia = diasSemana[dia === 0 ? 6 : dia - 1]; // Ajustar para que lunes sea 0
+        if (!gananciasPorDia[nombreDia]) {
+          gananciasPorDia[nombreDia] = 0;
+        }
+        gananciasPorDia[nombreDia] += op.resultado;
+      }
+    });
+
+    const mejorDia = Object.entries(gananciasPorDia).reduce((best, [dia, ganancia]) => 
+      ganancia > best.ganancia ? { dia, ganancia } : best, 
+      { dia: 'N/A', ganancia: -Infinity }
+    );
+    
+    const peorDia = Object.entries(gananciasPorDia).reduce((worst, [dia, ganancia]) => 
+      ganancia < worst.ganancia ? { dia, ganancia } : worst, 
+      { dia: 'N/A', ganancia: Infinity }
+    );
+
+    // Expectativa matemática
+    const expectativa = operacionesCerradas.length > 0 
+      ? (operacionesGanadoras.length * gananciasPromedio + operacionesPerdedoras.length * perdidasPromedio) / operacionesCerradas.length
+      : 0;
+
+    return {
+      ganancias_netas: gananciasNetas,
+      win_rate: winRate,
+      ganancias_promedio: gananciasPromedio,
+      perdidas_promedio: Math.abs(perdidasPromedio),
+      max_drawdown: {
+        drawdown_euros: maxDrawdown,
+        drawdown_porcentaje: currentMax > 0 ? (maxDrawdown / currentMax) * 100 : 0
+      },
+      racha_ganadora_mas_larga: maxRachaGanadora,
+      racha_perdedora_mas_larga: maxRachaPerdedora,
+      operaciones_ganadoras_consecutivas_actuales: rachaGanadoraActual,
+      media_operaciones_hasta_ganadora: mediaHastaGanadora,
+      media_operaciones_hasta_error: mediaHastaError,
+      dia_semanal_mas_rentable: mejorDia.ganancia !== -Infinity ? mejorDia : { dia: null, ganancia: 0 },
+      dia_semanal_menos_rentable: peorDia.ganancia !== Infinity ? peorDia : { dia: null, ganancia: 0 },
+      expectativa: expectativa
+    };
+  };
+
   // Función para obtener estadísticas del backend
   const fetchEstadisticasCompletas = async () => {
     if (!selectedAccount) {
@@ -136,7 +277,10 @@ const Dashboard = () => {
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
   };
-  const saldoPlaceholder = accountData.divisa === 'EUR' ? '€ 0.00' : '$ 0.00';
+  const selectedAccountObj = tradingAccounts.find(account => account.id === selectedAccount);
+  const selectedDivisa = selectedAccountObj?.divisa || 'EUR';
+  const accountOptionText = account => `${account.nombre_cuenta} (${account.divisa}) - ${formatCurrency(account.saldo_inicial, account.divisa)}`;
+  const saldoPlaceholder = formatCurrency(0, accountData.divisa);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -219,8 +363,12 @@ const Dashboard = () => {
         console.log('Número de cuentas:', accounts.length);
         setTradingAccounts(accounts);
         if (accounts.length > 0) {
-          console.log('ID de la primera cuenta:', accounts[0].id);
-          setSelectedAccount(accounts[0].id);
+          const savedAccountId = localStorage.getItem('selectedAccountId');
+          const accountToSelect = savedAccountId 
+            ? accounts.find(acc => acc.id === parseInt(savedAccountId))?.id 
+            : accounts[0].id;
+          console.log('ID de la cuenta a seleccionar:', accountToSelect || accounts[0].id);
+          setSelectedAccount(accountToSelect || accounts[0].id);
         }
       } else {
         // Si es 404, significa que no hay cuentas (es normal)
@@ -308,12 +456,12 @@ const Dashboard = () => {
               <label className="text-white font-medium">Cuentas:</label>
               <CustomSelect
                 value={
-                  tradingAccounts.find(account => account.id === selectedAccount)
-                    ? `${tradingAccounts.find(account => account.id === selectedAccount).nombre_cuenta} (${tradingAccounts.find(account => account.id === selectedAccount).divisa}) - $${tradingAccounts.find(account => account.id === selectedAccount).saldo_inicial.toFixed(2)}`
+                  selectedAccountObj
+                    ? accountOptionText(selectedAccountObj)
                     : 'No hay cuentas disponibles'
                 }
                 onChange={(selectedText) => {
-                  const selectedAccountObj = tradingAccounts.find(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}` === selectedText);
+                  const selectedAccountObj = tradingAccounts.find(account => accountOptionText(account) === selectedText);
                   if (selectedAccountObj) {
                     setSelectedAccount(selectedAccountObj.id);
                   }
@@ -321,7 +469,7 @@ const Dashboard = () => {
                 options={
                   tradingAccounts.length === 0
                     ? ['No hay cuentas disponibles']
-                    : tradingAccounts.map(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}`)
+                    : tradingAccounts.map(account => accountOptionText(account))
                 }
               />
             </div>
@@ -378,7 +526,7 @@ const Dashboard = () => {
                   <InfoIcon text="Beneficio o pérdida total después de todas las operaciones en el período seleccionado" />
                 </div>
                 <div className={`text-4xl font-black ${estadisticasCompletas.ganancias_netas >= 0 ? 'text-green-400' : 'text-red-400'} mb-2`}>
-                  ${estadisticasCompletas.ganancias_netas.toFixed(2)}
+                  {formatCurrency(estadisticasCompletas.ganancias_netas, selectedDivisa)}
                 </div>
                 <div className={`text-sm ${estadisticasCompletas.ganancias_netas >= 0 ? 'text-green-300' : 'text-red-300'} font-medium`}>
                   {estadisticasCompletas.ganancias_netas >= 0 ? 'Beneficio Neto' : 'Pérdida Neta'}
@@ -435,11 +583,11 @@ const Dashboard = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/50">
                     <div className="text-green-400 text-xs mb-1 font-medium">Ganancia</div>
-                    <div className="text-green-300 font-bold text-lg">€{estadisticasCompletas.ganancias_promedio.toFixed(0)}</div>
+                    <div className="text-green-300 font-bold text-lg">{formatCurrency(estadisticasCompletas.ganancias_promedio, selectedDivisa)}</div>
                   </div>
                   <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/50">
                     <div className="text-red-400 text-xs mb-1 font-medium">Pérdida</div>
-                    <div className="text-red-300 font-bold text-lg">€{Math.abs(estadisticasCompletas.perdidas_promedio).toFixed(0)}</div>
+                    <div className="text-red-300 font-bold text-lg">{formatCurrency(Math.abs(estadisticasCompletas.perdidas_promedio), selectedDivisa)}</div>
                   </div>
                 </div>
               </div>
@@ -455,7 +603,7 @@ const Dashboard = () => {
                   <InfoIcon text="Máxima pérdida desde el pico más alto, muestra el mayor riesgo asumido" />
                 </div>
                 <div className="text-3xl font-black text-orange-400 mb-2">
-                  ${estadisticasCompletas.max_drawdown.drawdown_euros.toFixed(0)}
+                  {formatCurrency(estadisticasCompletas.max_drawdown.drawdown_euros, selectedDivisa)}
                 </div>
                 <div className="bg-orange-500/20 rounded-lg px-3 py-1 inline-block border border-orange-500/50">
                   <div className="text-orange-300 text-sm font-medium">
@@ -537,7 +685,7 @@ const Dashboard = () => {
                       <span className="text-green-300 font-bold">{traducirDia(estadisticasCompletas.dia_semanal_mas_rentable.dia) || 'N/A'}</span>
                     </div>
                     {estadisticasCompletas.dia_semanal_mas_rentable.dia && (
-                      <div className="text-green-300 text-xs mt-1">+${estadisticasCompletas.dia_semanal_mas_rentable.ganancia.toFixed(2)}</div>
+                      <div className="text-green-300 text-xs mt-1">+{formatCurrency(estadisticasCompletas.dia_semanal_mas_rentable.ganancia, selectedDivisa)}</div>
                     )}
                   </div>
                   <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/50">
@@ -546,7 +694,7 @@ const Dashboard = () => {
                       <span className="text-red-300 font-bold">{traducirDia(estadisticasCompletas.dia_semanal_menos_rentable.dia) || 'N/A'}</span>
                     </div>
                     {estadisticasCompletas.dia_semanal_menos_rentable.dia && (
-                      <div className="text-red-300 text-xs mt-1">${estadisticasCompletas.dia_semanal_menos_rentable.ganancia.toFixed(2)}</div>
+                      <div className="text-red-300 text-xs mt-1">{formatCurrency(estadisticasCompletas.dia_semanal_menos_rentable.ganancia, selectedDivisa)}</div>
                     )}
                   </div>
                 </div>
@@ -565,7 +713,7 @@ const Dashboard = () => {
                 </div>
                 <div className="flex items-baseline gap-4 mb-3">
                   <div className="text-5xl font-black text-violet-400">
-                    ${estadisticasCompletas.expectativa.toFixed(2)}
+                    {formatCurrency(estadisticasCompletas.expectativa, selectedDivisa)}
                   </div>
                   <div className="text-violet-300 text-sm">
                     por operación
@@ -651,62 +799,12 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen flex" style={bgGradient}>
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-black/30 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col`}>
-        {/* Logo */}
-        <div className="p-4 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <img
-              src={logo}
-              alt="Logo"
-              className="h-10 w-auto object-contain"
-            />
-            {sidebarOpen && (
-              <h1 className="font-cinzel text-xl font-bold tracking-widest text-white">
-                EmoVest
-              </h1>
-            )}
-          </div>
-        </div>
-
-        {/* Menu Items */}
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {menuItems.map((item) => (
-              <li key={item.id}>
-                <button
-                  onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${location.pathname === item.path
-                      ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30'
-                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                    }`}
-                >
-                  <span className="flex-shrink-0 flex items-center justify-center">{item.icon}</span>
-                  {sidebarOpen && (
-                    <span className="font-medium pl-1 text-left">{item.name}</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        {/* Toggle Sidebar Button */}
-        <div className="p-4 border-t border-white/10">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2 rounded-lg text-gray-300 hover:bg-white/10 transition-all duration-300"
-          >
-            <span className="text-xl">{sidebarOpen ? '›' : '‹'}</span>
-            {sidebarOpen && <span className="font-medium">Contraer</span>}
-          </button>
-        </div>
-      </div>
+      <Sidebar sidebarOpen={sidebarOpen} onToggle={() => setSidebarOpen(prev => !prev)} />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
-        <header className="bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
+        <header className="sticky top-0 z-40 bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}

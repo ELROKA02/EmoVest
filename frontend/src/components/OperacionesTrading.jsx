@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import logo from '../assets/logoEmoVest.png';
+import { useNavigate } from 'react-router-dom';
+import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
 import { fetchAndStoreUserName } from '../utils/userSession';
+import { formatCurrency } from '../utils/currency';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -35,19 +36,19 @@ const OperacionesTrading = () => {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const navigate = useNavigate();
-  const location = useLocation();
 
   // Estados para backend
   const [cuentas, setCuentas] = useState([]);
-  const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
+  const [cuentaSeleccionada, setCuentaSeleccionada] = useState(() => {
+    const saved = localStorage.getItem('selectedAccountId');
+    return saved ? parseInt(saved) : null;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen));
-  }, [sidebarOpen]);
-
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
+  const selectedAccount = cuentas.find(cuenta => cuenta.id === cuentaSeleccionada);
+  const currencyDivisa = selectedAccount?.divisa || 'USD';
 
   useEffect(() => {
     let isMounted = true;
@@ -75,6 +76,13 @@ const OperacionesTrading = () => {
     cargarCuentas();
   }, []);
 
+  // Guardar cuenta seleccionada en localStorage cuando cambia
+  useEffect(() => {
+    if (cuentaSeleccionada) {
+      localStorage.setItem('selectedAccountId', cuentaSeleccionada);
+    }
+  }, [cuentaSeleccionada]);
+
   // Cargar operaciones cuando cambia la cuenta
   useEffect(() => {
     if (cuentaSeleccionada) {
@@ -97,7 +105,11 @@ const OperacionesTrading = () => {
       const data = await response.json();
       setCuentas(data);
       if (data.length > 0) {
-        setCuentaSeleccionada(data[0].id);
+        const savedAccountId = localStorage.getItem('selectedAccountId');
+        const accountToSelect = savedAccountId 
+          ? data.find(acc => acc.id === parseInt(savedAccountId))?.id 
+          : data[0].id;
+        setCuentaSeleccionada(accountToSelect || data[0].id);
       } else {
         setError('No se han creado cuentas de trading. Crea una desde el Tablero.');
       }
@@ -142,37 +154,6 @@ const OperacionesTrading = () => {
     navigate('/login');
   };
 
-  const menuItems = [
-    {
-      id: 'dashboard',
-      name: 'Tablero',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-      ),
-      path: '/dashboard'
-    },
-    {
-      id: 'operaciones',
-      name: 'Operaciones de Trading',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
-      path: '/trading'
-    },
-    {
-      id: 'estadisticas',
-      name: 'Estadísticas Emocionales',
-      icon: (
-       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-      ),
-      path: '/estadisticas'
-    }
-  ];
-
   const [operaciones, setOperaciones] = useState([]);
 
   const [showForm, setShowForm] = useState(false);
@@ -213,6 +194,32 @@ const OperacionesTrading = () => {
       }
     }
   }, [formData.precio_entrada, formData.precio_salida, formData.cantidad, formData.tipo_operacion, formData.resultado]);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validar que sea una imagen
+      if (!file.type.startsWith('image/')) {
+        setError('Por favor selecciona un archivo de imagen válido');
+        return;
+      }
+      // Validar tamaño (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('La imagen no debe superar 5MB');
+        return;
+      }
+      // Convertir a base64
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFormData(prev => ({...prev, screenshot: event.target?.result}));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setFormData(prev => ({...prev, screenshot: null}));
+  };
 
   const handleCreate = () => {
     setEditing(null);
@@ -335,64 +342,12 @@ const OperacionesTrading = () => {
 
   return (
     <div className="min-h-screen flex" style={bgGradient}>
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-black/30 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col`}>
-        {/* Logo */}
-        <div className="p-4 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <img
-              src={logo}
-              alt="Logo"
-              className="h-10 w-auto object-contain"
-            />
-            {sidebarOpen && (
-              <h1 className="font-cinzel text-xl font-bold tracking-widest text-white">
-                EmoVest
-              </h1>
-            )}
-          </div>
-        </div>
-
-        {/* Menu Items */}
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {menuItems.map((item) => (
-              <li key={item.id}>
-                <button
-                  onClick={() => navigate(item.path)}
-                  className={`w-full flex items-center justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-300 ${
-                    location.pathname === item.path
-                      ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30'
-                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  <span className="flex-shrink-0 flex items-center justify-center">{item.icon}</span>
-                  {sidebarOpen && (
-                    <span className="font-medium pl-1 text-left">{item.name}</span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-            
-        {/* Toggle Sidebar Button */}
-        <div className="p-4 border-t border-white/10">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2 rounded-lg text-gray-300 hover:bg-white/10 transition-all duration-300"
-          >
-            <span className="text-xl">{sidebarOpen ? '›' : '‹'}</span>
-            {sidebarOpen && <span className="font-medium">Contraer</span>}
-          </button>
-        </div>
-      </div>
+      <Sidebar sidebarOpen={sidebarOpen} onToggle={() => setSidebarOpen(prev => !prev)} />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
-        <header className="bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
+        <header className="sticky top-0 z-40 bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -493,10 +448,10 @@ const OperacionesTrading = () => {
                       </td>
                       <td className="p-4 text-center text-white">{op.activo}</td>
                       <td className="p-4 text-center text-white">{op.cantidad}</td>
-                      <td className="p-4 text-center font-mono text-white">{op.precio_entrada}$</td>
-                      <td className="p-4 text-center font-mono text-white">{op.precio_salida ? `${op.precio_salida}$` : '-'}</td>
+                      <td className="p-4 text-center font-mono text-white">{formatCurrency(op.precio_entrada, currencyDivisa)}</td>
+                      <td className="p-4 text-center font-mono text-white">{op.precio_salida !== null && op.precio_salida !== undefined ? formatCurrency(op.precio_salida, currencyDivisa) : '-'}</td>
                       <td className={`p-4 text-center font-semibold ${op.resultado > 0 ? 'text-green-400' : op.resultado < 0 ? 'text-red-400' : 'text-gray-300'}`}>
-                        {op.resultado !== null && op.resultado !== undefined ? `${op.resultado}$` : '-'}
+                        {op.resultado !== null && op.resultado !== undefined ? `${op.resultado > 0 ? '+' : ''}${formatCurrency(op.resultado, currencyDivisa)}` : '-'}
                       </td>
                       <td className="p-4 flex gap-2 justify-center">
                         <button
@@ -708,6 +663,41 @@ const OperacionesTrading = () => {
                         className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500 h-12"
                         disabled={loading}
                       />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1 mb-1">
+                        <label className="block text-xs text-white">Imagen/Screenshot</label>
+                        <InfoIcon text="Adjunta una captura de pantalla o imagen de la operación (máx. 5MB)." />
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          disabled={loading}
+                          className="w-full p-1.5 text-xs text-gray-300 bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500 file:bg-blue-600 file:text-white file:border-0 file:px-2 file:py-1 file:rounded file:cursor-pointer file:text-xs hover:file:bg-blue-700"
+                        />
+                        {formData.screenshot && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveImage}
+                            disabled={loading}
+                            className="px-2 py-1.5 text-xs text-red-400 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 rounded-xl transition-colors disabled:opacity-50"
+                            title="Eliminar imagen"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      {formData.screenshot && (
+                        <div className="mt-3 p-2 bg-white/5 rounded-xl border border-white/10">
+                          <img 
+                            src={formData.screenshot} 
+                            alt="Vista previa" 
+                            className="max-h-40 max-w-full mx-auto rounded-lg object-contain"
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="flex justify-end gap-2 pt-2">
                       <button
