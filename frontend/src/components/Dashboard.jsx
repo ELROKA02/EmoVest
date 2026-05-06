@@ -51,6 +51,14 @@ const Dashboard = () => {
   const [tradingAccounts, setTradingAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
 
+  // Estados para el selector de fecha y ganancias
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [gananciasNetas, setGananciasNetas] = useState(null);
+  const [loadingGanancias, setLoadingGanancias] = useState(false);
+  const [estadisticasCompletas, setEstadisticasCompletas] = useState(null);
+  const [loadingEstadisticas, setLoadingEstadisticas] = useState(false);
+
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
   };
@@ -94,31 +102,6 @@ const Dashboard = () => {
         });
         
         // Refrescar la lista de cuentas
-        const fetchTradingAccounts = async () => {
-          try {
-            const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-
-            if (response.ok) {
-              const accounts = await response.json();
-              setTradingAccounts(accounts);
-              if (accounts.length > 0) {
-                setSelectedAccount(accounts[accounts.length - 1].id); // Seleccionar la nueva cuenta
-              }
-            } else if (response.status === 404) {
-              setTradingAccounts([]);
-              setSelectedAccount('');
-            }
-          } catch (error) {
-            console.error('Error al refrescar cuentas:', error);
-          }
-        };
-        
         fetchTradingAccounts();
       } else {
         const errorData = await response.json();
@@ -146,43 +129,97 @@ const Dashboard = () => {
   };
 
   // Fetch trading accounts on component mount
-  useEffect(() => {
-    const fetchTradingAccounts = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
-          method: 'GET',
+  const fetchTradingAccounts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const accounts = await response.json();
+        console.log('Cuentas recibidas del backend:', accounts);
+        console.log('Número de cuentas:', accounts.length);
+        setTradingAccounts(accounts);
+        if (accounts.length > 0) {
+          console.log('ID de la primera cuenta:', accounts[0].id);
+          setSelectedAccount(accounts[0].id);
+        }
+      } else {
+        // Si es 404, significa que no hay cuentas (es normal)
+        if (response.status === 404) {
+          console.log('No hay cuentas (404 - es normal)');
+          setTradingAccounts([]);
+          setSelectedAccount('');
+        } else {
+          console.error('Error fetching accounts:', response.status);
+        }
+      }
+    } catch (error) {
+      console.error('Error de conexión al obtener cuentas:', error);
+    }
+  };
+
+  // Función para obtener todas las estadísticas completas
+  const fetchEstadisticasCompletas = async () => {
+    if (!selectedAccount) {
+      setGananciasNetas(null);
+      setEstadisticasCompletas(null);
+      return;
+    }
+
+    setLoadingGanancias(true);
+    setLoadingEstadisticas(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `http://localhost:8000/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`,
+        {
           headers: {
             'Authorization': `Bearer ${token}`
           }
-        });
-
-        if (response.ok) {
-          const accounts = await response.json();
-          console.log('Cuentas recibidas del backend:', accounts);
-          console.log('Número de cuentas:', accounts.length);
-          setTradingAccounts(accounts);
-          if (accounts.length > 0) {
-            console.log('ID de la primera cuenta:', accounts[0].id);
-            setSelectedAccount(accounts[0].id);
-          }
-        } else {
-          // Si es 404, significa que no hay cuentas (es normal)
-          if (response.status === 404) {
-            console.log('No hay cuentas (404 - es normal)');
-            setTradingAccounts([]);
-            setSelectedAccount('');
-          } else {
-            console.error('Error fetching accounts:', response.status);
-          }
         }
-      } catch (error) {
-        console.error('Error de conexión al obtener cuentas:', error);
-      }
-    };
+      );
 
+      if (response.ok) {
+        const data = await response.json();
+        setGananciasNetas(data.ganancias_netas);
+        setEstadisticasCompletas(data);
+      } else {
+        console.error('Error al obtener estadísticas:', response.status);
+        setGananciasNetas(null);
+        setEstadisticasCompletas(null);
+      }
+    } catch (error) {
+      console.error('Error de conexión:', error);
+      setGananciasNetas(null);
+      setEstadisticasCompletas(null);
+    } finally {
+      setLoadingGanancias(false);
+      setLoadingEstadisticas(false);
+    }
+  };
+
+  // Efecto para cargar estadísticas cuando cambia la cuenta, mes o año
+  useEffect(() => {
+    fetchEstadisticasCompletas();
+  }, [selectedAccount, selectedMonth, selectedYear]);
+
+  // Efecto para cargar cuentas al montar el componente
+  useEffect(() => {
     fetchTradingAccounts();
   }, []);
+
+  // Opciones para meses y años
+  const meses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  const años = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
   const menuItems = [
     {
@@ -220,41 +257,298 @@ const Dashboard = () => {
       return <OperacionesTrading />;
     }
 
-    // Dashboard content sin grid
-    console.log('Estado actual de tradingAccounts en render:', tradingAccounts);
-    console.log('Longitud de tradingAccounts:', tradingAccounts.length);
     return (
       <div className="p-14 pl-30 h-full">
-        <div className="mb-6 flex items-center gap-8">
-          <button
-            onClick={handleCreateAccountClick}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full transition-all duration-300"
-          >
-            Crear Cuenta Trading
-          </button>
-          
-          <div className="flex items-center gap-2">
-            <label className="text-white font-medium">Cuentas:</label>
-            <CustomSelect
-              value={
-                tradingAccounts.find(account => account.id === selectedAccount)
-                  ? `${tradingAccounts.find(account => account.id === selectedAccount).nombre_cuenta} (${tradingAccounts.find(account => account.id === selectedAccount).divisa}) - $${tradingAccounts.find(account => account.id === selectedAccount).saldo_inicial.toFixed(2)}`
-                  : 'No hay cuentas disponibles'
-              }
-              onChange={(selectedText) => {
-                const selectedAccountObj = tradingAccounts.find(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}` === selectedText);
-                if (selectedAccountObj) {
-                  setSelectedAccount(selectedAccountObj.id);
+        {/* Selectores de Fecha - Principales */}
+        <div className="mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            <button
+              onClick={handleCreateAccountClick}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full transition-all duration-300"
+            >
+              Crear Cuenta Trading
+            </button>
+            
+            <div className="flex items-center gap-2">
+              <label className="text-white font-medium">Cuentas:</label>
+              <CustomSelect
+                value={
+                  tradingAccounts.find(account => account.id === selectedAccount)
+                    ? `${tradingAccounts.find(account => account.id === selectedAccount).nombre_cuenta} (${tradingAccounts.find(account => account.id === selectedAccount).divisa}) - $${tradingAccounts.find(account => account.id === selectedAccount).saldo_inicial.toFixed(2)}`
+                    : 'No hay cuentas disponibles'
                 }
-              }}
-              options={
-                tradingAccounts.length === 0
-                  ? ['No hay cuentas disponibles']
-                  : tradingAccounts.map(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}`)
-              }
-            />
+                onChange={(selectedText) => {
+                  const selectedAccountObj = tradingAccounts.find(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}` === selectedText);
+                  if (selectedAccountObj) {
+                    setSelectedAccount(selectedAccountObj.id);
+                  }
+                }}
+                options={
+                  tradingAccounts.length === 0
+                    ? ['No hay cuentas disponibles']
+                    : tradingAccounts.map(account => `${account.nombre_cuenta} (${account.divisa}) - $${account.saldo_inicial.toFixed(2)}`)
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 bg-black/20 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+            <div className="flex items-center gap-3">
+              <label className="text-white font-medium">Mes:</label>
+              <CustomSelect
+                value={meses[selectedMonth - 1]}
+                onChange={(selectedText) => {
+                  const monthIndex = meses.indexOf(selectedText);
+                  if (monthIndex !== -1) {
+                    setSelectedMonth(monthIndex + 1);
+                  }
+                }}
+                options={meses}
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="text-white font-medium">Año:</label>
+              <CustomSelect
+                value={selectedYear.toString()}
+                onChange={(selectedText) => {
+                  setSelectedYear(parseInt(selectedText));
+                }}
+                options={años.map(año => año.toString())}
+              />
+            </div>
           </div>
         </div>
+
+        {/* Grid de Estadísticas Moderno */}
+        {loadingEstadisticas ? (
+          <div className="flex justify-center items-center py-20">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-8 h-8 bg-blue-500 rounded-full animate-pulse"></div>
+              </div>
+            </div>
+            <div className="ml-4 text-white text-lg font-medium">Analizando estadísticas...</div>
+          </div>
+        ) : estadisticasCompletas ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+            {/* Ganancias Netas - Tarjeta Hero */}
+            <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${estadisticasCompletas.ganancias_netas >= 0 ? 'from-green-600/20 to-emerald-600/10 border-green-500/30' : 'from-red-600/20 to-rose-600/10 border-red-500/30'} backdrop-blur-xl border p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl`}>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/5 to-transparent rounded-full -mr-16 -mt-16"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-4 h-4 rounded-full ${estadisticasCompletas.ganancias_netas >= 0 ? 'bg-green-500 shadow-lg shadow-green-500/50' : 'bg-red-500 shadow-lg shadow-red-500/50'} animate-pulse`}></div>
+                  <h3 className="text-white font-bold text-lg">Ganancias Netas</h3>
+                </div>
+                <div className={`text-4xl font-black ${estadisticasCompletas.ganancias_netas >= 0 ? 'text-green-400' : 'text-red-400'} mb-2`}>
+                  ${estadisticasCompletas.ganancias_netas.toFixed(2)}
+                </div>
+                <div className={`text-sm ${estadisticasCompletas.ganancias_netas >= 0 ? 'text-green-300' : 'text-red-300'} font-medium`}>
+                  {estadisticasCompletas.ganancias_netas >= 0 ? 'Beneficio Neto' : 'Pérdida Neta'}
+                </div>
+              </div>
+            </div>
+
+            {/* Win Rate - Tarjeta con Gráfica Circular */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600/20 to-indigo-600/10 backdrop-blur-xl border border-blue-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full -mr-12 -mt-12"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div>
+                  <h3 className="text-white font-bold text-lg">Win Rate</h3>
+                </div>
+                <div className="flex items-center justify-center mb-4">
+                  <div className="relative w-24 h-24">
+                    <svg className="w-24 h-24 transform -rotate-90">
+                      <circle cx="48" cy="48" r="36" stroke="rgba(55, 65, 81, 0.5)" strokeWidth="12" fill="none"/>
+                      <circle 
+                        cx="48" 
+                        cy="48" 
+                        r="36" 
+                        stroke="url(#gradient)" 
+                        strokeWidth="12" 
+                        fill="none"
+                        strokeDasharray={`${2 * Math.PI * 36}`}
+                        strokeDashoffset={`${2 * Math.PI * 36 * (1 - estadisticasCompletas.win_rate / 100)}`}
+                        className="transition-all duration-1000 ease-out"
+                      />
+                      <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#10b981"/>
+                          <stop offset="100%" stopColor="#3b82f6"/>
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-2xl font-black text-blue-400">{estadisticasCompletas.win_rate.toFixed(0)}%</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-green-400 font-medium">✓ Ganadoras</span>
+                  <span className="text-red-400 font-medium">✗ Perdedoras</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Promedios Operación - Tarjeta Dual */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600/20 to-pink-600/10 backdrop-blur-xl border border-purple-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-purple-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-purple-500 shadow-lg shadow-purple-500/50"></div>
+                  <h3 className="text-white font-bold text-lg">Promedios</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/20">
+                    <div className="text-green-400 text-xs mb-1 font-medium">Ganancia</div>
+                    <div className="text-green-300 font-bold text-lg">€{estadisticasCompletas.ganancias_promedio.toFixed(0)}</div>
+                  </div>
+                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                    <div className="text-red-400 text-xs mb-1 font-medium">Pérdida</div>
+                    <div className="text-red-300 font-bold text-lg">€{Math.abs(estadisticasCompletas.perdidas_promedio).toFixed(0)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Max Drawdown - Tarjeta de Alerta */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-600/20 to-amber-600/10 backdrop-blur-xl border border-orange-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-orange-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-orange-500 shadow-lg shadow-orange-500/50 animate-pulse"></div>
+                  <h3 className="text-white font-bold text-lg">Max Drawdown</h3>
+                </div>
+                <div className="text-3xl font-black text-orange-400 mb-2">
+                  ${estadisticasCompletas.max_drawdown.drawdown_euros.toFixed(0)}
+                </div>
+                <div className="bg-orange-500/20 rounded-lg px-3 py-1 inline-block">
+                  <div className="text-orange-300 text-sm font-medium">
+                    {estadisticasCompletas.max_drawdown.drawdown_porcentaje.toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Estadísticas de Operaciones - Tarjeta Compacta */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-600/20 to-teal-600/10 backdrop-blur-xl border border-cyan-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-cyan-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-cyan-500 shadow-lg shadow-cyan-500/50"></div>
+                  <h3 className="text-white font-bold text-lg">Estadísticas</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-cyan-300 text-sm">Media hasta ganar</span>
+                    <span className="text-cyan-400 font-bold">{estadisticasCompletas.media_operaciones_hasta_ganadora.toFixed(1)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-yellow-300 text-sm">Media hasta error</span>
+                    <span className="text-yellow-400 font-bold">{estadisticasCompletas.media_operaciones_hasta_error.toFixed(1)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-green-300 text-sm">Racha actual</span>
+                    <span className="text-green-400 font-bold">{estadisticasCompletas.operaciones_ganadoras_consecutivas_actuales}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Rachas - Tarjeta con Indicadores */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600/20 to-green-600/10 backdrop-blur-xl border border-emerald-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50"></div>
+                  <h3 className="text-white font-bold text-lg">Rachas</h3>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                        <span className="text-emerald-400 text-xs">🔥</span>
+                      </div>
+                      <span className="text-emerald-300 text-sm">Mejor racha</span>
+                    </div>
+                    <div className="text-emerald-400 font-bold text-lg">{estadisticasCompletas.racha_ganadora_mas_larga}</div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">
+                        <span className="text-red-400 text-xs">❄️</span>
+                      </div>
+                      <span className="text-red-300 text-sm">Peor racha</span>
+                    </div>
+                    <div className="text-red-400 font-bold text-lg">{estadisticasCompletas.racha_perdedora_mas_larga}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Días Rentables - Tarjeta Semanal */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600/20 to-blue-600/10 backdrop-blur-xl border border-indigo-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-indigo-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/50"></div>
+                  <h3 className="text-white font-bold text-lg">Días Rentables</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/20">
+                    <div className="flex justify-between items-center">
+                      <span className="text-green-400 text-sm font-medium">Mejor día</span>
+                      <span className="text-green-300 font-bold">{estadisticasCompletas.dia_semanal_mas_rentable.dia || 'N/A'}</span>
+                    </div>
+                    {estadisticasCompletas.dia_semanal_mas_rentable.dia && (
+                      <div className="text-green-300 text-xs mt-1">+${estadisticasCompletas.dia_semanal_mas_rentable.ganancia.toFixed(2)}</div>
+                    )}
+                  </div>
+                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                    <div className="flex justify-between items-center">
+                      <span className="text-red-400 text-sm font-medium">Peor día</span>
+                      <span className="text-red-300 font-bold">{estadisticasCompletas.dia_semanal_menos_rentable.dia || 'N/A'}</span>
+                    </div>
+                    {estadisticasCompletas.dia_semanal_menos_rentable.dia && (
+                      <div className="text-red-300 text-xs mt-1">${estadisticasCompletas.dia_semanal_menos_rentable.ganancia.toFixed(2)}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Expectativa - Tarjeta Destacada */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600/30 via-purple-600/20 to-pink-600/10 backdrop-blur-xl border border-violet-500/40 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl md:col-span-2">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-500/20 to-transparent rounded-full -mr-16 -mt-16"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-pink-500/10 to-transparent rounded-full -ml-12 -mb-12"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-violet-500 shadow-lg shadow-violet-500/50 animate-pulse"></div>
+                  <h3 className="text-white font-bold text-lg">Expectativa Matemática</h3>
+                </div>
+                <div className="flex items-baseline gap-4 mb-3">
+                  <div className="text-5xl font-black text-violet-400">
+                    ${estadisticasCompletas.expectativa.toFixed(2)}
+                  </div>
+                  <div className="text-violet-300 text-sm">
+                    por operación
+                  </div>
+                </div>
+                <div className="bg-violet-500/20 rounded-lg px-4 py-2 inline-block">
+                  <div className="text-violet-300 text-sm font-medium">
+                    {estadisticasCompletas.expectativa >= 0 ? 'Estrategia rentable' : 'Estrategia no rentable'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : selectedAccount ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="text-gray-400 text-lg">No hay datos para el período seleccionado</div>
+          </div>
+        ) : null}
 
         {/* Formulario modal para crear cuenta */}
         {showAccountForm && (
@@ -293,7 +587,6 @@ const Dashboard = () => {
                     onChange={(e) => setAccountData({...accountData, saldo_inicial: e.target.value})}
                     className="w-full p-2 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none"
                     placeholder={saldoPlaceholder}
-
                     required
                   />
                 </div>
