@@ -171,12 +171,12 @@ const EstadisticasEmocionales = () => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-14">
           <div className="max-w-6xl mx-auto space-y-6">
             {error && <div className="p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">{error}</div>}
 
             {/* Filtros */}
-            <div className="relative z-50 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="relative z-10 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row gap-4 items-center justify-between">
               <div className="w-full md:w-1/3">
                 <label className="text-sm text-gray-400 block mb-2">Cuenta Trading</label>
                 <CustomSelect
