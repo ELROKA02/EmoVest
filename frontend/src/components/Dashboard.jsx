@@ -20,6 +20,27 @@ const InfoIcon = ({ text }) => (
   </div>
 );
 
+// Función para traducir días del inglés al español
+const traducirDia = (diaIngles) => {
+  const traducciones = {
+    'Monday': 'Lunes',
+    'Tuesday': 'Martes',
+    'Wednesday': 'Miércoles',
+    'Thursday': 'Jueves',
+    'Friday': 'Viernes',
+    'Saturday': 'Sábado',
+    'Sunday': 'Domingo',
+    'Mon': 'Lunes',
+    'Tue': 'Martes',
+    'Wed': 'Miércoles',
+    'Thu': 'Jueves',
+    'Fri': 'Viernes',
+    'Sat': 'Sábado',
+    'Sun': 'Domingo'
+  };
+  return traducciones[diaIngles] || diaIngles;
+};
+
 const Dashboard = () => {
   // Obtener estado del sidebar desde localStorage o usar true por defecto
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -454,7 +475,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-6 bg-black/20 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+          <div className="flex items-center gap-6 bg-black/20 backdrop-blur-sm rounded-xl p-4 border border-white/10 z-[100]">
             <div className="flex items-center gap-3">
               <label className="text-white font-medium">Mes:</label>
               <CustomSelect
@@ -530,22 +551,16 @@ const Dashboard = () => {
                         cx="48" 
                         cy="48" 
                         r="36" 
-                        stroke="url(#gradient)" 
+                        stroke="#10b981" 
                         strokeWidth="12" 
                         fill="none"
                         strokeDasharray={`${2 * Math.PI * 36}`}
                         strokeDashoffset={`${2 * Math.PI * 36 * (1 - estadisticasCompletas.win_rate / 100)}`}
                         className="transition-all duration-1000 ease-out"
                       />
-                      <defs>
-                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#10b981"/>
-                          <stop offset="100%" stopColor="#3b82f6"/>
-                        </linearGradient>
-                      </defs>
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-2xl font-black text-blue-400">{estadisticasCompletas.win_rate.toFixed(0)}%</div>
+                      <div className="text-lg font-black text-white">{estadisticasCompletas.win_rate.toFixed(0)}%</div>
                     </div>
                   </div>
                 </div>
@@ -667,7 +682,7 @@ const Dashboard = () => {
                   <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/50">
                     <div className="flex justify-between items-center">
                       <span className="text-green-400 text-sm font-medium">Mejor día</span>
-                      <span className="text-green-300 font-bold">{estadisticasCompletas.dia_semanal_mas_rentable.dia || 'N/A'}</span>
+                      <span className="text-green-300 font-bold">{traducirDia(estadisticasCompletas.dia_semanal_mas_rentable.dia) || 'N/A'}</span>
                     </div>
                     {estadisticasCompletas.dia_semanal_mas_rentable.dia && (
                       <div className="text-green-300 text-xs mt-1">+{formatCurrency(estadisticasCompletas.dia_semanal_mas_rentable.ganancia, selectedDivisa)}</div>
@@ -676,7 +691,7 @@ const Dashboard = () => {
                   <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/50">
                     <div className="flex justify-between items-center">
                       <span className="text-red-400 text-sm font-medium">Peor día</span>
-                      <span className="text-red-300 font-bold">{estadisticasCompletas.dia_semanal_menos_rentable.dia || 'N/A'}</span>
+                      <span className="text-red-300 font-bold">{traducirDia(estadisticasCompletas.dia_semanal_menos_rentable.dia) || 'N/A'}</span>
                     </div>
                     {estadisticasCompletas.dia_semanal_menos_rentable.dia && (
                       <div className="text-red-300 text-xs mt-1">{formatCurrency(estadisticasCompletas.dia_semanal_menos_rentable.ganancia, selectedDivisa)}</div>
