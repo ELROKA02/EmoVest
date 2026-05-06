@@ -5,6 +5,20 @@ import CustomSelect from './CustomSelect';
 import logo from '../assets/logoEmoVest.png';
 import { fetchAndStoreUserName } from '../utils/userSession';
 
+const InfoIcon = ({ text }) => (
+  <div className="group relative inline-block">
+    <svg className="w-3.5 h-3.5 text-gray-400 hover:text-blue-400 cursor-help transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+      <div className="relative w-64 p-3 bg-[#1a2235] border border-white/10 text-xs text-gray-300 rounded-lg shadow-xl text-center">
+        {text}
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-b-[#1a2235]"></div>
+      </div>
+    </div>
+  </div>
+);
+
 const Dashboard = () => {
   // Obtener estado del sidebar desde localStorage o usar true por defecto
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -58,6 +72,179 @@ const Dashboard = () => {
   const [loadingGanancias, setLoadingGanancias] = useState(false);
   const [estadisticasCompletas, setEstadisticasCompletas] = useState(null);
   const [loadingEstadisticas, setLoadingEstadisticas] = useState(false);
+  const [operaciones, setOperaciones] = useState([]);
+
+  // Función para calcular estadísticas desde operaciones
+  const calcularEstadisticasDesdeOperaciones = (ops) => {
+    if (!ops || ops.length === 0) return null;
+
+    const operacionesGanadoras = ops.filter(op => op.resultado > 0);
+    const operacionesPerdedoras = ops.filter(op => op.resultado < 0);
+    const operacionesCerradas = ops.filter(op => op.resultado !== null && op.resultado !== undefined);
+
+    // Ganancias netas
+    const gananciasNetas = ops.reduce((sum, op) => sum + (op.resultado || 0), 0);
+
+    // Win Rate
+    const winRate = operacionesCerradas.length > 0 ? (operacionesGanadoras.length / operacionesCerradas.length) * 100 : 0;
+
+    // Promedios
+    const gananciasPromedio = operacionesGanadoras.length > 0 
+      ? operacionesGanadoras.reduce((sum, op) => sum + op.resultado, 0) / operacionesGanadoras.length 
+      : 0;
+    const perdidasPromedio = operacionesPerdedoras.length > 0 
+      ? operacionesPerdedoras.reduce((sum, op) => sum + op.resultado, 0) / operacionesPerdedoras.length 
+      : 0;
+
+    // Max Drawdown
+    let maxDrawdown = 0;
+    let currentMax = 0;
+    let runningTotal = 0;
+    ops.forEach(op => {
+      if (op.resultado) {
+        runningTotal += op.resultado;
+        if (runningTotal > currentMax) {
+          currentMax = runningTotal;
+        }
+        const drawdown = currentMax - runningTotal;
+        if (drawdown > maxDrawdown) {
+          maxDrawdown = drawdown;
+        }
+      }
+    });
+
+    // Rachas
+    let rachaGanadoraActual = 0;
+    let maxRachaGanadora = 0;
+    let rachaPerdedoraActual = 0;
+    let maxRachaPerdedora = 0;
+
+    ops.forEach(op => {
+      if (op.resultado > 0) {
+        rachaGanadoraActual++;
+        rachaPerdedoraActual = 0;
+        if (rachaGanadoraActual > maxRachaGanadora) {
+          maxRachaGanadora = rachaGanadoraActual;
+        }
+      } else if (op.resultado < 0) {
+        rachaPerdedoraActual++;
+        rachaGanadoraActual = 0;
+        if (rachaPerdedoraActual > maxRachaPerdedora) {
+          maxRachaPerdedora = rachaPerdedoraActual;
+        }
+      }
+    });
+
+    // Medias hasta ganar/perder
+    let operacionesHastaGanadora = 0;
+    let operacionesHastaError = 0;
+    let contadorActual = 0;
+
+    ops.forEach(op => {
+      if (op.resultado > 0) {
+        operacionesHastaError += contadorActual;
+        operacionesHastaGanadora = contadorActual + 1;
+        contadorActual = 0;
+      } else if (op.resultado < 0) {
+        operacionesHastaGanadora += contadorActual;
+        operacionesHastaError = contadorActual + 1;
+        contadorActual = 0;
+      } else {
+        contadorActual++;
+      }
+    });
+
+    const mediaHastaGanadora = operacionesHastaGanadora > 0 ? operacionesHastaGanadora / operacionesGanadoras.length : 0;
+    const mediaHastaError = operacionesHastaError > 0 ? operacionesHastaError / operacionesPerdedoras.length : 0;
+
+    // Días rentables
+    const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const gananciasPorDia = {};
+
+    ops.forEach(op => {
+      if (op.resultado && op.fecha_hora) {
+        const dia = new Date(op.fecha_hora).getDay();
+        const nombreDia = diasSemana[dia === 0 ? 6 : dia - 1]; // Ajustar para que lunes sea 0
+        if (!gananciasPorDia[nombreDia]) {
+          gananciasPorDia[nombreDia] = 0;
+        }
+        gananciasPorDia[nombreDia] += op.resultado;
+      }
+    });
+
+    const mejorDia = Object.entries(gananciasPorDia).reduce((best, [dia, ganancia]) => 
+      ganancia > best.ganancia ? { dia, ganancia } : best, 
+      { dia: 'N/A', ganancia: -Infinity }
+    );
+    
+    const peorDia = Object.entries(gananciasPorDia).reduce((worst, [dia, ganancia]) => 
+      ganancia < worst.ganancia ? { dia, ganancia } : worst, 
+      { dia: 'N/A', ganancia: Infinity }
+    );
+
+    // Expectativa matemática
+    const expectativa = operacionesCerradas.length > 0 
+      ? (operacionesGanadoras.length * gananciasPromedio + operacionesPerdedoras.length * perdidasPromedio) / operacionesCerradas.length
+      : 0;
+
+    return {
+      ganancias_netas: gananciasNetas,
+      win_rate: winRate,
+      ganancias_promedio: gananciasPromedio,
+      perdidas_promedio: Math.abs(perdidasPromedio),
+      max_drawdown: {
+        drawdown_euros: maxDrawdown,
+        drawdown_porcentaje: currentMax > 0 ? (maxDrawdown / currentMax) * 100 : 0
+      },
+      racha_ganadora_mas_larga: maxRachaGanadora,
+      racha_perdedora_mas_larga: maxRachaPerdedora,
+      operaciones_ganadoras_consecutivas_actuales: rachaGanadoraActual,
+      media_operaciones_hasta_ganadora: mediaHastaGanadora,
+      media_operaciones_hasta_error: mediaHastaError,
+      dia_semanal_mas_rentable: mejorDia.ganancia !== -Infinity ? mejorDia : { dia: null, ganancia: 0 },
+      dia_semanal_menos_rentable: peorDia.ganancia !== Infinity ? peorDia : { dia: null, ganancia: 0 },
+      expectativa: expectativa
+    };
+  };
+
+  // Función para obtener estadísticas del backend
+  const fetchEstadisticasCompletas = async () => {
+    if (!selectedAccount) {
+      setGananciasNetas(null);
+      setEstadisticasCompletas(null);
+      return;
+    }
+
+    setLoadingEstadisticas(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `http://localhost:8000/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Estadísticas del backend:', data);
+        setGananciasNetas(data.ganancias_netas);
+        setEstadisticasCompletas(data);
+      } else {
+        console.error('Error al obtener estadísticas:', response.status);
+        setGananciasNetas(null);
+        setEstadisticasCompletas(null);
+      }
+    } catch (error) {
+      console.error('Error de conexión:', error);
+      setGananciasNetas(null);
+      setEstadisticasCompletas(null);
+    } finally {
+      setLoadingEstadisticas(false);
+    }
+  };
 
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
@@ -163,46 +350,7 @@ const Dashboard = () => {
     }
   };
 
-  // Función para obtener todas las estadísticas completas
-  const fetchEstadisticasCompletas = async () => {
-    if (!selectedAccount) {
-      setGananciasNetas(null);
-      setEstadisticasCompletas(null);
-      return;
-    }
-
-    setLoadingGanancias(true);
-    setLoadingEstadisticas(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `http://localhost:8000/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setGananciasNetas(data.ganancias_netas);
-        setEstadisticasCompletas(data);
-      } else {
-        console.error('Error al obtener estadísticas:', response.status);
-        setGananciasNetas(null);
-        setEstadisticasCompletas(null);
-      }
-    } catch (error) {
-      console.error('Error de conexión:', error);
-      setGananciasNetas(null);
-      setEstadisticasCompletas(null);
-    } finally {
-      setLoadingGanancias(false);
-      setLoadingEstadisticas(false);
-    }
-  };
-
+  
   // Efecto para cargar estadísticas cuando cambia la cuenta, mes o año
   useEffect(() => {
     fetchEstadisticasCompletas();
@@ -329,17 +477,18 @@ const Dashboard = () => {
                 <div className="w-8 h-8 bg-blue-500 rounded-full animate-pulse"></div>
               </div>
             </div>
-            <div className="ml-4 text-white text-lg font-medium">Analizando estadísticas...</div>
+            <div className="ml-4 text-white text-lg font-medium">Cargando operaciones...</div>
           </div>
         ) : estadisticasCompletas ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
             {/* Ganancias Netas - Tarjeta Hero */}
-            <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${estadisticasCompletas.ganancias_netas >= 0 ? 'from-green-600/20 to-emerald-600/10 border-green-500/30' : 'from-red-600/20 to-rose-600/10 border-red-500/30'} backdrop-blur-xl border p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl`}>
+            <div className={`relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border ${estadisticasCompletas.ganancias_netas >= 0 ? 'border-white/10' : 'border-red-500/50'} p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl`}>
               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/5 to-transparent rounded-full -mr-16 -mt-16"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className={`w-4 h-4 rounded-full ${estadisticasCompletas.ganancias_netas >= 0 ? 'bg-green-500 shadow-lg shadow-green-500/50' : 'bg-red-500 shadow-lg shadow-red-500/50'} animate-pulse`}></div>
                   <h3 className="text-white font-bold text-lg">Ganancias Netas</h3>
+                  <InfoIcon text="Beneficio o pérdida total después de todas las operaciones en el período seleccionado" />
                 </div>
                 <div className={`text-4xl font-black ${estadisticasCompletas.ganancias_netas >= 0 ? 'text-green-400' : 'text-red-400'} mb-2`}>
                   ${estadisticasCompletas.ganancias_netas.toFixed(2)}
@@ -351,12 +500,13 @@ const Dashboard = () => {
             </div>
 
             {/* Win Rate - Tarjeta con Gráfica Circular */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600/20 to-indigo-600/10 backdrop-blur-xl border border-blue-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
               <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full -mr-12 -mt-12"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-4 h-4 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div>
                   <h3 className="text-white font-bold text-lg">Win Rate</h3>
+                  <InfoIcon text="Porcentaje de operaciones ganadoras respecto al total de operaciones realizadas" />
                 </div>
                 <div className="flex items-center justify-center mb-4">
                   <div className="relative w-24 h-24">
@@ -393,19 +543,20 @@ const Dashboard = () => {
             </div>
 
             {/* Promedios Operación - Tarjeta Dual */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600/20 to-pink-600/10 backdrop-blur-xl border border-purple-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
               <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-purple-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-4 h-4 rounded-full bg-purple-500 shadow-lg shadow-purple-500/50"></div>
                   <h3 className="text-white font-bold text-lg">Promedios</h3>
+                  <InfoIcon text="Promedio de ganancia en operaciones ganadoras y promedio de pérdida en operaciones perdedoras" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/20">
+                  <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/50">
                     <div className="text-green-400 text-xs mb-1 font-medium">Ganancia</div>
                     <div className="text-green-300 font-bold text-lg">€{estadisticasCompletas.ganancias_promedio.toFixed(0)}</div>
                   </div>
-                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/50">
                     <div className="text-red-400 text-xs mb-1 font-medium">Pérdida</div>
                     <div className="text-red-300 font-bold text-lg">€{Math.abs(estadisticasCompletas.perdidas_promedio).toFixed(0)}</div>
                   </div>
@@ -414,17 +565,18 @@ const Dashboard = () => {
             </div>
 
             {/* Max Drawdown - Tarjeta de Alerta */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-600/20 to-amber-600/10 backdrop-blur-xl border border-orange-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
               <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-orange-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-4 h-4 rounded-full bg-orange-500 shadow-lg shadow-orange-500/50 animate-pulse"></div>
                   <h3 className="text-white font-bold text-lg">Max Drawdown</h3>
+                  <InfoIcon text="Máxima pérdida desde el pico más alto, muestra el mayor riesgo asumido" />
                 </div>
                 <div className="text-3xl font-black text-orange-400 mb-2">
                   ${estadisticasCompletas.max_drawdown.drawdown_euros.toFixed(0)}
                 </div>
-                <div className="bg-orange-500/20 rounded-lg px-3 py-1 inline-block">
+                <div className="bg-orange-500/20 rounded-lg px-3 py-1 inline-block border border-orange-500/50">
                   <div className="text-orange-300 text-sm font-medium">
                     {estadisticasCompletas.max_drawdown.drawdown_porcentaje.toFixed(1)}%
                   </div>
@@ -433,12 +585,13 @@ const Dashboard = () => {
             </div>
 
             {/* Estadísticas de Operaciones - Tarjeta Compacta */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-600/20 to-teal-600/10 backdrop-blur-xl border border-cyan-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
               <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-cyan-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-4 h-4 rounded-full bg-cyan-500 shadow-lg shadow-cyan-500/50"></div>
                   <h3 className="text-white font-bold text-lg">Estadísticas</h3>
+                  <InfoIcon text="Promedio de operaciones hasta ganar/perder y racha actual de operaciones ganadoras" />
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
@@ -458,26 +611,26 @@ const Dashboard = () => {
             </div>
 
             {/* Rachas - Tarjeta con Indicadores */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600/20 to-green-600/10 backdrop-blur-xl border border-emerald-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
               <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-4 h-4 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50"></div>
                   <h3 className="text-white font-bold text-lg">Rachas</h3>
-                </div>
-                <div className="space-y-4">
+                  <InfoIcon text="Mejor y peor racha de operaciones consecutivas ganadoras y perdedoras" />
+                  </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                      <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center border border-emerald-500/50">
                         <span className="text-emerald-400 text-xs">🔥</span>
                       </div>
                       <span className="text-emerald-300 text-sm">Mejor racha</span>
                     </div>
                     <div className="text-emerald-400 font-bold text-lg">{estadisticasCompletas.racha_ganadora_mas_larga}</div>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mt-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">
+                      <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center border border-red-500/50">
                         <span className="text-red-400 text-xs">❄️</span>
                       </div>
                       <span className="text-red-300 text-sm">Peor racha</span>
@@ -485,19 +638,19 @@ const Dashboard = () => {
                     <div className="text-red-400 font-bold text-lg">{estadisticasCompletas.racha_perdedora_mas_larga}</div>
                   </div>
                 </div>
-              </div>
             </div>
 
             {/* Días Rentables - Tarjeta Semanal */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600/20 to-blue-600/10 backdrop-blur-xl border border-indigo-500/30 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
               <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-indigo-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-4 h-4 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/50"></div>
                   <h3 className="text-white font-bold text-lg">Días Rentables</h3>
+                  <InfoIcon text="Días de la semana con mejor y peor rendimiento histórico" />
                 </div>
                 <div className="space-y-3">
-                  <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/20">
+                  <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/50">
                     <div className="flex justify-between items-center">
                       <span className="text-green-400 text-sm font-medium">Mejor día</span>
                       <span className="text-green-300 font-bold">{estadisticasCompletas.dia_semanal_mas_rentable.dia || 'N/A'}</span>
@@ -506,7 +659,7 @@ const Dashboard = () => {
                       <div className="text-green-300 text-xs mt-1">+${estadisticasCompletas.dia_semanal_mas_rentable.ganancia.toFixed(2)}</div>
                     )}
                   </div>
-                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/50">
                     <div className="flex justify-between items-center">
                       <span className="text-red-400 text-sm font-medium">Peor día</span>
                       <span className="text-red-300 font-bold">{estadisticasCompletas.dia_semanal_menos_rentable.dia || 'N/A'}</span>
@@ -520,13 +673,14 @@ const Dashboard = () => {
             </div>
 
             {/* Expectativa - Tarjeta Destacada */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600/30 via-purple-600/20 to-pink-600/10 backdrop-blur-xl border border-violet-500/40 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl md:col-span-2">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-500/20 to-transparent rounded-full -mr-16 -mt-16"></div>
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-pink-500/10 to-transparent rounded-full -ml-12 -mb-12"></div>
+            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl md:col-span-2">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-500/50 to-transparent rounded-full -mr-16 -mt-16"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-pink-500/50 to-transparent rounded-full -ml-12 -mb-12"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-4 h-4 rounded-full bg-violet-500 shadow-lg shadow-violet-500/50 animate-pulse"></div>
                   <h3 className="text-white font-bold text-lg">Expectativa Matemática</h3>
+                  <InfoIcon text="Ganancia promedio esperada por operación, indica la rentabilidad a largo plazo" />
                 </div>
                 <div className="flex items-baseline gap-4 mb-3">
                   <div className="text-5xl font-black text-violet-400">
