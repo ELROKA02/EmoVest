@@ -1,8 +1,5 @@
 ![Banner de EmoVest](docs/Emovest.png)
 
-
-# 🧠 EmoVest — Emotional Invest
-
 EmoVest convierte el diario de trading en inteligencia emocional accionable. Registra tus operaciones, escribe cómo te sientes y la IA detecta qué emociones están afectando tus decisiones.
 
 
