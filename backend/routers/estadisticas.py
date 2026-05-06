@@ -784,7 +784,8 @@ def get_resumen_mensual(
         "racha_perdedora_mas_larga": racha_perdedora_mas_larga,
         "dia_semanal_mas_rentable": dia_semanal_mas_rentable,
         "dia_semanal_menos_rentable": dia_semanal_menos_rentable,
-        "expectativa": expectativa
+        "expectativa": expectativa,
+        "saldo_diario": calcular_saldo_diario_mensual(db, cuenta.id, year, month)
     }
 
 @router.get(
