@@ -39,7 +39,10 @@ const OperacionesTrading = () => {
 
   // Estados para backend
   const [cuentas, setCuentas] = useState([]);
-  const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
+  const [cuentaSeleccionada, setCuentaSeleccionada] = useState(() => {
+    const saved = localStorage.getItem('selectedAccountId');
+    return saved ? parseInt(saved) : null;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -73,6 +76,13 @@ const OperacionesTrading = () => {
     cargarCuentas();
   }, []);
 
+  // Guardar cuenta seleccionada en localStorage cuando cambia
+  useEffect(() => {
+    if (cuentaSeleccionada) {
+      localStorage.setItem('selectedAccountId', cuentaSeleccionada);
+    }
+  }, [cuentaSeleccionada]);
+
   // Cargar operaciones cuando cambia la cuenta
   useEffect(() => {
     if (cuentaSeleccionada) {
@@ -95,7 +105,11 @@ const OperacionesTrading = () => {
       const data = await response.json();
       setCuentas(data);
       if (data.length > 0) {
-        setCuentaSeleccionada(data[0].id);
+        const savedAccountId = localStorage.getItem('selectedAccountId');
+        const accountToSelect = savedAccountId 
+          ? data.find(acc => acc.id === parseInt(savedAccountId))?.id 
+          : data[0].id;
+        setCuentaSeleccionada(accountToSelect || data[0].id);
       } else {
         setError('No se han creado cuentas de trading. Crea una desde el Tablero.');
       }
@@ -180,6 +194,32 @@ const OperacionesTrading = () => {
       }
     }
   }, [formData.precio_entrada, formData.precio_salida, formData.cantidad, formData.tipo_operacion, formData.resultado]);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validar que sea una imagen
+      if (!file.type.startsWith('image/')) {
+        setError('Por favor selecciona un archivo de imagen válido');
+        return;
+      }
+      // Validar tamaño (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('La imagen no debe superar 5MB');
+        return;
+      }
+      // Convertir a base64
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFormData(prev => ({...prev, screenshot: event.target?.result}));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setFormData(prev => ({...prev, screenshot: null}));
+  };
 
   const handleCreate = () => {
     setEditing(null);
@@ -307,7 +347,7 @@ const OperacionesTrading = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
-        <header className="bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
+        <header className="sticky top-0 z-40 bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -623,6 +663,41 @@ const OperacionesTrading = () => {
                         className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500 h-12"
                         disabled={loading}
                       />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1 mb-1">
+                        <label className="block text-xs text-white">Imagen/Screenshot</label>
+                        <InfoIcon text="Adjunta una captura de pantalla o imagen de la operación (máx. 5MB)." />
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          disabled={loading}
+                          className="w-full p-1.5 text-xs text-gray-300 bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500 file:bg-blue-600 file:text-white file:border-0 file:px-2 file:py-1 file:rounded file:cursor-pointer file:text-xs hover:file:bg-blue-700"
+                        />
+                        {formData.screenshot && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveImage}
+                            disabled={loading}
+                            className="px-2 py-1.5 text-xs text-red-400 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 rounded-xl transition-colors disabled:opacity-50"
+                            title="Eliminar imagen"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      {formData.screenshot && (
+                        <div className="mt-3 p-2 bg-white/5 rounded-xl border border-white/10">
+                          <img 
+                            src={formData.screenshot} 
+                            alt="Vista previa" 
+                            className="max-h-40 max-w-full mx-auto rounded-lg object-contain"
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="flex justify-end gap-2 pt-2">
                       <button

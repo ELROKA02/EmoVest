@@ -60,7 +60,10 @@ const Dashboard = () => {
   });
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [tradingAccounts, setTradingAccounts] = useState([]);
-  const [selectedAccount, setSelectedAccount] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState(() => {
+    const saved = localStorage.getItem('selectedAccountId');
+    return saved ? parseInt(saved) : '';
+  });
 
   // Estados para el selector de fecha y ganancias
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -70,6 +73,13 @@ const Dashboard = () => {
   const [estadisticasCompletas, setEstadisticasCompletas] = useState(null);
   const [loadingEstadisticas, setLoadingEstadisticas] = useState(false);
   const [operaciones, setOperaciones] = useState([]);
+
+  // Guardar cuenta seleccionada en localStorage cuando cambia
+  useEffect(() => {
+    if (selectedAccount) {
+      localStorage.setItem('selectedAccountId', selectedAccount);
+    }
+  }, [selectedAccount]);
 
   // Función para calcular estadísticas desde operaciones
   const calcularEstadisticasDesdeOperaciones = (ops) => {
@@ -332,8 +342,12 @@ const Dashboard = () => {
         console.log('Número de cuentas:', accounts.length);
         setTradingAccounts(accounts);
         if (accounts.length > 0) {
-          console.log('ID de la primera cuenta:', accounts[0].id);
-          setSelectedAccount(accounts[0].id);
+          const savedAccountId = localStorage.getItem('selectedAccountId');
+          const accountToSelect = savedAccountId 
+            ? accounts.find(acc => acc.id === parseInt(savedAccountId))?.id 
+            : accounts[0].id;
+          console.log('ID de la cuenta a seleccionar:', accountToSelect || accounts[0].id);
+          setSelectedAccount(accountToSelect || accounts[0].id);
         }
       } else {
         // Si es 404, significa que no hay cuentas (es normal)
@@ -775,7 +789,7 @@ const Dashboard = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
-        <header className="bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
+        <header className="sticky top-0 z-40 bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}

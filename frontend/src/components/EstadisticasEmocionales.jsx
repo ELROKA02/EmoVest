@@ -18,7 +18,10 @@ const EstadisticasEmocionales = () => {
   const currentMonth = new Date().getMonth() + 1;
 
   const [cuentas, setCuentas] = useState([]);
-  const [cuentaSeleccionada, setCuentaSeleccionada] = useState('');
+  const [cuentaSeleccionada, setCuentaSeleccionada] = useState(() => {
+    const saved = localStorage.getItem('selectedAccountId');
+    return saved ? saved : '';
+  });
   const [year, setYear] = useState(currentYear.toString());
   const [month, setMonth] = useState(currentMonth.toString());
   const [stats, setStats] = useState(null);
@@ -59,6 +62,13 @@ const EstadisticasEmocionales = () => {
     return () => { isMounted = false; };
   }, []);
 
+  // Guardar cuenta seleccionada en localStorage cuando cambia
+  useEffect(() => {
+    if (cuentaSeleccionada) {
+      localStorage.setItem('selectedAccountId', cuentaSeleccionada);
+    }
+  }, [cuentaSeleccionada]);
+
   useEffect(() => {
     const cargarCuentas = async () => {
       try {
@@ -69,7 +79,13 @@ const EstadisticasEmocionales = () => {
         if (response.ok) {
           const data = await response.json();
           setCuentas(data);
-          if (data.length > 0) setCuentaSeleccionada(data[0].id.toString());
+          if (data.length > 0) {
+            const savedAccountId = localStorage.getItem('selectedAccountId');
+            const accountToSelect = savedAccountId
+              ? data.find(acc => acc.id.toString() === savedAccountId)?.id
+              : data[0].id;
+            setCuentaSeleccionada((accountToSelect || data[0].id).toString());
+          }
         } else if (response.status !== 404) {
           setError('Error al cargar cuentas de trading');
         }
@@ -136,7 +152,7 @@ const EstadisticasEmocionales = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        <header className="bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
+        <header className="sticky top-0 z-40 bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-300 hover:text-white transition-colors">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
