@@ -19,6 +19,27 @@ const InfoIcon = ({ text }) => (
   </div>
 );
 
+// Función para traducir días del inglés al español
+const traducirDia = (diaIngles) => {
+  const traducciones = {
+    'Monday': 'Lunes',
+    'Tuesday': 'Martes',
+    'Wednesday': 'Miércoles',
+    'Thursday': 'Jueves',
+    'Friday': 'Viernes',
+    'Saturday': 'Sábado',
+    'Sunday': 'Domingo',
+    'Mon': 'Lunes',
+    'Tue': 'Martes',
+    'Wed': 'Miércoles',
+    'Thu': 'Jueves',
+    'Fri': 'Viernes',
+    'Sat': 'Sábado',
+    'Sun': 'Domingo'
+  };
+  return traducciones[diaIngles] || diaIngles;
+};
+
 const Dashboard = () => {
   // Obtener estado del sidebar desde localStorage o usar true por defecto
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -72,141 +93,7 @@ const Dashboard = () => {
   const [loadingGanancias, setLoadingGanancias] = useState(false);
   const [estadisticasCompletas, setEstadisticasCompletas] = useState(null);
   const [loadingEstadisticas, setLoadingEstadisticas] = useState(false);
-  const [operaciones, setOperaciones] = useState([]);
-
-  // Función para calcular estadísticas desde operaciones
-  const calcularEstadisticasDesdeOperaciones = (ops) => {
-    if (!ops || ops.length === 0) return null;
-
-    const operacionesGanadoras = ops.filter(op => op.resultado > 0);
-    const operacionesPerdedoras = ops.filter(op => op.resultado < 0);
-    const operacionesCerradas = ops.filter(op => op.resultado !== null && op.resultado !== undefined);
-
-    // Ganancias netas
-    const gananciasNetas = ops.reduce((sum, op) => sum + (op.resultado || 0), 0);
-
-    // Win Rate
-    const winRate = operacionesCerradas.length > 0 ? (operacionesGanadoras.length / operacionesCerradas.length) * 100 : 0;
-
-    // Promedios
-    const gananciasPromedio = operacionesGanadoras.length > 0 
-      ? operacionesGanadoras.reduce((sum, op) => sum + op.resultado, 0) / operacionesGanadoras.length 
-      : 0;
-    const perdidasPromedio = operacionesPerdedoras.length > 0 
-      ? operacionesPerdedoras.reduce((sum, op) => sum + op.resultado, 0) / operacionesPerdedoras.length 
-      : 0;
-
-    // Max Drawdown
-    let maxDrawdown = 0;
-    let currentMax = 0;
-    let runningTotal = 0;
-    ops.forEach(op => {
-      if (op.resultado) {
-        runningTotal += op.resultado;
-        if (runningTotal > currentMax) {
-          currentMax = runningTotal;
-        }
-        const drawdown = currentMax - runningTotal;
-        if (drawdown > maxDrawdown) {
-          maxDrawdown = drawdown;
-        }
-      }
-    });
-
-    // Rachas
-    let rachaGanadoraActual = 0;
-    let maxRachaGanadora = 0;
-    let rachaPerdedoraActual = 0;
-    let maxRachaPerdedora = 0;
-
-    ops.forEach(op => {
-      if (op.resultado > 0) {
-        rachaGanadoraActual++;
-        rachaPerdedoraActual = 0;
-        if (rachaGanadoraActual > maxRachaGanadora) {
-          maxRachaGanadora = rachaGanadoraActual;
-        }
-      } else if (op.resultado < 0) {
-        rachaPerdedoraActual++;
-        rachaGanadoraActual = 0;
-        if (rachaPerdedoraActual > maxRachaPerdedora) {
-          maxRachaPerdedora = rachaPerdedoraActual;
-        }
-      }
-    });
-
-    // Medias hasta ganar/perder
-    let operacionesHastaGanadora = 0;
-    let operacionesHastaError = 0;
-    let contadorActual = 0;
-
-    ops.forEach(op => {
-      if (op.resultado > 0) {
-        operacionesHastaError += contadorActual;
-        operacionesHastaGanadora = contadorActual + 1;
-        contadorActual = 0;
-      } else if (op.resultado < 0) {
-        operacionesHastaGanadora += contadorActual;
-        operacionesHastaError = contadorActual + 1;
-        contadorActual = 0;
-      } else {
-        contadorActual++;
-      }
-    });
-
-    const mediaHastaGanadora = operacionesHastaGanadora > 0 ? operacionesHastaGanadora / operacionesGanadoras.length : 0;
-    const mediaHastaError = operacionesHastaError > 0 ? operacionesHastaError / operacionesPerdedoras.length : 0;
-
-    // Días rentables
-    const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-    const gananciasPorDia = {};
-
-    ops.forEach(op => {
-      if (op.resultado && op.fecha_hora) {
-        const dia = new Date(op.fecha_hora).getDay();
-        const nombreDia = diasSemana[dia === 0 ? 6 : dia - 1]; // Ajustar para que lunes sea 0
-        if (!gananciasPorDia[nombreDia]) {
-          gananciasPorDia[nombreDia] = 0;
-        }
-        gananciasPorDia[nombreDia] += op.resultado;
-      }
-    });
-
-    const mejorDia = Object.entries(gananciasPorDia).reduce((best, [dia, ganancia]) => 
-      ganancia > best.ganancia ? { dia, ganancia } : best, 
-      { dia: 'N/A', ganancia: -Infinity }
-    );
-    
-    const peorDia = Object.entries(gananciasPorDia).reduce((worst, [dia, ganancia]) => 
-      ganancia < worst.ganancia ? { dia, ganancia } : worst, 
-      { dia: 'N/A', ganancia: Infinity }
-    );
-
-    // Expectativa matemática
-    const expectativa = operacionesCerradas.length > 0 
-      ? (operacionesGanadoras.length * gananciasPromedio + operacionesPerdedoras.length * perdidasPromedio) / operacionesCerradas.length
-      : 0;
-
-    return {
-      ganancias_netas: gananciasNetas,
-      win_rate: winRate,
-      ganancias_promedio: gananciasPromedio,
-      perdidas_promedio: Math.abs(perdidasPromedio),
-      max_drawdown: {
-        drawdown_euros: maxDrawdown,
-        drawdown_porcentaje: currentMax > 0 ? (maxDrawdown / currentMax) * 100 : 0
-      },
-      racha_ganadora_mas_larga: maxRachaGanadora,
-      racha_perdedora_mas_larga: maxRachaPerdedora,
-      operaciones_ganadoras_consecutivas_actuales: rachaGanadoraActual,
-      media_operaciones_hasta_ganadora: mediaHastaGanadora,
-      media_operaciones_hasta_error: mediaHastaError,
-      dia_semanal_mas_rentable: mejorDia.ganancia !== -Infinity ? mejorDia : { dia: null, ganancia: 0 },
-      dia_semanal_menos_rentable: peorDia.ganancia !== Infinity ? peorDia : { dia: null, ganancia: 0 },
-      expectativa: expectativa
-    };
-  };
-
+  
   // Función para obtener estadísticas del backend
   const fetchEstadisticasCompletas = async () => {
     if (!selectedAccount) {
@@ -440,7 +327,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-6 bg-black/20 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+          <div className="flex items-center gap-6 bg-black/20 backdrop-blur-sm rounded-xl p-4 border border-white/10 z-[100]">
             <div className="flex items-center gap-3">
               <label className="text-white font-medium">Mes:</label>
               <CustomSelect
@@ -516,22 +403,16 @@ const Dashboard = () => {
                         cx="48" 
                         cy="48" 
                         r="36" 
-                        stroke="url(#gradient)" 
+                        stroke="#10b981" 
                         strokeWidth="12" 
                         fill="none"
                         strokeDasharray={`${2 * Math.PI * 36}`}
                         strokeDashoffset={`${2 * Math.PI * 36 * (1 - estadisticasCompletas.win_rate / 100)}`}
                         className="transition-all duration-1000 ease-out"
                       />
-                      <defs>
-                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#10b981"/>
-                          <stop offset="100%" stopColor="#3b82f6"/>
-                        </linearGradient>
-                      </defs>
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-2xl font-black text-blue-400">{estadisticasCompletas.win_rate.toFixed(0)}%</div>
+                      <div className="text-lg font-black text-white">{estadisticasCompletas.win_rate.toFixed(0)}%</div>
                     </div>
                   </div>
                 </div>
@@ -653,7 +534,7 @@ const Dashboard = () => {
                   <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/50">
                     <div className="flex justify-between items-center">
                       <span className="text-green-400 text-sm font-medium">Mejor día</span>
-                      <span className="text-green-300 font-bold">{estadisticasCompletas.dia_semanal_mas_rentable.dia || 'N/A'}</span>
+                      <span className="text-green-300 font-bold">{traducirDia(estadisticasCompletas.dia_semanal_mas_rentable.dia) || 'N/A'}</span>
                     </div>
                     {estadisticasCompletas.dia_semanal_mas_rentable.dia && (
                       <div className="text-green-300 text-xs mt-1">+${estadisticasCompletas.dia_semanal_mas_rentable.ganancia.toFixed(2)}</div>
@@ -662,7 +543,7 @@ const Dashboard = () => {
                   <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/50">
                     <div className="flex justify-between items-center">
                       <span className="text-red-400 text-sm font-medium">Peor día</span>
-                      <span className="text-red-300 font-bold">{estadisticasCompletas.dia_semanal_menos_rentable.dia || 'N/A'}</span>
+                      <span className="text-red-300 font-bold">{traducirDia(estadisticasCompletas.dia_semanal_menos_rentable.dia) || 'N/A'}</span>
                     </div>
                     {estadisticasCompletas.dia_semanal_menos_rentable.dia && (
                       <div className="text-red-300 text-xs mt-1">${estadisticasCompletas.dia_semanal_menos_rentable.ganancia.toFixed(2)}</div>
