@@ -26,14 +26,14 @@ Un **diario de trading** es el registro sistemático de cada operación: activo,
 
 EmoVest hace eso, y va un paso más allá: cada vez que escribes notas en una operación, **un modelo de IA local analiza el texto y cuantifica tu estado emocional** en cinco dimensiones. El resultado queda vinculado al resultado financiero, convirtiendo el diario en un espejo psicológico de tu trading.
 
-| Aspecto | Otros diarios | EmoVest |
+| Aspecto | 📓 Otros diarios | 🧠 EmoVest |
 |------|------|------|
-| Registro de operaciones | Guardan datos básicos de entrada, salida y resultado | Guarda los datos de la operación y añade contexto emocional y operativo |
-| Lectura emocional | Las emociones quedan en texto libre o no se registran | Analiza tus notas con IA local y cuantifica 5 emociones |
-| Relación emoción-rendimiento | No muestran si un estado mental mejora o empeora tus resultados | Vincula cada emoción con el resultado real de tus operaciones |
-| Métricas mensuales | Suelen limitarse a profit, win rate o balance | Añade drawdown, rachas, días más rentables y métricas emocionales |
-| Detección de patrones | Depende de revisar manualmente tus anotaciones | Facilita detectar patrones repetidos por mes, día y estado emocional |
-| Utilidad práctica | Sirven como historial | Sirve como historial y como herramienta de mejora psicológica y estadística |
+| 📝 Registro de operaciones | Guardan datos básicos de entrada, salida y resultado | Guarda los datos de la operación y añade contexto emocional y operativo |
+| ❤️ Lectura emocional | Las emociones quedan en texto libre o no se registran | Analiza tus notas con IA local y cuantifica 5 emociones |
+| 🔗 Relación emoción-rendimiento | No muestran si un estado mental mejora o empeora tus resultados | Vincula cada emoción con el resultado real de tus operaciones |
+| 📊 Métricas mensuales | Suelen limitarse a profit, win rate o balance | Añade drawdown, rachas, días más rentables y métricas emocionales |
+| 🔍 Detección de patrones | Depende de revisar manualmente tus anotaciones | Facilita detectar patrones repetidos por mes, día y estado emocional |
+| 🎯 Utilidad práctica | Sirven como historial | Sirve como historial y como herramienta de mejora psicológica y estadística |
 
 ---
 
