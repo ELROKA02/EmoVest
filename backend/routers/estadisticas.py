@@ -169,9 +169,9 @@ def calcular_ganancias_promedias_mensuales(
 def calcular_perdidas_promedias_mensuales(
     db: Session,
     cuenta_id_trading: int,
-     year: int = None,
-     month: int = None,
-    ) -> float:
+    year: int = None,
+    month: int = None,
+) -> float:
     operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     perdidas_totales_decimal = Decimal("0")
@@ -188,12 +188,12 @@ def calcular_perdidas_promedias_mensuales(
     perdida_promedio_decimal = perdidas_totales_decimal / Decimal(operaciones_perdedoras)
 
     return float(perdida_promedio_decimal)
+
 def calcular_maximo_drawdown_mensual(
     db: Session,
     cuenta_id_trading: int,
     year: int = None,
-     month: int = None,
-    
+    month: int = None, 
 ) -> dict:
 
     operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
@@ -240,7 +240,7 @@ def calcular_media_operaciones_hasta_error_mensual(
     db: Session,
     cuenta_id_trading: int,
     year: int = None,
-     month: int = None,
+    month: int = None,
 ) -> float:
     operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
@@ -317,7 +317,7 @@ def calcular_operaciones_ganadoras_consecutivas_actuales_mensual(
     db: Session,
     cuenta_id_trading: int,
     year: int = None,
-     month: int = None,
+    month: int = None,
 ) -> int:
     operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
@@ -338,8 +338,7 @@ def calcular_racha_ganadora_mas_larga_mensual(
     db: Session,
     cuenta_id_trading: int,
     year: int = None,
-     month: int = None,
-    
+    month: int = None,
 ) -> int:
     operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
@@ -387,7 +386,7 @@ def calcular_dia_mas_rentable_semanal_mensual(
     db: Session,
     cuenta_id_trading: int,
     year: int = None,
-     month: int = None,
+    month: int = None,
 ) -> dict:
     operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
@@ -451,7 +450,7 @@ def calcular_expectativa_mensual(
     db: Session,
     cuenta_id_trading: int,
     year: int = None,
-     month: int = None,
+    month: int = None,
 ) -> float:
     winrate = calcular_winrate_mensual(db, cuenta_id_trading, year, month)
     ganancias_promedio = calcular_ganancias_promedias_mensuales(db, cuenta_id_trading, year, month)
@@ -462,12 +461,8 @@ def calcular_expectativa_mensual(
     return expectancy
     
 
-from decimal import Decimal
-
 def get_emocion_principal_operacion(
     operacion: Operacion,
-    
-    
 ) -> list[str] | None:
     
     if operacion.registro_emocional is None:

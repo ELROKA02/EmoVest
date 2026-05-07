@@ -26,6 +26,51 @@ Un **diario de trading** es el registro sistemático de cada operación: activo,
 
 EmoVest hace eso, y va un paso más allá: cada vez que escribes notas en una operación, **un modelo de IA local analiza el texto y cuantifica tu estado emocional** en cinco dimensiones. El resultado queda vinculado al resultado financiero, convirtiendo el diario en un espejo psicológico de tu trading.
 
+| Aspecto | Otros diarios | EmoVest |
+|------|------|------|
+| Registro de operaciones | Guardan datos básicos de entrada, salida y resultado | Guarda los datos de la operación y añade contexto emocional y operativo |
+| Lectura emocional | Las emociones quedan en texto libre o no se registran | Analiza tus notas con IA local y cuantifica 5 emociones |
+| Relación emoción-rendimiento | No muestran si un estado mental mejora o empeora tus resultados | Vincula cada emoción con el resultado real de tus operaciones |
+| Métricas mensuales | Suelen limitarse a profit, win rate o balance | Añade drawdown, rachas, días más rentables y métricas emocionales |
+| Detección de patrones | Depende de revisar manualmente tus anotaciones | Facilita detectar patrones repetidos por mes, día y estado emocional |
+| Utilidad práctica | Sirven como historial | Sirve como historial y como herramienta de mejora psicológica y estadística |
+
+---
+
+## 🚀 Funcionalidades
+
+### Cuenta y acceso
+
+- Puede crear su cuenta personal con plan inicial y entrar en segundos.
+- Puede mantener la sesion activa para volver sin repetir el correo cada vez.
+- Puede ver su perfil con nombre y correo dentro del panel.
+
+### Gestion de cuentas de trading
+
+- Puede crear varias cuentas de trading para separar estrategias o mercados.
+- Puede editar nombre y saldo de cada cuenta cuando cambie su estructura.
+- Puede eliminar cuentas que ya no use desde su perfil.
+
+### Diario de operaciones
+
+- Puede registrar operaciones LONG o SHORT con fecha, activo, precios y cantidad.
+- Puede anadir contexto real de cada operacion: stop loss, take profit y nivel de confianza.
+- Puede adjuntar una captura para recordar el grafico o escenario exacto.
+- Puede editar o eliminar operaciones y ver la lista por cuenta.
+
+### Rendimiento y seguimiento mensual
+
+- Puede ver sus resultados del mes con ganancias netas, win rate y drawdown.
+- Puede identificar rachas ganadoras y perdedoras para evaluar consistencia.
+- Puede detectar que dias de la semana le generan mejores y peores resultados.
+- Puede seguir su evolucion mensual con un resumen que se conserva en el tiempo.
+
+### Lectura emocional del trading
+
+- Puede escribir notas personales y recibir una lectura emocional de cada operacion.
+- Puede comparar el rendimiento por emocion para entender que estado le favorece.
+- Puede ver un panel emocional por mes con win rate y beneficio total por emocion.
+
 ---
 
 ## 🧠 Cómo funciona
@@ -88,41 +133,6 @@ flowchart LR
 
 ---
 
-## 🚀 Funcionalidades
-
-### Cuenta y acceso
-
-- Puede crear su cuenta personal con plan inicial y entrar en segundos.
-- Puede mantener la sesion activa para volver sin repetir el correo cada vez.
-- Puede ver su perfil con nombre y correo dentro del panel.
-
-### Gestion de cuentas de trading
-
-- Puede crear varias cuentas de trading para separar estrategias o mercados.
-- Puede editar nombre y saldo de cada cuenta cuando cambie su estructura.
-- Puede eliminar cuentas que ya no use desde su perfil.
-
-### Diario de operaciones
-
-- Puede registrar operaciones LONG o SHORT con fecha, activo, precios y cantidad.
-- Puede anadir contexto real de cada operacion: stop loss, take profit y nivel de confianza.
-- Puede adjuntar una captura para recordar el grafico o escenario exacto.
-- Puede editar o eliminar operaciones y ver la lista por cuenta.
-
-### Rendimiento y seguimiento mensual
-
-- Puede ver sus resultados del mes con ganancias netas, win rate y drawdown.
-- Puede identificar rachas ganadoras y perdedoras para evaluar consistencia.
-- Puede detectar que dias de la semana le generan mejores y peores resultados.
-- Puede seguir su evolucion mensual con un resumen que se conserva en el tiempo.
-
-### Lectura emocional del trading
-
-- Puede escribir notas personales y recibir una lectura emocional de cada operacion.
-- Puede comparar el rendimiento por emocion para entender que estado le favorece.
-- Puede ver un panel emocional por mes con win rate y beneficio total por emocion.
-
----
 
 ## 👥 Equipo
 
