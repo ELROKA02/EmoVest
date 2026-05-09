@@ -5,6 +5,7 @@ import CustomSelect from './CustomSelect';
 import Sidebar from './Sidebar';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 const InfoIcon = ({ text }) => (
   <div className="group relative inline-block">
@@ -281,6 +282,55 @@ const Dashboard = () => {
   const selectedDivisa = selectedAccountObj?.divisa || 'EUR';
   const accountOptionText = account => `${account.nombre_cuenta} (${account.divisa}) - ${formatCurrency(account.saldo_inicial, account.divisa)}`;
   const saldoPlaceholder = formatCurrency(0, accountData.divisa);
+  const saldoDiarioChartData = (() => {
+    if (!estadisticasCompletas || !Array.isArray(estadisticasCompletas.saldo_diario)) {
+      return [];
+    }
+
+    const diasMes = new Date(selectedYear, selectedMonth, 0).getDate();
+    const saldoPorDia = new Map();
+
+    estadisticasCompletas.saldo_diario.forEach((item) => {
+      if (!item?.fecha || item.saldo === null || item.saldo === undefined) {
+        return;
+      }
+
+      const fecha = new Date(`${item.fecha}T00:00:00`);
+      if (Number.isNaN(fecha.getTime())) {
+        return;
+      }
+
+      if (fecha.getFullYear() !== selectedYear || fecha.getMonth() + 1 !== selectedMonth) {
+        return;
+      }
+
+      saldoPorDia.set(fecha.getDate(), Number(item.saldo));
+    });
+
+    let saldoActual = Number(selectedAccountObj?.saldo_inicial ?? 0);
+    const serie = [];
+
+    for (let dia = 1; dia <= diasMes; dia += 1) {
+      if (saldoPorDia.has(dia)) {
+        saldoActual = Number(saldoPorDia.get(dia));
+      }
+
+      serie.push({
+        dia,
+        saldo: Number(saldoActual.toFixed(2)),
+        fechaCompleta: `${String(dia).padStart(2, '0')}/${String(selectedMonth).padStart(2, '0')}/${selectedYear}`,
+      });
+    }
+
+    return serie;
+  })();
+
+  const hasSaldoDiario = Array.isArray(estadisticasCompletas?.saldo_diario) && estadisticasCompletas.saldo_diario.length > 0;
+  const saldos = saldoDiarioChartData.map((item) => item.saldo);
+  const minSaldo = saldos.length > 0 ? Math.min(...saldos) : 0;
+  const maxSaldo = saldos.length > 0 ? Math.max(...saldos) : 0;
+  const paddingY = Math.max((maxSaldo - minSaldo) * 0.1, 1);
+  const yDomain = [minSaldo - paddingY, maxSaldo + paddingY];
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -515,6 +565,71 @@ const Dashboard = () => {
             <div className="ml-4 text-white text-lg font-medium">Cargando operaciones...</div>
           </div>
         ) : estadisticasCompletas ? (
+          <>
+          <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 mb-8">
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-white font-bold text-xl">Evolución de Saldo Diario</h3>
+              </div>
+              <div className="text-[#8b5cf6] text-sm font-medium bg-[#8b5cf6]/10 border border-[#8b5cf6]/30 rounded-lg px-3 py-1">
+                {meses[selectedMonth - 1]} {selectedYear}
+              </div>
+            </div>
+
+            {hasSaldoDiario ? (
+              <div className="w-full h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={saldoDiarioChartData} margin={{ top: 12, right: 28, left: 16, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
+                    <XAxis
+                      dataKey="dia"
+                      tick={{ fill: '#cbd5e1', fontSize: 12 }}
+                      tickLine={false}
+                      axisLine={{ stroke: 'rgba(148, 163, 184, 0.35)' }}
+                      interval="preserveStartEnd"
+                      minTickGap={12}
+                    />
+                    <YAxis
+                      tick={{ fill: '#cbd5e1', fontSize: 12 }}
+                      tickFormatter={(value) => formatCurrency(value, selectedDivisa)}
+                      tickLine={false}
+                      axisLine={{ stroke: 'rgba(148, 163, 184, 0.35)' }}
+                      width={110}
+                      domain={yDomain}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#0f172a',
+                        border: '1px solid rgba(148, 163, 184, 0.35)',
+                        borderRadius: '12px',
+                        color: '#e2e8f0',
+                      }}
+                      labelFormatter={(label, payload) => {
+                        const fechaCompleta = payload?.[0]?.payload?.fechaCompleta;
+                        return fechaCompleta ? `Día ${label} (${fechaCompleta})` : `Día ${label}`;
+                      }}
+                      formatter={(value) => [formatCurrency(value, selectedDivisa), 'Saldo']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="saldo"
+                      stroke="#8b5cf6"
+                      strokeWidth={3}
+                      fill="#8b5cf6"
+                      fillOpacity={0.18}
+                      dot={{ r: 3, strokeWidth: 2, fill: '#0f172a', stroke: '#8b5cf6' }}
+                      activeDot={{ r: 6, fill: '#8b5cf6', stroke: '#c4b5fd', strokeWidth: 2 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[180px] rounded-xl border border-dashed border-white/15 bg-black/20 flex items-center justify-center text-gray-300 text-sm">
+                No hay operaciones cerradas para construir el saldo diario de este mes.
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
             {/* Ganancias Netas - Tarjeta Hero */}
             <div className={`relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border ${estadisticasCompletas.ganancias_netas >= 0 ? 'border-white/10' : 'border-red-500/50'} p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl`}>
@@ -727,6 +842,7 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
+          </>
         ) : selectedAccount ? (
           <div className="flex justify-center items-center py-12">
             <div className="text-gray-400 text-lg">No hay datos para el período seleccionado</div>

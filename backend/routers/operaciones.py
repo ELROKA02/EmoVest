@@ -6,7 +6,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Operacion, Cuenta_Trading
-from routers.ia import guardar_registro_emocional
+from rq_queue import enqueue_emociones_job
 from schemas import OperacionCreate, OperacionUpdate
 from routers.auth import get_current_user
 
@@ -119,11 +119,11 @@ def create_operacion(
 
     if operacion.notas:
         try:
-            guardar_registro_emocional(operacion.notas, nueva_operacion.id, db)
-            db.commit()
+            # Encola el analisis emocional en segundo plano para responder rapido.
+            enqueue_emociones_job(nueva_operacion.id, operacion.notas)
         except Exception as error:
-            db.rollback()
-            print(f"Advertencia: fallo en guardar registro emocional, la operacion ya fue guardada. Error: {error}")
+            # Si Redis/RQ falla, no se rompe el endpoint: la operacion ya esta guardada.
+            print(f"Advertencia: fallo al encolar registro emocional, la operacion ya fue guardada. Error: {error}")
 
     return {"message": "Operacion creada exitosamente", "operacion_id": nueva_operacion.id, "cuenta_id": cuenta.id}
 
