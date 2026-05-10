@@ -65,14 +65,34 @@ def calcular_saldo_diario_mensual(
     month: int = None,
 ) -> list[dict]:
     """Calcula el saldo diario de la cuenta durante la fecha indicada, devolviendo la fecha y el saldo al final de cada dia."""
+    if year is None or month is None:
+        now = datetime.now()
+        year = now.year
+        month = now.month
+
+    inicio_mes = datetime(year, month, 1)
     operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     cuenta = db.query(Cuenta_Trading).filter(
         Cuenta_Trading.id == cuenta_id_trading
     ).first()
 
+    if not cuenta:
+        return []
+
+    # Calcula el saldo real con el que empieza el mes sumando resultados previos.
+    operaciones_previas = db.query(Operacion).filter(
+        Operacion.id_cuenta == cuenta_id_trading,
+        Operacion.fecha_hora < inicio_mes,
+    ).all()
+
+    resultado_acumulado_previo = Decimal("0")
+    for operacion_previa in operaciones_previas:
+        if operacion_previa.resultado is not None:
+            resultado_acumulado_previo += Decimal(str(operacion_previa.resultado))
+
     saldo_diario = []
-    saldo_actual = Decimal(str(cuenta.saldo_inicial))
+    saldo_actual = Decimal(str(cuenta.saldo_inicial)) + resultado_acumulado_previo
     fecha_actual = None
 
     for operacion in operaciones:
@@ -459,6 +479,106 @@ def calcular_expectativa_mensual(
     expectancy = (winrate * ganancias_promedio) / 100 - (loserate * abs(perdidas_promedio)) / 100
     
     return expectancy
+
+def calcular_activo_mas_rentable_mensual(
+    db: Session,
+    cuenta_id_trading: int,
+    year: int = None,
+    month: int = None,
+) -> dict:
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
+
+    ganancias_por_activo = {}
+
+    for operacion in operaciones:
+        if operacion.resultado is None:
+            continue
+
+        activo = operacion.activo
+
+        if activo not in ganancias_por_activo:
+            ganancias_por_activo[activo] = Decimal("0")
+
+        ganancias_por_activo[activo] += Decimal(str(operacion.resultado))
+
+    if not ganancias_por_activo:
+        return {"activo": None, "ganancia": 0.0}
+
+    activo_mas_rentable = max(ganancias_por_activo, key=ganancias_por_activo.get)
+    ganancia_mas_alta_decimal = ganancias_por_activo[activo_mas_rentable]
+
+    return {
+        "activo": activo_mas_rentable,
+        "ganancia": round(float(ganancia_mas_alta_decimal), 2)
+    }
+
+def calcular_activo_menos_rentable_mensual(
+    db: Session,
+    cuenta_id_trading: int,
+    year: int = None,
+    month: int = None,
+) -> dict:
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
+
+    ganancias_por_activo = {}
+
+    for operacion in operaciones:
+        if operacion.resultado is None:
+            continue
+
+        activo = operacion.activo
+
+        if activo not in ganancias_por_activo:
+            ganancias_por_activo[activo] = Decimal("0")
+
+        ganancias_por_activo[activo] += Decimal(str(operacion.resultado))
+
+    if not ganancias_por_activo:
+        return {"activo": None, "ganancia": 0.0}
+
+    activo_menos_rentable = min(ganancias_por_activo, key=ganancias_por_activo.get)
+    ganancia_mas_baja_decimal = ganancias_por_activo[activo_menos_rentable]
+
+    return {
+        "activo": activo_menos_rentable,
+        "ganancia": round(float(ganancia_mas_baja_decimal), 2)
+    }
+
+def calcular_winrate_por_long_short_mensual(
+    db: Session,
+    cuenta_id_trading: int,
+    year: int = None,
+    month: int = None,
+) -> dict:
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
+
+    resultados_long_short = {
+        "long": {"ganadoras": 0, "totales": 0},
+        "short": {"ganadoras": 0, "totales": 0}
+    }
+
+    for operacion in operaciones:
+        if operacion.resultado is None:
+            continue
+
+        # Normaliza LONG/SHORT del modelo para usar claves consistentes en la respuesta.
+        tipo_operacion = str(operacion.tipo_operacion).strip().lower()
+
+        if tipo_operacion in resultados_long_short:
+            resultados_long_short[tipo_operacion]["totales"] += 1
+            if operacion.resultado > 0:
+                resultados_long_short[tipo_operacion]["ganadoras"] += 1
+
+    winrate_long_short = {}
+
+    for tipo, datos in resultados_long_short.items():
+        if datos["totales"] > 0:
+            win_rate = (datos["ganadoras"] / datos["totales"]) * 100
+            winrate_long_short[tipo] = round(win_rate, 2)
+        else:
+            winrate_long_short[tipo] = 0.0
+
+    return winrate_long_short
     
 
 def get_emocion_principal_operacion(
@@ -765,6 +885,9 @@ def get_resumen_mensual(
     dia_semanal_mas_rentable = calcular_dia_mas_rentable_semanal_mensual(db, cuenta.id, year, month)
     dia_semanal_menos_rentable = calcular_dia_menos_rentable_semanal_mensual(db, cuenta.id, year, month)
     expectativa = calcular_expectativa_mensual(db, cuenta.id, year, month)
+    activo_mas_rentable = calcular_activo_mas_rentable_mensual(db, cuenta.id, year, month)
+    activo_menos_rentable = calcular_activo_menos_rentable_mensual(db, cuenta.id, year, month)
+    winrate_long_short = calcular_winrate_por_long_short_mensual(db, cuenta.id, year, month)
 
     return {
         "ganancias_netas": ganancias_netas,
@@ -780,6 +903,9 @@ def get_resumen_mensual(
         "dia_semanal_mas_rentable": dia_semanal_mas_rentable,
         "dia_semanal_menos_rentable": dia_semanal_menos_rentable,
         "expectativa": expectativa,
+        "activo_mas_rentable": activo_mas_rentable,
+        "activo_menos_rentable": activo_menos_rentable,
+        "winrate_long_short": winrate_long_short,
         "saldo_diario": calcular_saldo_diario_mensual(db, cuenta.id, year, month)
     }
 

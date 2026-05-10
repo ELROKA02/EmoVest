@@ -280,6 +280,8 @@ const Dashboard = () => {
   };
   const selectedAccountObj = tradingAccounts.find(account => account.id === selectedAccount);
   const selectedDivisa = selectedAccountObj?.divisa || 'EUR';
+  const saldoActualCuenta = Number(selectedAccountObj?.saldo_actual ?? selectedAccountObj?.saldo_inicial ?? 0);
+  const saldoInicialCuenta = Number(selectedAccountObj?.saldo_inicial ?? 0);
   const accountOptionText = account => `${account.nombre_cuenta} (${account.divisa}) - ${formatCurrency(account.saldo_inicial, account.divisa)}`;
   const saldoPlaceholder = formatCurrency(0, accountData.divisa);
   const saldoDiarioChartData = (() => {
@@ -566,68 +568,114 @@ const Dashboard = () => {
           </div>
         ) : estadisticasCompletas ? (
           <>
-          <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 mb-8">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <h3 className="text-white font-bold text-xl">Evolución de Saldo Diario</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 md:col-span-2">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-white font-bold text-xl">Evolución de Saldo Diario</h3>
+                </div>
+                <div className="text-[#8b5cf6] text-sm font-medium bg-[#8b5cf6]/10 border border-[#8b5cf6]/30 rounded-lg px-3 py-1">
+                  {meses[selectedMonth - 1]} {selectedYear}
+                </div>
               </div>
-              <div className="text-[#8b5cf6] text-sm font-medium bg-[#8b5cf6]/10 border border-[#8b5cf6]/30 rounded-lg px-3 py-1">
-                {meses[selectedMonth - 1]} {selectedYear}
-              </div>
+
+              {hasSaldoDiario ? (
+                <div className="w-full h-[320px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={saldoDiarioChartData} margin={{ top: 12, right: 28, left: 16, bottom: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
+                      <XAxis
+                        dataKey="dia"
+                        tick={{ fill: '#cbd5e1', fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={{ stroke: 'rgba(148, 163, 184, 0.35)' }}
+                        interval="preserveStartEnd"
+                        minTickGap={12}
+                      />
+                      <YAxis
+                        tick={{ fill: '#cbd5e1', fontSize: 12 }}
+                        tickFormatter={(value) => formatCurrency(value, selectedDivisa)}
+                        tickLine={false}
+                        axisLine={{ stroke: 'rgba(148, 163, 184, 0.35)' }}
+                        width={110}
+                        domain={yDomain}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          border: '1px solid rgba(148, 163, 184, 0.35)',
+                          borderRadius: '12px',
+                          color: '#e2e8f0',
+                        }}
+                        labelFormatter={(label, payload) => {
+                          const fechaCompleta = payload?.[0]?.payload?.fechaCompleta;
+                          return fechaCompleta ? `Día ${label} (${fechaCompleta})` : `Día ${label}`;
+                        }}
+                        formatter={(value) => [formatCurrency(value, selectedDivisa), 'Saldo']}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="saldo"
+                        stroke="#8b5cf6"
+                        strokeWidth={3}
+                        fill="#8b5cf6"
+                        fillOpacity={0.18}
+                        dot={{ r: 3, strokeWidth: 2, fill: '#0f172a', stroke: '#8b5cf6' }}
+                        activeDot={{ r: 6, fill: '#8b5cf6', stroke: '#c4b5fd', strokeWidth: 2 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-[180px] rounded-xl border border-dashed border-white/15 bg-black/20 flex items-center justify-center text-gray-300 text-sm">
+                  No hay operaciones cerradas para construir el saldo diario de este mes.
+                </div>
+              )}
             </div>
 
-            {hasSaldoDiario ? (
-              <div className="w-full h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={saldoDiarioChartData} margin={{ top: 12, right: 28, left: 16, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
-                    <XAxis
-                      dataKey="dia"
-                      tick={{ fill: '#cbd5e1', fontSize: 12 }}
-                      tickLine={false}
-                      axisLine={{ stroke: 'rgba(148, 163, 184, 0.35)' }}
-                      interval="preserveStartEnd"
-                      minTickGap={12}
-                    />
-                    <YAxis
-                      tick={{ fill: '#cbd5e1', fontSize: 12 }}
-                      tickFormatter={(value) => formatCurrency(value, selectedDivisa)}
-                      tickLine={false}
-                      axisLine={{ stroke: 'rgba(148, 163, 184, 0.35)' }}
-                      width={110}
-                      domain={yDomain}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#0f172a',
-                        border: '1px solid rgba(148, 163, 184, 0.35)',
-                        borderRadius: '12px',
-                        color: '#e2e8f0',
-                      }}
-                      labelFormatter={(label, payload) => {
-                        const fechaCompleta = payload?.[0]?.payload?.fechaCompleta;
-                        return fechaCompleta ? `Día ${label} (${fechaCompleta})` : `Día ${label}`;
-                      }}
-                      formatter={(value) => [formatCurrency(value, selectedDivisa), 'Saldo']}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="saldo"
-                      stroke="#8b5cf6"
-                      strokeWidth={3}
-                      fill="#8b5cf6"
-                      fillOpacity={0.18}
-                      dot={{ r: 3, strokeWidth: 2, fill: '#0f172a', stroke: '#8b5cf6' }}
-                      activeDot={{ r: 6, fill: '#8b5cf6', stroke: '#c4b5fd', strokeWidth: 2 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+            <div className="h-full flex flex-col gap-4">
+              <div className="relative h-[190px] overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-500/50 to-transparent rounded-full -mr-16 -mt-16"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-pink-500/50 to-transparent rounded-full -ml-12 -mb-12"></div>
+                <div className="relative h-full flex flex-col justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded-full bg-violet-500 shadow-lg shadow-violet-500/50 animate-pulse"></div>
+                    <h3 className="text-white font-bold text-lg">Expectativa Matemática</h3>
+                    <InfoIcon text="Ganancia promedio esperada por operación, indica la rentabilidad a largo plazo" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-baseline gap-3">
+                      <div className="text-3xl font-black text-violet-400 leading-none">
+                        {formatCurrency(estadisticasCompletas.expectativa, selectedDivisa)}
+                      </div>
+                      <div className="text-violet-300 text-xs">
+                        por operación
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-violet-500/20 rounded-lg px-3 py-1 inline-block w-fit">
+                    <div className="text-violet-300 text-xs font-medium">
+                      {estadisticasCompletas.expectativa >= 0 ? 'Estrategia rentable' : 'Estrategia no rentable'}
+                    </div>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div className="h-[180px] rounded-xl border border-dashed border-white/15 bg-black/20 flex items-center justify-center text-gray-300 text-sm">
-                No hay operaciones cerradas para construir el saldo diario de este mes.
+
+              <div className="relative flex-1 overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-4 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-cyan-500/20 to-transparent rounded-full -mr-10 -mt-10"></div>
+                <div className="relative h-full flex flex-col">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full bg-cyan-400 shadow-lg shadow-cyan-500/40"></div>
+                    <h3 className="text-white font-bold text-lg">Saldo Actual</h3>
+                  </div>
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className={`text-3xl font-black ${saldoActualCuenta >= saldoInicialCuenta ? 'text-green-400' : 'text-red-400'}`}>
+                      {formatCurrency(saldoActualCuenta, selectedDivisa)}
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
@@ -816,31 +864,68 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Expectativa - Tarjeta Destacada */}
-            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl md:col-span-2">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-500/50 to-transparent rounded-full -mr-16 -mt-16"></div>
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-pink-500/50 to-transparent rounded-full -ml-12 -mb-12"></div>
+            {/* Activos Más/Menos Rentables - Tarjeta Doble */}
+            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-amber-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-4 h-4 rounded-full bg-violet-500 shadow-lg shadow-violet-500/50 animate-pulse"></div>
-                  <h3 className="text-white font-bold text-lg">Expectativa Matemática</h3>
-                  <InfoIcon text="Ganancia promedio esperada por operación, indica la rentabilidad a largo plazo" />
+                  <div className="w-4 h-4 rounded-full bg-amber-500 shadow-lg shadow-amber-500/50"></div>
+                  <h3 className="text-white font-bold text-lg">Activos Rentables</h3>
+                  <InfoIcon text="Muestra el activo con mejor y peor resultado acumulado en el período seleccionado" />
                 </div>
-                <div className="flex items-baseline gap-4 mb-3">
-                  <div className="text-5xl font-black text-violet-400">
-                    {formatCurrency(estadisticasCompletas.expectativa, selectedDivisa)}
+                <div className="space-y-3">
+                  <div className="bg-green-500/10 rounded-xl p-3 border border-green-500/50">
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="text-green-400 text-sm font-medium">Más rentable</span>
+                      <span className="text-green-300 font-bold text-sm truncate max-w-[60%] text-right">
+                        {estadisticasCompletas.activo_mas_rentable?.activo || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="text-green-300 text-xs mt-1">
+                      {formatCurrency(estadisticasCompletas.activo_mas_rentable?.ganancia || 0, selectedDivisa)}
+                    </div>
                   </div>
-                  <div className="text-violet-300 text-sm">
-                    por operación
-                  </div>
-                </div>
-                <div className="bg-violet-500/20 rounded-lg px-4 py-2 inline-block">
-                  <div className="text-violet-300 text-sm font-medium">
-                    {estadisticasCompletas.expectativa >= 0 ? 'Estrategia rentable' : 'Estrategia no rentable'}
+                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/50">
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="text-red-400 text-sm font-medium">Menos rentable</span>
+                      <span className="text-red-300 font-bold text-sm truncate max-w-[60%] text-right">
+                        {estadisticasCompletas.activo_menos_rentable?.activo || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="text-red-300 text-xs mt-1">
+                      {formatCurrency(estadisticasCompletas.activo_menos_rentable?.ganancia || 0, selectedDivisa)}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Winrate Long/Short - Tarjeta Comparativa */}
+            <div className="relative overflow-hidden rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-fuchsia-500/10 to-transparent rounded-full -mr-10 -mt-10"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-fuchsia-500 shadow-lg shadow-fuchsia-500/50"></div>
+                  <h3 className="text-white font-bold text-lg">Winrate Long/Short</h3>
+                  <InfoIcon text="Compara el porcentaje de acierto entre operaciones Long y Short" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/50">
+                    <div className="text-emerald-300 text-xs mb-1 font-medium">Long</div>
+                    <div className="text-emerald-300 font-bold text-xl">
+                      {Number(estadisticasCompletas.winrate_long_short?.long || 0).toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="bg-blue-500/10 rounded-xl p-3 border border-blue-500/50">
+                    <div className="text-blue-300 text-xs mb-1 font-medium">Short</div>
+                    <div className="text-blue-300 font-bold text-xl">
+                      {Number(estadisticasCompletas.winrate_long_short?.short || 0).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
           </>
         ) : selectedAccount ? (
