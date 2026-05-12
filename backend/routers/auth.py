@@ -300,7 +300,7 @@ def signup(usuario: SignUp, db: Session = Depends(get_db)):
         }
     }
 )
-def forgot_password(request: 'PasswordResetRequest', db: Session = Depends(get_db)):
+def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db)):
     usuario = obtener_correo_usuario(db, request.correo_electronico)
 
     if usuario:
@@ -308,8 +308,11 @@ def forgot_password(request: 'PasswordResetRequest', db: Session = Depends(get_d
         mensaje = build_password_reset_message(usuario.correo_electronico, token)
         try:
             send_email_message(mensaje)
-        except Exception:
-            raise HTTPException(status_code=500, detail="No se pudo enviar el correo de recuperación")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"No se pudo enviar el correo de recuperación: {type(exc).__name__} - {str(exc)}"
+            )
 
     return {
         "msg": "Si existe una cuenta asociada a ese correo, recibirás un email con instrucciones para restablecer tu contraseña"
@@ -330,12 +333,18 @@ def forgot_password(request: 'PasswordResetRequest', db: Session = Depends(get_d
         }
     }
 )
-def reset_password(data: 'PasswordResetConfirm', db: Session = Depends(get_db)):
+def reset_password(data: PasswordResetConfirm, db: Session = Depends(get_db)):
     correo = verify_password_reset_token(data.token)
     usuario = obtener_correo_usuario(db, correo)
 
     if not usuario:
         raise HTTPException(status_code=400, detail="Usuario no encontrado")
+
+    if len(data.contrasena) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+
+    if data.contrasena != data.confirmar_contrasena:
+        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
 
     usuario.contrasena = hash_password(data.contrasena)
     db.commit()

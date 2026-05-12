@@ -29,7 +29,7 @@ RQ_RETRY_INTERVALS = [2, 4, 8]
 # Configuración de correo para recuperación de contraseña.
 EMAIL_SMTP_SERVER = os.getenv("EMAIL_SMTP_SERVER", "")
 EMAIL_SMTP_PORT = int(os.getenv("EMAIL_SMTP_PORT", "465"))
-EMAIL_USERNAME = os.getenv("EMAIL_USERNAME", "")
+EMAIL_USERNAME = os.getenv("EMAIL_USERNAME", "tu_usuario_de_email@gmail.com")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", EMAIL_USERNAME)
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "EmoVest")

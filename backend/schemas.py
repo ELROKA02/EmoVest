@@ -19,6 +19,7 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str
     contrasena: str
+    confirmar_contrasena: str
 
 class OperacionCreate(BaseModel):
     fecha_hora: datetime
