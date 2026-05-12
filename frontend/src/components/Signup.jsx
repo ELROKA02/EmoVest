@@ -173,7 +173,7 @@ const Signup = () => {
                             required
                         />
                         <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
-                            Acepto los <span className="text-blue-400 hover:text-blue-300 underline">términos y condiciones</span> y la <span className="text-blue-400 hover:text-blue-300 underline">política de privacidad</span>
+                            Acepto los <a href="/docs/Terminos_y_Condiciones_EmoVest_Logo.pdf" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">términos y condiciones</a> y la <a href="/docs/Politica_de_Privacidad_EmoVest.pdf" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">política de privacidad</a>
                         </span>
                     </label>
 

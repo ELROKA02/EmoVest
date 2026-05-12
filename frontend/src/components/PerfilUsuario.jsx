@@ -21,6 +21,10 @@ const PerfilUsuario = () => {
   const [loadingCuentas, setLoadingCuentas] = useState(false);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
+  const [showFundsModal, setShowFundsModal] = useState(false);
+  const [fundsType, setFundsType] = useState('add'); // 'add' or 'withdraw'
+  const [fundsAmount, setFundsAmount] = useState('');
+  const [selectedAccountForFunds, setSelectedAccountForFunds] = useState(null);
   const [accountData, setAccountData] = useState({
     nombre_cuenta: '',
     divisa: 'EUR',
@@ -162,6 +166,57 @@ const PerfilUsuario = () => {
     setShowAccountForm(true);
   };
 
+  const openFundsModal = (cuenta, type) => {
+    setSelectedAccountForFunds(cuenta);
+    setFundsType(type);
+    setFundsAmount('');
+    setShowFundsModal(true);
+  };
+
+  const handleFundsSubmit = async (e) => {
+    e.preventDefault();
+    const amount = parseFloat(fundsAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Por favor ingresa un monto válido mayor a 0');
+      return;
+    }
+
+    const newSaldo = fundsType === 'add' 
+      ? selectedAccountForFunds.saldo_actual + amount 
+      : selectedAccountForFunds.saldo_actual - amount;
+
+    if (newSaldo < 0) {
+      alert('No puedes retirar más fondos de los que tienes en la cuenta');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:8000/cuentas/actualizarcuenta/${selectedAccountForFunds.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          saldo_actual: newSaldo
+        })
+      });
+
+      if (response.ok) {
+        fetchCuentas();
+        setShowFundsModal(false);
+        setFundsAmount('');
+        setSelectedAccountForFunds(null);
+      } else {
+        const errData = await response.json();
+        alert(errData.detail || 'Error al actualizar el saldo');
+      }
+    } catch (error) {
+      alert('Error de conexión al servidor', error);
+    }
+  };
+
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
   };
@@ -288,6 +343,18 @@ const PerfilUsuario = () => {
                           </div>
                           <div className="flex gap-2">
                             <button
+                              onClick={() => openFundsModal(cuenta, 'add')}
+                              className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-full transition-colors"
+                            >
+                              + Fondos
+                            </button>
+                            <button
+                              onClick={() => openFundsModal(cuenta, 'withdraw')}
+                              className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-full transition-colors"
+                            >
+                              - Fondos
+                            </button>
+                            <button
                               onClick={() => openEditForm(cuenta)}
                               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-full transition-colors"
                             >
@@ -355,6 +422,45 @@ const PerfilUsuario = () => {
                   <div className="flex justify-end gap-3 pt-4">
                     <button type="button" onClick={() => setShowAccountForm(false)} className="px-5 py-2 text-sm text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors">Cancelar</button>
                     <button type="submit" className="px-5 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors font-semibold">Guardar</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Añadir/Retirar Fondos */}
+          {showFundsModal && selectedAccountForFunds && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-[#1a2235] rounded-2xl p-6 border border-white/20 w-full max-w-md shadow-2xl animate-in zoom-in duration-200">
+                <h2 className="text-xl font-bold mb-4 text-white">
+                  {fundsType === 'add' ? 'Añadir Fondos' : 'Retirar Fondos'}
+                </h2>
+                <p className="text-sm text-gray-300 mb-4">
+                  Cuenta: <strong>{selectedAccountForFunds.nombre_cuenta}</strong> ({selectedAccountForFunds.divisa})<br />
+                  Saldo Actual: <strong>{formatCurrency(selectedAccountForFunds.saldo_actual, selectedAccountForFunds.divisa)}</strong>
+                </p>
+                <form onSubmit={handleFundsSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs text-white mb-1">
+                      Monto a {fundsType === 'add' ? 'Añadir' : 'Retirar'} ({selectedAccountForFunds.divisa})
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={fundsAmount}
+                      onChange={(e) => setFundsAmount(e.target.value)}
+                      className="w-full p-2.5 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
+                      placeholder="0.00"
+                      min="0"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end gap-3 pt-4">
+                    <button type="button" onClick={() => setShowFundsModal(false)} className="px-5 py-2 text-sm text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors">Cancelar</button>
+                    <button type="submit" className="px-5 py-2 text-sm text-white bg-green-600 hover:bg-green-700 rounded-full transition-colors font-semibold">
+                      {fundsType === 'add' ? 'Añadir' : 'Retirar'}
+                    </button>
                   </div>
                 </form>
               </div>

@@ -16,7 +16,7 @@ export default function CustomSelect({ value, onChange, options }) {
   }, []);
 
   return (
-    <div ref={ref} className="relative w-full z-[100]">
+    <div ref={ref} className="relative w-full z-0">
       {/* Botón */}
       <div
         onClick={() => setOpen(!open)}
@@ -28,7 +28,7 @@ export default function CustomSelect({ value, onChange, options }) {
 
       {/* Opciones */}
       {open && (
-        <div className="absolute mt-1 w-full bg-[#1a2235]/95 border border-white/10 rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl z-[9999]">
+        <div className="absolute mt-1 w-full bg-[#1a2235]/95 border border-white/10 rounded-xl overflow-hidden shadow-2xl backdrop-blur-xl z-30">
           {options.map((opt) => (
             <div
               key={opt}
