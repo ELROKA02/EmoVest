@@ -808,6 +808,7 @@ def ya_existe_estadistica(db: Session, cuenta_id: int, year: int, month: int):
     ).first() is not None
 
 def job_estadisticas_mensuales():
+    """Funcion que se ejecuta el primer dia de cada mes para calcular y guardar las estadisticas mensuales de cada cuenta de trading."""
     db = next(get_db())
 
     now = datetime.now()
@@ -829,6 +830,54 @@ def job_estadisticas_mensuales():
         stats = obtener_resumen_mensual(db, cuenta.id, year, month)
 
         guardar_estadistica(db, cuenta.id, stats)
+
+def calcular_ganancia_neta_y_total_operaciones_diarias_mensual(
+    db: Session,
+    cuenta_id_trading: int,
+    year: int = None,
+    month: int = None,
+) -> list[dict]:
+    """Calcula la ganancia neta y el total de operaciones diarias para cada dia del mes indicado."""
+    if year is None or month is None:
+        now = datetime.now()
+        year = now.year
+        month = now.month
+
+    inicio_mes = datetime(year, month, 1)
+    inicio_mes_siguiente = get_inicio_mes_siguiente(inicio_mes)
+
+    operaciones = db.query(Operacion).filter(
+        Operacion.id_cuenta == cuenta_id_trading,
+        Operacion.fecha_hora >= inicio_mes,
+        Operacion.fecha_hora < inicio_mes_siguiente,
+    ).order_by(Operacion.fecha_hora.asc(), Operacion.id.asc()).all()
+
+    resultados_diarios = {}
+
+    for operacion in operaciones:
+        if operacion.resultado is None:
+            continue
+
+        fecha_str = operacion.fecha_hora.date().isoformat()
+
+        if fecha_str not in resultados_diarios:
+            resultados_diarios[fecha_str] = {
+                "ganancia_neta": Decimal("0"),
+                "total_operaciones": 0
+            }
+
+        resultados_diarios[fecha_str]["total_operaciones"] += 1
+        resultados_diarios[fecha_str]["ganancia_neta"] += Decimal(str(operacion.resultado))
+
+    resultados_formateados = []
+    for fecha, datos in resultados_diarios.items():
+        resultados_formateados.append({
+            "fecha": fecha,
+            "ganancia_neta": round(float(datos["ganancia_neta"]), 2),
+            "total_operaciones": datos["total_operaciones"]
+        })
+
+    return resultados_formateados
         
 @router.get(
     "/mensual",
@@ -959,8 +1008,49 @@ def get_estadisticas_emociones_mensuales(
         "beneficio_total_emociones": beneficio_total_emociones
     }
 
+@router.get(
+    "/calendario",
+    summary="Obtener ganancia neta y total de operaciones diarias de una cuenta de trading durante un mes",
+    description=(
+        "Calcula la ganancia neta y el total de operaciones diarias para cada dia del mes indicado."
+    ),
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Ganancia neta y total de operaciones diarias calculados correctamente."
+        },  
+        401: {
+            "description": "El usuario no esta autenticado o el token no es valido."
+        },
+        404: {
+            "description": "La cuenta indicada no existe o no pertenece al usuario autenticado."
+        },
+        422: {
+            "description": "Los parametros de consulta no son validos."
+        }
+    },
+    tags=["estadisticas", "diario"]
+)
+def get_estadisticas_diarias(
+    cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading.", examples=[1])],
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    year: int = Query(
+        default=None,
+        ge=2000,
+        le=2100,
+        description="Ano a consultar."
+    ),
+    month: int = Query(
+        default=None,
+        ge=1,
+        le=12,
+        description="Mes a consultar (1-12). "
+    ),
+):
+    cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
 
-
+    return calcular_ganancia_neta_y_total_operaciones_diarias_mensual(db, cuenta.id, year, month)
 
 scheduler = BackgroundScheduler()
 
