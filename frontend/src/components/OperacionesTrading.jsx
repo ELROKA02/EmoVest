@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
@@ -15,17 +15,41 @@ const getAuthHeaders = () => {
   };
 };
 
-const InfoIcon = ({ text }) => (
-  <div className="relative group flex items-center">
-    <svg className="w-3.5 h-3.5 text-gray-400 hover:text-blue-400 cursor-help transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-[#1a2235] border border-white/10 text-[10px] text-gray-300 rounded shadow-xl z-50 text-center pointer-events-none">
-      {text}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1a2235]"></div>
+const InfoIcon = ({ text }) => {
+  const [alignRight, setAlignRight] = useState(false);
+  const iconRef = useRef(null);
+
+  const handlePointerEnter = () => {
+    if (!iconRef.current) return;
+    const rect = iconRef.current.getBoundingClientRect();
+    const tooltipWidth = 288; // w-64
+    const formElement = iconRef.current.closest('form');
+
+    if (!formElement) {
+      const rightSpace = window.innerWidth - rect.right;
+      const leftSpace = rect.left;
+      setAlignRight(rightSpace < tooltipWidth && leftSpace > tooltipWidth);
+      return;
+    }
+
+    const formRect = formElement.getBoundingClientRect();
+    const rightSpace = formRect.right - rect.right;
+    const leftSpace = rect.left - formRect.left;
+    setAlignRight(rightSpace < tooltipWidth && leftSpace > tooltipWidth);
+  };
+
+  return (
+    <div ref={iconRef} className="relative group inline-flex items-center overflow-visible" onPointerEnter={handlePointerEnter}>
+      <svg className="w-3.5 h-3.5 text-gray-400 hover:text-blue-400 cursor-help transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <div className={`absolute bottom-full mb-2 hidden group-hover:block w-64 max-w-[18rem] break-words whitespace-normal p-2 bg-[#1a2235] border border-white/10 text-[10px] text-gray-300 rounded shadow-xl z-50 pointer-events-none ${alignRight ? 'right-0 text-right' : 'left-0 text-left'}`}>
+        {text}
+        <div className={`absolute top-full border-4 border-transparent border-t-[#1a2235] ${alignRight ? 'right-4' : 'left-4'}`}></div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const OperacionesTrading = () => {
   console.log('OperacionesTrading renderizado');
@@ -155,9 +179,26 @@ const OperacionesTrading = () => {
   };
 
   const [operaciones, setOperaciones] = useState([]);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterType, setFilterType] = useState('TODOS');
+  const [filterActivo, setFilterActivo] = useState('TODOS');
+  const [sortBy, setSortBy] = useState('fecha');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 25;
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+
+  // Cerrar dropdowns cuando se abre el modal
+  useEffect(() => {
+    if (showForm) {
+      // Simular click outside para cerrar cualquier dropdown abierto
+      document.dispatchEvent(new Event('mousedown'));
+    }
+  }, [showForm]);
+
   const [formData, setFormData] = useState({
     fecha_hora: '',
     tipo_operacion: 'LONG',
@@ -220,6 +261,36 @@ const OperacionesTrading = () => {
   const handleRemoveImage = () => {
     setFormData(prev => ({...prev, screenshot: null}));
   };
+
+  const activosDisponibles = Array.from(new Set(operaciones.map(op => op.activo))).sort();
+
+  const displayedOperaciones = operaciones
+    .filter(op => filterType === 'TODOS' ? true : op.tipo_operacion === filterType)
+    .filter(op => filterActivo === 'TODOS' ? true : op.activo?.toLowerCase() === filterActivo.toLowerCase())
+    .sort((a, b) => {
+      if (sortBy === 'beneficio') {
+        const valueA = a.resultado ?? 0;
+        const valueB = b.resultado ?? 0;
+        const diff = valueA - valueB;
+        return sortDirection === 'asc' ? diff : -diff;
+      }
+      const dateA = new Date(a.fecha_hora).getTime();
+      const dateB = new Date(b.fecha_hora).getTime();
+      return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+
+  const totalPages = Math.max(1, Math.ceil(displayedOperaciones.length / PAGE_SIZE));
+  const paginatedOperaciones = displayedOperaciones.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, filterActivo, sortBy, sortDirection, cuentaSeleccionada, operaciones.length]);
 
   const handleCreate = () => {
     setEditing(null);
@@ -392,8 +463,8 @@ const OperacionesTrading = () => {
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
-              <div className="flex flex-col gap-2">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-4">
+              <div className="flex flex-col gap-2 min-w-[240px]">
                 <label className="text-sm text-gray-300">Seleccionar Cuenta:</label>
                 <CustomSelect
                   value={cuentaSeleccionada ? cuentas.find(c => c.id === cuentaSeleccionada)?.nombre_cuenta + ' (' + cuentas.find(c => c.id === cuentaSeleccionada)?.divisa + ')' : 'Cargando cuentas...'}
@@ -405,14 +476,78 @@ const OperacionesTrading = () => {
                 />
               </div>
 
-              <button
-                onClick={handleCreate}
-                disabled={!cuentaSeleccionada || loading}
-                className="mt-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-all duration-300"
-              >
-                {loading ? 'Cargando...' : 'Crear Operación'}
-              </button>
+              <div className="flex flex-col items-start sm:items-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowFilters(prev => !prev)}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-full text-sm transition-all"
+                >
+                  {showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={!cuentaSeleccionada || loading}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-all duration-300"
+                >
+                  {loading ? 'Cargando...' : 'Crear Operación'}
+                </button>
+              </div>
             </div>
+            {showFilters && (
+              <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner">
+                <div className="grid gap-4 lg:grid-cols-4 items-end">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-gray-300">Filtrar por tipo</label>
+                    <select
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-[#1a2235]/90 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                    >
+                      <option value="TODOS">Todos</option>
+                      <option value="LONG">LONG</option>
+                      <option value="SHORT">SHORT</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-gray-300">Filtrar por activo</label>
+                    <select
+                      value={filterActivo}
+                      onChange={(e) => setFilterActivo(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-[#1a2235]/90 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                    >
+                      <option value="TODOS">Todos</option>
+                      {activosDisponibles.map(activo => (
+                        <option key={activo} value={activo}>{activo}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-gray-300">Ordenar por</label>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-[#1a2235]/90 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                    >
+                      <option value="fecha">Fecha</option>
+                      <option value="beneficio">Beneficio</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-gray-300">Orden</label>
+                    <button
+                      type="button"
+                      onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                      className="rounded-xl border border-white/10 bg-[#1a2235]/90 px-3 py-2 text-sm text-white hover:bg-[#1a2235]/80 transition"
+                    >
+                      {sortDirection === 'asc' ? 'Ascendente' : 'Descendente'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="mt-12 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 overflow-x-auto">
               {loading && (
@@ -425,59 +560,129 @@ const OperacionesTrading = () => {
                 <div className="py-8 text-center text-gray-300">
                   <p>No hay operaciones registradas para esta cuenta.</p>
                 </div>
+              ) : !loading && displayedOperaciones.length === 0 ? (
+                <div className="py-8 text-center text-gray-300">
+                  <p>No hay operaciones que coincidan con los filtros seleccionados.</p>
+                </div>
               ) : (
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-gray-400 border-b border-white/10">
-                    <th className="p-4 text-center">Fecha</th>
-                    <th className="p-4 text-center">Tipo</th>
-                    <th className="p-4 text-center">Activo</th>
-                    <th className="p-4 text-center">Cantidad</th>
-                    <th className="p-4 text-center">Precio Entrada</th>
-                    <th className="p-4 text-center">Precio Salida</th>
-                    <th className="p-4 text-center">Profit</th>
-                    <th className="p-4 text-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {operaciones.map(op => (
-                    <tr key={op.id} className="border-t text-white border-white/10 hover:bg-white/5 transition-colors">
-                      <td className="p-4 text-center">{new Date(op.fecha_hora).toLocaleString()}</td>
-                      <td className={`p-4 text-center font-bold ${op.tipo_operacion === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>
-                        {op.tipo_operacion}
-                      </td>
-                      <td className="p-4 text-center text-white">{op.activo}</td>
-                      <td className="p-4 text-center text-white">{op.cantidad}</td>
-                      <td className="p-4 text-center font-mono text-white">{formatCurrency(op.precio_entrada, currencyDivisa)}</td>
-                      <td className="p-4 text-center font-mono text-white">{op.precio_salida !== null && op.precio_salida !== undefined ? formatCurrency(op.precio_salida, currencyDivisa) : '-'}</td>
-                      <td className={`p-4 text-center font-semibold ${op.resultado > 0 ? 'text-green-400' : op.resultado < 0 ? 'text-red-400' : 'text-gray-300'}`}>
-                        {op.resultado !== null && op.resultado !== undefined ? `${op.resultado > 0 ? '+' : ''}${formatCurrency(op.resultado, currencyDivisa)}` : '-'}
-                      </td>
-                      <td className="p-4 flex gap-2 justify-center">
+                <>
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-gray-300">
+                    <div>
+                      Mostrando {paginatedOperaciones.length} de {displayedOperaciones.length} operaciones
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="rounded-full border border-white/10 bg-[#1a2235]/90 px-4 py-2 text-white transition hover:bg-[#1a2235]/80 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Anterior
+                      </button>
+                      <span>Página {currentPage} de {totalPages}</span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className="rounded-full border border-white/10 bg-[#1a2235]/90 px-4 py-2 text-white transition hover:bg-[#1a2235]/80 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  </div>
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-white/10">
+                        <th className="p-4 text-center">Fecha</th>
+                        <th className="p-4 text-center">Tipo</th>
+                        <th className="p-4 text-center">Activo</th>
+                        <th className="p-4 text-center">Cantidad</th>
+                        <th className="p-4 text-center">Precio Entrada</th>
+                        <th className="p-4 text-center">Precio Salida</th>
+                        <th className="p-4 text-center">Profit</th>
+                        <th className="p-4 text-center">Imagen</th>
+                        <th className="p-4 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedOperaciones.map(op => (
+                        <tr key={op.id} className="border-t text-white border-white/10 hover:bg-white/5 transition-colors">
+                          <td className="p-4 text-center">{new Date(op.fecha_hora).toLocaleString()}</td>
+                          <td className={`p-4 text-center font-bold ${op.tipo_operacion === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>
+                            {op.tipo_operacion}
+                          </td>
+                          <td className="p-4 text-center text-white">{op.activo}</td>
+                          <td className="p-4 text-center text-white">{op.cantidad}</td>
+                          <td className="p-4 text-center font-mono text-white">{formatCurrency(op.precio_entrada, currencyDivisa)}</td>
+                          <td className="p-4 text-center font-mono text-white">{op.precio_salida !== null && op.precio_salida !== undefined ? formatCurrency(op.precio_salida, currencyDivisa) : '-'}</td>
+                          <td className={`p-4 text-center font-semibold ${op.resultado > 0 ? 'text-green-400' : op.resultado < 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                            {op.resultado !== null && op.resultado !== undefined ? `${op.resultado > 0 ? '+' : ''}${formatCurrency(op.resultado, currencyDivisa)}` : '-'}
+                          </td>
+                          <td className="p-4 text-center">
+                            {op.screenshot ? (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewImage(op.screenshot)}
+                                className="mx-auto inline-block h-14 w-14 overflow-hidden rounded-xl border border-white/10 shadow-inner transition-all hover:border-blue-400"
+                              >
+                                <img src={op.screenshot} alt={`Operación ${op.id}`} className="h-full w-full object-cover" />
+                              </button>
+                            ) : (
+                              <span className="text-gray-500">-</span>
+                            )}
+                          </td>
+                          <td className="p-4 flex gap-2 justify-center">
+                            <button
+                              onClick={() => handleEdit(op)}
+                              disabled={loading}
+                              className="px-4 py-2 text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 rounded-full text-sm transition-colors disabled:cursor-not-allowed"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDelete(op.id)}
+                              disabled={loading}
+                              className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 rounded-full text-sm transition-colors disabled:cursor-not-allowed"
+                            >
+                              Eliminar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {totalPages > 1 && (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-gray-300">
+                      <div>
+                        Mostrando {paginatedOperaciones.length} de {displayedOperaciones.length} operaciones
+                      </div>
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleEdit(op)}
-                          disabled={loading}
-                          className="px-4 py-2 text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 rounded-full text-sm transition-colors disabled:cursor-not-allowed"
+                          type="button"
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                          className="rounded-full border border-white/10 bg-[#1a2235]/90 px-4 py-2 text-white transition hover:bg-[#1a2235]/80 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Editar
+                          Anterior
                         </button>
+                        <span>Página {currentPage} de {totalPages}</span>
                         <button
-                          onClick={() => handleDelete(op.id)}
-                          disabled={loading}
-                          className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 rounded-full text-sm transition-colors disabled:cursor-not-allowed"
+                          type="button"
+                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                          disabled={currentPage === totalPages}
+                          className="rounded-full border border-white/10 bg-[#1a2235]/90 px-4 py-2 text-white transition hover:bg-[#1a2235}/80 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Eliminar
+                          Siguiente
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
             {showForm && (
-              <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4">
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-[10000] p-4">
                 <div className="bg-[#1a2235]/80 backdrop-blur-lg rounded-2xl p-6 border border-white/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
                   <h2 className="text-2xl font-bold mb-4 text-white">{editing ? 'Editar Operación' : 'Crear Operación'}</h2>
                   <form onSubmit={handleSubmit} className="space-y-3">
@@ -497,7 +702,7 @@ const OperacionesTrading = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <div className="flex items-center gap-1 mb-1">
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Tipo</label>
                           <InfoIcon text="Dirección de tu inversión (LONG = Compra y luego vende, SHORT = Vende y luego compra)." />
                         </div>
@@ -508,7 +713,7 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center gap-1 mb-1">
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Activo</label>
                           <InfoIcon text="Símbolo del mercado o par (Ej: BTC, EUR, USD)." />
                         </div>
@@ -523,7 +728,7 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center gap-1 mb-1">
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Cantidad</label>
                           <InfoIcon text="Tamaño de la posición operada (Lotaje o unidades)." />
                         </div>
@@ -540,7 +745,7 @@ const OperacionesTrading = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <div className="flex items-center gap-1 mb-1">
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Precio Entrada</label>
                           <InfoIcon text="Precio al que abriste la posición." />
                         </div>
@@ -555,7 +760,7 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center gap-1 mb-1">
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Precio Salida</label>
                           <InfoIcon text="Precio al que cerraste la posición." />
                         </div>
@@ -570,7 +775,7 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center gap-1 mb-1">
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Stop Loss</label>
                           <InfoIcon text="Precio límite predefinido para cortar pérdidas." />
                         </div>
@@ -587,7 +792,7 @@ const OperacionesTrading = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <div className="flex items-center gap-1 mb-1">
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Take Profit</label>
                           <InfoIcon text="Precio objetivo predefinido para tomar ganancias." />
                         </div>
@@ -602,7 +807,7 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center gap-1 mb-1">
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Resultado</label>
                           <InfoIcon text="Ganancia o pérdida (Calculado automáticamente con la salida)." />
                         </div>
@@ -617,7 +822,7 @@ const OperacionesTrading = () => {
                         />
                       </div>
                       <div>
-                        <div className="flex items-center gap-1 mb-1">
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Ratio RR</label>
                           <InfoIcon text="Relación de Riesgo / Beneficio (Risk/Reward)." />
                         </div>
@@ -723,6 +928,18 @@ const OperacionesTrading = () => {
           </div>
         </main>
       </div>
+      {previewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setPreviewImage(null)}>
+          <div className="relative max-w-4xl w-full max-h-[90vh] overflow-hidden rounded-3xl bg-[#0f172a] p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="absolute right-4 top-4 rounded-full bg-white/10 px-3 py-2 text-xs text-white transition hover:bg-white/20"
+            >Cerrar</button>
+            <img src={previewImage} alt="Vista previa ampliada" className="mx-auto max-h-[80vh] w-full object-contain rounded-2xl" />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
