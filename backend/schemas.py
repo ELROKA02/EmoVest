@@ -13,6 +13,13 @@ class login(BaseModel):
     correo_electronico: EmailStr
     contrasena: str
 
+class PasswordResetRequest(BaseModel):
+    correo_electronico: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    contrasena: str
+
 class OperacionCreate(BaseModel):
     fecha_hora: datetime
     tipo_operacion: Literal["LONG", "SHORT"]

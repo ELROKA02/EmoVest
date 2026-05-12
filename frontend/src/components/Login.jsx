@@ -106,9 +106,9 @@ const Login = () => {
                                     Recordar usuario
                                 </span>
                             </label>
-                            <a href="#" className="text-[10px] sm:text-[12px] text-blue-400/80 hover:text-blue-300 transition-colors">
+                            <Link to="/forgot-password" className="text-[10px] sm:text-[12px] text-blue-400/80 hover:text-blue-300 transition-colors">
                                 ¿Olvidaste tu contraseña?
-                            </a>
+                            </Link>
                         </div>
                     </div>
 

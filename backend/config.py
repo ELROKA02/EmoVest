@@ -26,3 +26,11 @@ RQ_RETRY_MAX = int(os.getenv("RQ_RETRY_MAX", "3"))
 
 # Espera entre reintentos (segundos): 2s, 4s y 8s.
 RQ_RETRY_INTERVALS = [2, 4, 8]
+# Configuración de correo para recuperación de contraseña.
+EMAIL_SMTP_SERVER = os.getenv("EMAIL_SMTP_SERVER", "")
+EMAIL_SMTP_PORT = int(os.getenv("EMAIL_SMTP_PORT", "465"))
+EMAIL_USERNAME = os.getenv("EMAIL_USERNAME", "")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
+EMAIL_FROM = os.getenv("EMAIL_FROM", EMAIL_USERNAME)
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "EmoVest")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
