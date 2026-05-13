@@ -21,7 +21,7 @@ const Calendar = () => {
     const saved = localStorage.getItem('selectedAccountId');
     return saved ? saved : '';
   });
-  const [operaciones, setOperaciones] = useState([]);
+  const [estadisticasDiarias, setEstadisticasDiarias] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const calendarRef = useRef(null);
@@ -59,14 +59,17 @@ const Calendar = () => {
       setError(null);
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:8000/cuentas/${cuentaSeleccionada}/operaciones?year=${year}&month=${month}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setOperaciones(data);
-        } else {
-          setError('No se pudieron cargar las operaciones');
+        if (!token) {
+          setError('No hay sesión activa');
+          return;
+        }
+        const statsResponse = await fetch(
+          `http://localhost:8000/cuentas/${cuentaSeleccionada}/estadisticas/calendario?year=${year}&month=${month}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          setEstadisticasDiarias(statsData);
         }
       } catch (error) {
         setError('Error de conexión al cargar operaciones', error);
@@ -116,37 +119,6 @@ const Calendar = () => {
 
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
-  };
-
-  // Convertir operaciones a eventos del calendario
-  const calendarEvents = operaciones.map(op => ({
-    id: op.id,
-    title: `${op.activo} - ${op.tipo_operacion}`,
-    start: op.fecha_hora,
-    backgroundColor: op.resultado > 0 ? '#10b981' : op.resultado < 0 ? '#ef4444' : '#6b7280',
-    borderColor: op.resultado > 0 ? '#059669' : op.resultado < 0 ? '#dc2626' : '#4b5563',
-    textColor: '#ffffff',
-    extendedProps: {
-      resultado: op.resultado,
-      activo: op.activo,
-      tipo: op.tipo_operacion,
-      entrada: op.precio_entrada,
-      salida: op.precio_salida,
-      divisa: 'USD'
-    }
-  }));
-
-  const renderEventContent = (eventInfo) => {
-    const { resultado, activo, tipo, divisa } = eventInfo.event.extendedProps;
-    return (
-      <div className="p-1 text-xs">
-        <div className="font-semibold">{activo}</div>
-        <div className="opacity-90">{tipo}</div>
-        <div className={`font-bold ${resultado > 0 ? 'text-green-300' : resultado < 0 ? 'text-red-300' : 'text-gray-300'}`}>
-          {resultado > 0 ? '+' : ''}{formatCurrency(resultado, divisa)}
-        </div>
-      </div>
-    );
   };
 
   const newLocal = `
@@ -243,31 +215,52 @@ const Calendar = () => {
                       font-size: 0.75rem !important; 
                       padding: 12px 8px !important;
                       letter-spacing: 0.5px;
+                      border-radius: 8px !important;
                     }
                     .fc-col-header-cell-cushion {
-                      color: #000000 !important;
+                      color: #ffffff !important;
                     }
                     .fc-day-sun.fc-col-header-cell {
                       box-shadow: inset 0 0 0 1px #000000 !important;
                     }
-                    .fc-daygrid-day-frame { 
-                      background: linear-gradient(135deg, rgba(17, 24, 39, 0.8), rgba(31, 41, 55, 0.6)) !important; 
+                    .fc-daygrid-day,
+                    .fc-daygrid-day .fc-daygrid-day-frame {
+                      height: 100% !important;
+                    }
+                    .fc-daygrid-day-frame {
+                      display: flex !important;
+                      flex-direction: column !important;
+                      min-height: 100px !important;
+                      background: linear-gradient(135deg, rgba(17, 24, 39, 0.8), rgba(31, 41, 55, 0.6));
                       border-color: rgba(255, 255, 255, 0.06) !important;
+                      border-radius: 10px !important;
                       transition: all 0.3s ease !important;
                     }
                     .fc-daygrid-day-frame:hover {
                       background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.05)) !important;
                       border-color: rgba(59, 130, 246, 0.2) !important;
                     }
+                    .fc-daygrid-day-top {
+                      flex: 1 !important;
+                      width: 100% !important;
+                      overflow: visible !important;
+                    }
                     .fc-day-today { 
-                      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1)) !important;
-                      border-color: rgba(16, 185, 129, 0.3) !important;
-                      box-shadow: inset 0 0 20px rgba(16, 185, 129, 0.1) !important;
+                      background: transparent !important;
+                      border-color: transparent !important;
+                      box-shadow: none !important;
+                    }
+                    .fc-day-today .fc-daygrid-day-frame {
+                      box-shadow: inset 0 0 0 2px rgba(168, 0, 255, 0.7) !important;
+                    }
+                    .fc-daygrid-day-number {
+                      color: #ffffff !important;
+                      font-weight: 700 !important;
                     }
                     .fc-day-today .fc-daygrid-day-number { 
-                      color: #10f981 !important; 
+                      color: #a800ff !important; 
                       font-weight: 800 !important;
-                      text-shadow: 0 0 10px rgba(16, 249, 129, 0.5);
+                      text-shadow: 0 0 10px rgba(168, 0, 255, 0.5);
                     }
                     .fc-day-other-month { 
                       background: linear-gradient(135deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.1)) !important; 
@@ -397,20 +390,6 @@ const Calendar = () => {
                   <div className="w-4 h-4 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/50"></div>
                   <h3 className="text-white font-bold text-xl">Calendario de Operaciones</h3>
                 </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span className="text-gray-300">Ganancia</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                    <span className="text-gray-300">Pérdida</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-gray-500"></div>
-                    <span className="text-gray-300">Neutro</span>
-                  </div>
-                </div>
               </div>
               
               {/* Controles de navegación de fecha */}
@@ -423,7 +402,7 @@ const Calendar = () => {
                     setYear(currentYear.toString());
                     setMonth(currentMonth.toString());
                   }}
-                  className="px-4 py-2 bg-gradient-to-r from-green-600/20 to-green-500/20 hover:from-green-600/30 hover:to-green-500/30 text-green-400 border border-green-500/30 hover:border-green-500/50 font-bold rounded-lg transition-all duration-300 flex items-center gap-2 backdrop-blur-sm"
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600/20 to-purple-500/20 hover:from-purple-600/30 hover:to-purple-500/30 text-purple-400 border border-purple-500/30 hover:border-purple-500/50 font-bold rounded-lg transition-all duration-300 flex items-center gap-2 backdrop-blur-sm"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -460,7 +439,7 @@ const Calendar = () => {
                 <div className="bg-white/5 backdrop-blur-xl rounded-xl">
                   <style>{newLocal}</style>
                   <FullCalendar
-                    key={`${year}-${month}`}
+                    key={`${year}-${month}-${estadisticasDiarias.length}`}
                     ref={calendarRef}
                     plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                     initialView="dayGridMonth"
@@ -470,8 +449,42 @@ const Calendar = () => {
                       center: 'title',
                       right: ''
                     }}
-                    events={calendarEvents}
-                    eventContent={renderEventContent}
+                    dayCellDidMount={(arg) => {
+                      const dateStr = arg.date.toLocaleDateString('en-CA');
+                      const stats = estadisticasDiarias.find(s => s.fecha === dateStr);
+                      if (!stats) return;
+                      const color = stats.ganancia_neta > 0 ? '#10f981' : stats.ganancia_neta < 0 ? '#f87171' : '#9ca3af';
+                      const bg = stats.ganancia_neta > 0 ? 'rgba(16,185,129,0.25)' : stats.ganancia_neta < 0 ? 'rgba(239,68,68,0.25)' : 'rgba(107,114,128,0.12)';
+                      const border = stats.ganancia_neta > 0 ? 'rgba(16,185,129,0.3)' : stats.ganancia_neta < 0 ? 'rgba(239,68,68,0.3)' : 'rgba(107,114,128,0.3)';
+                      const frame = arg.el.querySelector('.fc-daygrid-day-frame');
+                      if (!frame) return;
+                      frame.style.background = bg;
+                      frame.style.border = `1px solid ${border}`;
+                      frame.style.borderRadius = '10px';
+                      const overlay = document.createElement('div');
+                      overlay.className = 'day-stats-overlay';
+                      overlay.style.cssText = `
+                        position: absolute;
+                        inset: 0;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 4px;
+                        pointer-events: none;
+                        z-index: 1;
+                      `;
+                      overlay.innerHTML = `
+                        <div style="font-size:0.95rem;font-weight:800;color:${color};line-height:1.2">
+                          ${stats.ganancia_neta > 0 ? '+' : stats.ganancia_neta < 0 ? '-' : ''}${formatCurrency(Math.abs(stats.ganancia_neta), 'USD')}
+                        </div>
+                        <div style="font-size:0.72rem;font-weight:600;color:rgba(255,255,255,0.6);line-height:1">
+                          ${stats.total_operaciones} op${stats.total_operaciones !== 1 ? 's' : ''}
+                        </div>
+                      `;
+                      frame.style.position = 'relative';
+                      frame.appendChild(overlay);
+                    }}
                     height="auto"
                     aspectRatio={1.8}
                     stickyHeaderDates={false}
@@ -483,40 +496,6 @@ const Calendar = () => {
                       week: 'Semana',
                       day: 'Día',
                       list: 'Lista'
-                    }}
-                    viewDidMount={() => {
-                      const headerRow = document.querySelector('.fc-col-header tr');
-                      if (headerRow) {
-                        headerRow.querySelectorAll('th:not([data-date])').forEach(th => {
-                          th.style.display = 'none';
-                        });
-                      }
-                    }}
-                                        eventMouseEnter={(info) => {
-                      const { resultado, entrada, salida, divisa } = info.event.extendedProps;
-                      const tooltip = document.createElement('div');
-                      tooltip.className = 'absolute z-50 p-2 bg-gray-900 text-white text-xs rounded shadow-lg border border-gray-700';
-                      tooltip.innerHTML = `
-                        <div><strong>${info.event.title}</strong></div>
-                        <div>Entrada: ${formatCurrency(entrada, divisa)}</div>
-                        <div>Salida: ${formatCurrency(salida, divisa)}</div>
-                        <div class="${resultado > 0 ? 'text-green-400' : resultado < 0 ? 'text-red-400' : 'text-gray-400'}">
-                          Resultado: ${resultado > 0 ? '+' : ''}${formatCurrency(resultado, divisa)}
-                        </div>
-                      `;
-                      document.body.appendChild(tooltip);
-                      
-                      const rect = info.el.getBoundingClientRect();
-                      tooltip.style.left = `${rect.left + window.scrollX}px`;
-                      tooltip.style.top = `${rect.bottom + window.scrollY + 5}px`;
-                      
-                      info.el.tooltip = tooltip;
-                    }}
-                    eventMouseLeave={(info) => {
-                      if (info.el.tooltip) {
-                        document.body.removeChild(info.el.tooltip);
-                        info.el.tooltip = null;
-                      }
                     }}
                   />
                 </div>
