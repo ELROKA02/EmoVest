@@ -32,6 +32,16 @@ const menuItems = [
       </svg>
     ),
     path: '/estadisticas'
+  },
+  {
+    id: 'calendario',
+    name: 'Calendario',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+    path: '/calendar'
   }
 ];
 
@@ -44,7 +54,7 @@ const Sidebar = ({ sidebarOpen, onToggle }) => {
   }, [sidebarOpen]);
 
   return (
-    <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-black/30 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col sticky top-0 h-screen`}>
+    <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-black/30 backdrop-blur-xl transition-all duration-300 flex flex-col sticky top-0 h-screen`}>
       <div className="p-4 border-b border-white/10">
         <div className="flex items-center gap-3">
           <img src={logo} alt="Logo" className="h-10 w-auto object-contain" />

@@ -78,7 +78,7 @@ function Navbar() {
             </a>
           </li>
         ))}
-        {isLoggedIn && location.pathname !== '/trading' && location.pathname !== '/perfil' && location.pathname !== '/estadisticas' && (
+        {isLoggedIn && location.pathname !== '/trading' && location.pathname !== '/perfil' && location.pathname !== '/estadisticas' && location.pathname !== '/calendar' && (
           <li>
             <button
               onClick={handleTradingClick}

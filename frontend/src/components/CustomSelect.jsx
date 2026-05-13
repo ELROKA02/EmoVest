@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-export default function CustomSelect({ value, onChange, options }) {
+export default function CustomSelect({ value, onChange, options, className = "" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef();
 
@@ -16,11 +16,11 @@ export default function CustomSelect({ value, onChange, options }) {
   }, []);
 
   return (
-    <div ref={ref} className="relative w-full z-0">
+    <div ref={ref} className={`relative z-0 ${className}`}>
       {/* Botón */}
       <div
         onClick={() => setOpen(!open)}
-        className="w-full bg-[#1a2235]/80 text-white text-sm px-4 py-2 rounded-xl border border-white/10 cursor-pointer transition-all duration-200 hover:bg-[#1a2235]/90 flex items-center justify-between min-w-[120px]"
+        className={`w-full bg-[#1a2235]/80 text-white text-sm px-4 py-2 rounded-xl border border-white/10 cursor-pointer transition-all duration-200 hover:bg-[#1a2235]/90 flex items-center justify-between ${className}`}
       >
         <span className="truncate">{value}</span>
         <span className="ml-2 text-white/70">▼</span>
