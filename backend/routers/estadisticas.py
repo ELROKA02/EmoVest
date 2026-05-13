@@ -1052,6 +1052,292 @@ def get_estadisticas_diarias(
 
     return calcular_ganancia_neta_y_total_operaciones_diarias_mensual(db, cuenta.id, year, month)
 
+@router.get(
+    "/resumen-cuentas",
+    summary="Obtener resumen mensual de todas las cuentas de trading del usuario",
+    description=(
+        "Calcula un resumen estadistico mensual para cada cuenta de trading del usuario autenticado. "
+    ),
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "Resumen mensual de todas las cuentas calculado correctamente."
+        },
+        401: {
+            "description": "El usuario no esta autenticado o el token no es valido."
+        },
+        422: {
+            "description": "Los parametros de consulta no son validos."
+        }
+    },
+    tags=["estadisticas"]   
+)
+def get_resumen_mensual_todas_cuentas(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    year: int = Query(
+        default=None,
+        ge=2000,
+        le=2100,
+        description="Ano a consultar."
+    ),
+    month: int = Query(
+        default=None,
+        ge=1,
+        le=12,
+        description="Mes a consultar (1-12). Si no se envia junto con year, se usa el mes actual."
+    ),
+):
+    # Resolver año/mes por defecto
+    if year is None or month is None:
+        now = datetime.now()
+        year = year or now.year
+        month = month or now.month
+
+    inicio_mes = datetime(year, month, 1)
+    inicio_mes_siguiente = get_inicio_mes_siguiente(inicio_mes)
+
+    # Obtener todas las cuentas del usuario
+    cuentas = db.query(Cuenta_Trading).filter(
+        Cuenta_Trading.id_usuario == current_user.id
+    ).all()
+
+    if not cuentas:
+        return {
+            "ganancias_netas": 0.0,
+            "win_rate": 0.0,
+            "ganancias_promedio": 0.0,
+            "perdidas_promedio": 0.0,
+            "max_drawdown": {"drawdown_euros": 0.0, "drawdown_porcentaje": 0.0},
+            "media_operaciones_hasta_error": 0.0,
+            "media_operaciones_hasta_ganadora": 0.0,
+            "operaciones_ganadoras_consecutivas_actuales": 0,
+            "racha_ganadora_mas_larga": 0,
+            "racha_perdedora_mas_larga": 0,
+            "dia_semanal_mas_rentable": {"dia": None, "ganancia": 0.0},
+            "dia_semanal_menos_rentable": {"dia": None, "ganancia": 0.0},
+            "expectativa": 0.0,
+            "activo_mas_rentable": {"activo": None, "ganancia": 0.0},
+            "activo_menos_rentable": {"activo": None, "ganancia": 0.0},
+            "winrate_long_short": {"long": 0.0, "short": 0.0},
+            "saldo_diario": [],
+        }
+
+    cuenta_ids = [c.id for c in cuentas]
+
+    # Obtener todas las operaciones del mes de todas las cuentas, ordenadas cronologicamente
+    operaciones = db.query(Operacion).filter(
+        Operacion.id_cuenta.in_(cuenta_ids),
+        Operacion.fecha_hora >= inicio_mes,
+        Operacion.fecha_hora < inicio_mes_siguiente,
+    ).order_by(Operacion.fecha_hora.asc(), Operacion.id.asc()).all()
+
+    ops = [op for op in operaciones if op.resultado is not None]
+    ops_ganadoras = [op for op in ops if op.resultado > 0]
+    ops_perdedoras = [op for op in ops if op.resultado < 0]
+    total = len(ops)
+
+    # --- Ganancias netas: suma de todas las operaciones ---
+    ganancias_netas = float(sum(Decimal(str(op.resultado)) for op in ops)) if ops else 0.0
+
+    # --- Win rate: ganadoras / total de todas las cuentas ---
+    win_rate = round((len(ops_ganadoras) / total * 100), 2) if total > 0 else 0.0
+
+    # --- Promedios: media de las ganadoras y de las perdedoras ---
+    ganancias_promedio = float(
+        sum(Decimal(str(op.resultado)) for op in ops_ganadoras) / Decimal(len(ops_ganadoras))
+    ) if ops_ganadoras else 0.0
+    perdidas_promedio = float(
+        sum(Decimal(str(op.resultado)) for op in ops_perdedoras) / Decimal(len(ops_perdedoras))
+    ) if ops_perdedoras else 0.0
+
+    # --- Max drawdown sobre el P&L acumulado combinado ---
+    running = Decimal("0")
+    peak = Decimal("0")
+    max_dd_euros = Decimal("0")
+    max_dd_pct = Decimal("0")
+    for op in ops:
+        running += Decimal(str(op.resultado))
+        if running > peak:
+            peak = running
+        dd = peak - running
+        if dd > max_dd_euros:
+            max_dd_euros = dd
+        if peak > 0 and dd > 0:
+            pct = (dd / peak) * Decimal("100")
+            if pct > max_dd_pct:
+                max_dd_pct = pct
+    max_drawdown = {
+        "drawdown_euros": round(float(max_dd_euros), 2),
+        "drawdown_porcentaje": round(float(max_dd_pct), 2),
+    }
+
+    # --- Rachas (sobre el flujo cronologico combinado) ---
+    racha_g = 0
+    max_racha_g = 0
+    racha_p = 0
+    max_racha_p = 0
+    racha_actual_g = 0
+    for op in ops:
+        if op.resultado > 0:
+            racha_g += 1
+            racha_p = 0
+            racha_actual_g += 1
+            if racha_g > max_racha_g:
+                max_racha_g = racha_g
+        elif op.resultado < 0:
+            racha_p += 1
+            racha_g = 0
+            racha_actual_g = 0
+            if racha_p > max_racha_p:
+                max_racha_p = racha_p
+    racha_ganadora_mas_larga = max_racha_g
+    racha_perdedora_mas_larga = max_racha_p
+    operaciones_ganadoras_consecutivas_actuales = racha_actual_g
+
+    # --- Media de operaciones hasta error (rachas ganadoras) ---
+    rachas_ganadoras_lista = []
+    racha_tmp = 0
+    for op in ops:
+        if op.resultado < 0:
+            if racha_tmp > 0:
+                rachas_ganadoras_lista.append(racha_tmp)
+            racha_tmp = 0
+        elif op.resultado > 0:
+            racha_tmp += 1
+    if racha_tmp > 0:
+        rachas_ganadoras_lista.append(racha_tmp)
+    media_operaciones_hasta_error = float(
+        Decimal(str(sum(rachas_ganadoras_lista))) / Decimal(str(len(rachas_ganadoras_lista)))
+    ) if rachas_ganadoras_lista else 0.0
+
+    # --- Media de operaciones hasta ganadora (rachas perdedoras) ---
+    rachas_perdedoras_lista = []
+    racha_tmp = 0
+    for op in ops:
+        if op.resultado > 0:
+            if racha_tmp > 0:
+                rachas_perdedoras_lista.append(racha_tmp)
+            racha_tmp = 0
+        elif op.resultado < 0:
+            racha_tmp += 1
+    if racha_tmp > 0:
+        rachas_perdedoras_lista.append(racha_tmp)
+    media_operaciones_hasta_ganadora = float(
+        Decimal(str(sum(rachas_perdedoras_lista))) / Decimal(str(len(rachas_perdedoras_lista)))
+    ) if rachas_perdedoras_lista else 0.0
+
+    # --- Dia semanal mas/menos rentable (suma de todas las cuentas por dia) ---
+    ganancias_dia = {}
+    for op in ops:
+        dia = op.fecha_hora.strftime("%A")
+        if dia not in ganancias_dia:
+            ganancias_dia[dia] = Decimal("0")
+        ganancias_dia[dia] += Decimal(str(op.resultado))
+    if ganancias_dia:
+        dia_mas = max(ganancias_dia, key=ganancias_dia.get)
+        dia_menos = min(ganancias_dia, key=ganancias_dia.get)
+        dia_semanal_mas_rentable = {"dia": dia_mas, "ganancia": round(float(ganancias_dia[dia_mas]), 2)}
+        dia_semanal_menos_rentable = {"dia": dia_menos, "ganancia": round(float(ganancias_dia[dia_menos]), 2)}
+    else:
+        dia_semanal_mas_rentable = {"dia": None, "ganancia": 0.0}
+        dia_semanal_menos_rentable = {"dia": None, "ganancia": 0.0}
+
+    # --- Activo mas/menos rentable (suma de resultados por activo de todas las cuentas) ---
+    ganancias_activo = {}
+    for op in ops:
+        activo = op.activo
+        if activo not in ganancias_activo:
+            ganancias_activo[activo] = Decimal("0")
+        ganancias_activo[activo] += Decimal(str(op.resultado))
+    if ganancias_activo:
+        activo_mas = max(ganancias_activo, key=ganancias_activo.get)
+        activo_menos = min(ganancias_activo, key=ganancias_activo.get)
+        activo_mas_rentable = {"activo": activo_mas, "ganancia": round(float(ganancias_activo[activo_mas]), 2)}
+        activo_menos_rentable = {"activo": activo_menos, "ganancia": round(float(ganancias_activo[activo_menos]), 2)}
+    else:
+        activo_mas_rentable = {"activo": None, "ganancia": 0.0}
+        activo_menos_rentable = {"activo": None, "ganancia": 0.0}
+
+    # --- Winrate long/short: conteo combinado de todas las cuentas ---
+    ls = {"long": {"ganadoras": 0, "totales": 0}, "short": {"ganadoras": 0, "totales": 0}}
+    for op in ops:
+        tipo = str(op.tipo_operacion).strip().lower()
+        if tipo in ls:
+            ls[tipo]["totales"] += 1
+            if op.resultado > 0:
+                ls[tipo]["ganadoras"] += 1
+    winrate_long_short = {
+        tipo: round((datos["ganadoras"] / datos["totales"] * 100), 2) if datos["totales"] > 0 else 0.0
+        for tipo, datos in ls.items()
+    }
+
+    # --- Expectativa: calculada sobre los promedios agregados ---
+    loserate = 100 - win_rate
+    expectativa = (win_rate * ganancias_promedio) / 100 - (loserate * abs(perdidas_promedio)) / 100
+
+    # --- Saldo diario combinado: suma del saldo de todas las cuentas al final de cada dia ---
+    # Calcular el saldo base total al inicio del mes (saldo_inicial + ops previas de cada cuenta)
+    saldo_base_total = Decimal("0")
+    for cuenta in cuentas:
+        ops_previas = db.query(Operacion).filter(
+            Operacion.id_cuenta == cuenta.id,
+            Operacion.fecha_hora < inicio_mes,
+        ).all()
+        saldo_base_total += Decimal(str(cuenta.saldo_inicial))
+        for op_prev in ops_previas:
+            if op_prev.resultado is not None:
+                saldo_base_total += Decimal(str(op_prev.resultado))
+
+    # Agrupar resultados del mes por fecha
+    resultados_por_fecha = {}
+    for op in ops:
+        fecha_key = op.fecha_hora.date()
+        if fecha_key not in resultados_por_fecha:
+            resultados_por_fecha[fecha_key] = Decimal("0")
+        resultados_por_fecha[fecha_key] += Decimal(str(op.resultado))
+
+    saldo_acumulado = saldo_base_total
+    saldo_diario = []
+    fecha_actual_sd = None
+    for op in ops:
+        fecha_op = op.fecha_hora.date()
+        if fecha_actual_sd is None:
+            fecha_actual_sd = fecha_op
+        if fecha_op != fecha_actual_sd:
+            saldo_diario.append({
+                "fecha": fecha_actual_sd.isoformat(),
+                "saldo": round(float(saldo_acumulado), 2),
+            })
+            fecha_actual_sd = fecha_op
+        saldo_acumulado += Decimal(str(op.resultado))
+    if fecha_actual_sd is not None:
+        saldo_diario.append({
+            "fecha": fecha_actual_sd.isoformat(),
+            "saldo": round(float(saldo_acumulado), 2),
+        })
+
+    return {
+        "ganancias_netas": round(ganancias_netas, 2),
+        "win_rate": win_rate,
+        "ganancias_promedio": round(ganancias_promedio, 2),
+        "perdidas_promedio": round(perdidas_promedio, 2),
+        "max_drawdown": max_drawdown,
+        "media_operaciones_hasta_error": round(media_operaciones_hasta_error, 2),
+        "media_operaciones_hasta_ganadora": round(media_operaciones_hasta_ganadora, 2),
+        "operaciones_ganadoras_consecutivas_actuales": operaciones_ganadoras_consecutivas_actuales,
+        "racha_ganadora_mas_larga": racha_ganadora_mas_larga,
+        "racha_perdedora_mas_larga": racha_perdedora_mas_larga,
+        "dia_semanal_mas_rentable": dia_semanal_mas_rentable,
+        "dia_semanal_menos_rentable": dia_semanal_menos_rentable,
+        "expectativa": round(expectativa, 2),
+        "activo_mas_rentable": activo_mas_rentable,
+        "activo_menos_rentable": activo_menos_rentable,
+        "winrate_long_short": winrate_long_short,
+        "saldo_diario": saldo_diario,
+    }
+
+
 scheduler = BackgroundScheduler()
 
 scheduler.add_job(
