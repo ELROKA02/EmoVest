@@ -266,7 +266,7 @@ def signup(usuario: SignUp, db: Session = Depends(get_db)):
 
         if usuario.tipo_plan == "FREE":
             precio = 0
-            fecha_expiracion = now + timedelta(days=30)
+            fecha_expiracion = now + timedelta(weeks=2)
         elif usuario.tipo_plan == "PRO":
             precio = 14.99
             fecha_expiracion = now + timedelta(days=30)
@@ -416,6 +416,23 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     # Contraseña incorrecta
     if not verify_password(form_data.password, user.contrasena):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+
+    # Validar que la suscripción no haya expirado
+    suscripcion = db.query(Suscripcion).filter(
+        Suscripcion.id_usuario == user.id
+    ).first()
+
+    if not suscripcion:
+        raise HTTPException(
+            status_code=403,
+            detail="No hay suscripción asociada a esta cuenta"
+        )
+
+    if suscripcion.fecha_expiracion < datetime.utcnow():
+        raise HTTPException(
+            status_code=403,
+            detail="Tu suscripción ha expirado. Por favor, renueva tu plan."
+        )
 
     access_token = create_access_token(
         data={"sub": user.correo_electronico, "id": user.id},

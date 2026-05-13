@@ -28,3 +28,4 @@ def crear_suscripcion(db: Session, id_usuario: int, tipo_plan: str):
         precio=precio,
         fecha_expiracion=fecha_expiracion
     )
+
