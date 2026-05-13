@@ -484,6 +484,16 @@ const Dashboard = () => {
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
       ),
       path: '/estadisticas'
+    },
+    {
+      id: 'calendario',
+      name: 'Calendario',
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+      path: '/calendar'
     }
   ];
 
@@ -856,9 +866,12 @@ const Dashboard = () => {
                       <span className="text-red-400 text-sm font-medium">Peor día</span>
                       <span className="text-red-300 font-bold">{traducirDia(estadisticasCompletas.dia_semanal_menos_rentable.dia) || 'N/A'}</span>
                     </div>
-                    {estadisticasCompletas.dia_semanal_menos_rentable.dia && (
-                      <div className="text-red-300 text-xs mt-1">{formatCurrency(estadisticasCompletas.dia_semanal_menos_rentable.ganancia, selectedDivisa)}</div>
-                    )}
+                    <div className="text-red-300 text-xs mt-1">
+                      {estadisticasCompletas.dia_semanal_menos_rentable.dia && estadisticasCompletas.dia_semanal_menos_rentable.ganancia < 0
+                        ? formatCurrency(estadisticasCompletas.dia_semanal_menos_rentable.ganancia, selectedDivisa)
+                        : `${formatCurrency(0, selectedDivisa)}`
+                      }
+                    </div>
                   </div>
                 </div>
               </div>

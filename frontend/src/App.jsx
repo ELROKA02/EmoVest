@@ -10,6 +10,7 @@ import Dashboard from './components/Dashboard';
 import OperacionesTrading from './components/OperacionesTrading';
 import PerfilUsuario from './components/PerfilUsuario';
 import EstadisticasEmocionales from './components/EstadisticasEmocionales';
+import Calendar from './components/calendar';
 
 import { useEffect } from 'react';
 
@@ -44,6 +45,7 @@ function AppContent() {
           <Route path="/trading" element={<OperacionesTrading />} />
           <Route path="/perfil" element={<PerfilUsuario />} />
           <Route path="/estadisticas" element={<EstadisticasEmocionales />} />
+          <Route path="/calendar" element={<Calendar />} />
         </Routes>
       </main>
       {isHomePage && <Footer />}
