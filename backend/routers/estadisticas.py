@@ -837,7 +837,7 @@ def calcular_ganancia_neta_y_total_operaciones_diarias_mensual(
     year: int = None,
     month: int = None,
 ) -> list[dict]:
-    """Calcula la ganancia neta y el total de operaciones diarias para cada dia del mes indicado."""
+    """Calcula metricas diarias del mes: ganancia neta, total de operaciones y notas por dia."""
     if year is None or month is None:
         now = datetime.now()
         year = now.year
@@ -855,16 +855,20 @@ def calcular_ganancia_neta_y_total_operaciones_diarias_mensual(
     resultados_diarios = {}
 
     for operacion in operaciones:
-        if operacion.resultado is None:
-            continue
-
         fecha_str = operacion.fecha_hora.date().isoformat()
 
         if fecha_str not in resultados_diarios:
             resultados_diarios[fecha_str] = {
                 "ganancia_neta": Decimal("0"),
-                "total_operaciones": 0
+                "total_operaciones": 0,
+                "notas_operaciones": []
             }
+
+        if operacion.notas:
+            resultados_diarios[fecha_str]["notas_operaciones"].append(operacion.notas)
+
+        if operacion.resultado is None:
+            continue
 
         resultados_diarios[fecha_str]["total_operaciones"] += 1
         resultados_diarios[fecha_str]["ganancia_neta"] += Decimal(str(operacion.resultado))
@@ -874,7 +878,8 @@ def calcular_ganancia_neta_y_total_operaciones_diarias_mensual(
         resultados_formateados.append({
             "fecha": fecha,
             "ganancia_neta": round(float(datos["ganancia_neta"]), 2),
-            "total_operaciones": datos["total_operaciones"]
+            "total_operaciones": datos["total_operaciones"],
+            "notas_operaciones": datos["notas_operaciones"]
         })
 
     return resultados_formateados
@@ -1009,9 +1014,9 @@ def get_estadisticas_emociones_mensuales(
 
 @router.get(
     "/calendario",
-    summary="Obtener ganancia neta y total de operaciones diarias de una cuenta de trading durante un mes",
+    summary="Obtener ganancia neta, total y notas de operaciones diarias de una cuenta de trading durante un mes",
     description=(
-        "Calcula la ganancia neta y el total de operaciones diarias para cada dia del mes indicado."
+        "Calcula la ganancia neta, el total de operaciones y las notas diarias para cada dia del mes indicado."
     ),
     status_code=status.HTTP_200_OK,
     responses={
