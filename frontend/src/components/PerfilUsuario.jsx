@@ -66,6 +66,10 @@ const PerfilUsuario = () => {
     setLoadingCuentas(true);
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
       const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -84,11 +88,12 @@ const PerfilUsuario = () => {
     }
   };
 
-  useEffect(() => {
-    if (currentView === 'Información de Cuentas') {
+  const handleViewChange = (view) => {
+    setCurrentView(view);
+    if (view === 'Información de Cuentas') {
       fetchCuentas();
     }
-  }, [currentView]);
+  };
 
   const handleAccountSubmit = async (e) => {
     e.preventDefault();
@@ -275,7 +280,7 @@ const PerfilUsuario = () => {
                 <div className="w-full md:w-64">
                   <CustomSelect
                     value={currentView}
-                    onChange={setCurrentView}
+                    onChange={handleViewChange}
                     options={['Información Personal', 'Información de Cuentas']}
                   />
                 </div>
