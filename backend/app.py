@@ -12,7 +12,7 @@ app = FastAPI(
         "define directamente en FastAPI para que Swagger UI refleje con precision los "
         "endpoints disponibles y sus respuestas."
     ),
-    version="0.1.1",
+    version="0.3.1",
     contact={
         "name": "Equipo EMOVEST"
     },

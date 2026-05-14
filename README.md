@@ -8,7 +8,7 @@ https://github.com/user-attachments/assets/7aa16d35-055a-4fea-b33c-defe37a71cf4
 
 
 
-![versión](https://img.shields.io/badge/versión-0.1.1-blue)
+![versión](https://img.shields.io/badge/versión-0.3.1-blue)
 
 ---
 
