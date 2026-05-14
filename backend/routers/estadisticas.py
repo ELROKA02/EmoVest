@@ -884,7 +884,6 @@ def calcular_ganancia_neta_y_total_operaciones_diarias_mensual(
     summary="Obtener resumen estadistico mensual de una cuenta",
     description=(
         "Calcula las metricas estadisticas del mes seleccionado para la cuenta de trading del usuario autenticado. "
-        "Si year y month no se envian, se utiliza el mes actual del servidor."
     ),
     status_code=status.HTTP_200_OK,
     responses={
@@ -1152,7 +1151,7 @@ def get_resumen_mensual_todas_cuentas(
     ) if ops_perdedoras else 0.0
 
     # --- Max drawdown sobre el P&L acumulado combinado ---
-    running = Decimal("0")
+    running = Decimal("0")      # Saldo actual mientras iteramos cronologicamente
     peak = Decimal("0")
     max_dd_euros = Decimal("0")
     max_dd_pct = Decimal("0")
