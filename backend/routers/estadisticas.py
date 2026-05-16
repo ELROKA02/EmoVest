@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date as date_type
 
 from decimal import Decimal
 from typing import Annotated
@@ -91,8 +91,9 @@ def calcular_saldo_diario_mensual(
         if operacion_previa.resultado is not None:
             resultado_acumulado_previo += Decimal(str(operacion_previa.resultado))
 
+    saldo_inicio_mes = Decimal(str(cuenta.saldo_inicial)) + resultado_acumulado_previo
     saldo_diario = []
-    saldo_actual = Decimal(str(cuenta.saldo_inicial)) + resultado_acumulado_previo
+    saldo_actual = saldo_inicio_mes
     fecha_actual = None
 
     for operacion in operaciones:
@@ -115,6 +116,16 @@ def calcular_saldo_diario_mensual(
         saldo_diario.append({
             "fecha": fecha_actual.isoformat(),
             "saldo": round(float(saldo_actual), 2)
+        })
+
+    # Añadir punto de saldo al inicio del mes para que el frontend pueda
+    # dibujar la línea desde el día 1 con el saldo correcto de arranque.
+    inicio_mes_date = date_type(year, month, 1)
+    if saldo_diario and saldo_diario[0]["fecha"] != inicio_mes_date.isoformat():
+        saldo_diario.insert(0, {
+            "fecha": inicio_mes_date.isoformat(),
+            "saldo": round(float(saldo_inicio_mes), 2),
+            "es_inicio_mes": True,
         })
 
     return saldo_diario

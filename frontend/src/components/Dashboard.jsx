@@ -82,9 +82,10 @@ const Dashboard = () => {
   });
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [tradingAccounts, setTradingAccounts] = useState([]);
+  const ALL_ACCOUNTS = 'all';
   const [selectedAccount, setSelectedAccount] = useState(() => {
     const saved = localStorage.getItem('selectedAccountId');
-    return saved ? parseInt(saved) : '';
+    return saved ? (saved === 'all' ? 'all' : parseInt(saved)) : 'all';
   });
 
   // Estados para el selector de fecha y ganancias
@@ -98,7 +99,7 @@ const Dashboard = () => {
 
   // Guardar cuenta seleccionada en localStorage cuando cambia
   useEffect(() => {
-    if (selectedAccount) {
+    if (selectedAccount !== '') {
       localStorage.setItem('selectedAccountId', selectedAccount);
     }
   }, [selectedAccount]);
@@ -238,7 +239,7 @@ const Dashboard = () => {
 
   // Función para obtener estadísticas del backend
   const fetchEstadisticasCompletas = async () => {
-    if (!selectedAccount) {
+    if (selectedAccount === '') {
       setGananciasNetas(null);
       setEstadisticasCompletas(null);
       return;
@@ -247,14 +248,12 @@ const Dashboard = () => {
     setLoadingEstadisticas(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(
-        `http://localhost:8000/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
+      const url = selectedAccount === 'all'
+        ? `http://localhost:8000/cuentas/0/estadisticas/resumen-cuentas?year=${selectedYear}&month=${selectedMonth}`
+        : `http://localhost:8000/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -278,10 +277,14 @@ const Dashboard = () => {
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
   };
-  const selectedAccountObj = tradingAccounts.find(account => account.id === selectedAccount);
+  const selectedAccountObj = selectedAccount === 'all' ? null : tradingAccounts.find(account => account.id === selectedAccount);
   const selectedDivisa = selectedAccountObj?.divisa || 'EUR';
-  const saldoActualCuenta = Number(selectedAccountObj?.saldo_actual ?? selectedAccountObj?.saldo_inicial ?? 0);
-  const saldoInicialCuenta = Number(selectedAccountObj?.saldo_inicial ?? 0);
+  const saldoActualCuenta = selectedAccount === 'all'
+    ? tradingAccounts.reduce((sum, acc) => sum + Number(acc.saldo_actual ?? acc.saldo_inicial ?? 0), 0)
+    : Number(selectedAccountObj?.saldo_actual ?? selectedAccountObj?.saldo_inicial ?? 0);
+  const saldoInicialCuenta = selectedAccount === 'all'
+    ? tradingAccounts.reduce((sum, acc) => sum + Number(acc.saldo_inicial ?? 0), 0)
+    : Number(selectedAccountObj?.saldo_inicial ?? 0);
   const accountOptionText = account => `${account.nombre_cuenta} (${account.divisa}) - ${formatCurrency(account.saldo_inicial, account.divisa)}`;
   const saldoPlaceholder = formatCurrency(0, accountData.divisa);
   const saldoDiarioChartData = (() => {
@@ -309,6 +312,9 @@ const Dashboard = () => {
       saldoPorDia.set(fecha.getDate(), Number(item.saldo));
     });
 
+    // El backend incluye siempre un punto para el día 1 del mes con el saldo
+    // de arranque (saldo_inicial + ops de meses anteriores), por lo que saldoPorDia
+    // tendrá el día 1 cubierto. El saldo inicial es solo fallback si no hay datos.
     let saldoActual = Number(selectedAccountObj?.saldo_inicial ?? 0);
     const serie = [];
 
@@ -518,21 +524,24 @@ const Dashboard = () => {
               <label className="text-white font-medium">Cuentas:</label>
               <CustomSelect
                 value={
-                  selectedAccountObj
-                    ? accountOptionText(selectedAccountObj)
-                    : 'No hay cuentas disponibles'
+                  selectedAccount === 'all'
+                    ? 'Todas las cuentas'
+                    : selectedAccountObj
+                      ? accountOptionText(selectedAccountObj)
+                      : 'No hay cuentas disponibles'
                 }
                 onChange={(selectedText) => {
-                  const selectedAccountObj = tradingAccounts.find(account => accountOptionText(account) === selectedText);
-                  if (selectedAccountObj) {
-                    setSelectedAccount(selectedAccountObj.id);
+                  if (selectedText === 'Todas las cuentas') {
+                    setSelectedAccount('all');
+                  } else {
+                    const acc = tradingAccounts.find(account => accountOptionText(account) === selectedText);
+                    if (acc) setSelectedAccount(acc.id);
                   }
                 }}
-                options={
-                  tradingAccounts.length === 0
-                    ? ['No hay cuentas disponibles']
-                    : tradingAccounts.map(account => accountOptionText(account))
-                }
+                options={[
+                  'Todas las cuentas',
+                  ...tradingAccounts.map(account => accountOptionText(account))
+                ]}
               />
             </div>
           </div>
@@ -949,7 +958,7 @@ const Dashboard = () => {
 
         {/* Formulario modal para crear cuenta */}
         {showAccountForm && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[1100] p-4">
             <div className="bg-[#1a2235] rounded-2xl p-6 border border-white/20 w-full max-w-md shadow-2xl">
               <h2 className="text-xl font-bold mb-4 text-white">Crear Cuenta Trading</h2>
               <form onSubmit={handleAccountSubmit} className="space-y-3">

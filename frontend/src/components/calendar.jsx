@@ -21,9 +21,11 @@ const Calendar = () => {
     const saved = localStorage.getItem('selectedAccountId');
     return saved ? saved : '';
   });
+  const [cuentas, setCuentas] = useState([]);
   const [estadisticasDiarias, setEstadisticasDiarias] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [diaSeleccionado, setDiaSeleccionado] = useState(null);
   const calendarRef = useRef(null);
 
   const currentYear = new Date().getFullYear();
@@ -51,6 +53,28 @@ const Calendar = () => {
       localStorage.setItem('selectedAccountId', cuentaSeleccionada);
     }
   }, [cuentaSeleccionada]);
+
+  useEffect(() => {
+    const cargarCuentas = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCuentas(data);
+          if (data.length > 0 && !cuentaSeleccionada) {
+            setCuentaSeleccionada(data[0].id.toString());
+          }
+        }
+      } catch (err) {
+        console.error('Error al cargar cuentas:', err);
+      }
+    };
+    cargarCuentas();
+  }, []);
 
   useEffect(() => {
     const cargarOperaciones = async () => {
@@ -81,27 +105,7 @@ const Calendar = () => {
   }, [cuentaSeleccionada, year, month]);
 
   useEffect(() => {
-    // Exponer funciones globalmente para que los controles del calendario puedan usarlas
-    window.setYear = setYear;
-    window.setMonth = setMonth;
-    
-    return () => {
-      // Limpiar funciones globales al desmontar
-      delete window.setYear;
-      delete window.setMonth;
-    };
-  }, [setYear, setMonth]);
-
-  useEffect(() => {
-    // Actualizar los selectores cuando cambian las variables de estado
-    const monthSelect = document.getElementById('calendar-month-select');
-    const yearSelect = document.getElementById('calendar-year-select');
-    if (monthSelect) monthSelect.value = month;
-    if (yearSelect) yearSelect.value = year;
-  }, [month, year]);
-
-  useEffect(() => {
-    // Navegar el calendario al mes y año seleccionados
+    // Navegar el calendario al mes y año seleccionados cuando cambian desde los selects
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
       if (calendarApi) {
@@ -391,9 +395,24 @@ const Calendar = () => {
                   <h3 className="text-white font-bold text-xl">Calendario de Operaciones</h3>
                 </div>
               </div>
-              
-              {/* Controles de navegación de fecha */}
-              <div className="flex justify-end items-center gap-2 mb-4">
+
+              {/* Fila: select de cuenta (izquierda) + controles de fecha (derecha) */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-300 font-medium">Cuenta:</label>
+                  <CustomSelect
+                    value={cuentas.find(c => c.id.toString() === cuentaSeleccionada)?.nombre_cuenta || 'Sin cuenta'}
+                    onChange={(val) => {
+                      const cuenta = cuentas.find(c => c.nombre_cuenta === val);
+                      if (cuenta) setCuentaSeleccionada(cuenta.id.toString());
+                    }}
+                    options={cuentas.length === 0 ? ['Sin cuenta'] : cuentas.map(c => c.nombre_cuenta)}
+                    className="w-36"
+                  />
+                </div>
+
+                {/* Controles de navegación de fecha */}
+                <div className="flex items-center gap-2">
                 <button 
                   onClick={() => {
                     const currentDate = new Date();
@@ -409,7 +428,7 @@ const Calendar = () => {
                   </svg>
                   Hoy
                 </button>
-                
+
                 <CustomSelect
                   value={meses.find(m => m.id === month)?.nombre || 'Enero'}
                   onChange={(val) => setMonth(meses.find(m => m.nombre === val)?.id || '1')}
@@ -423,6 +442,7 @@ const Calendar = () => {
                   options={Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => year.toString())}
                   className="w-24 z-50"
                 />
+                </div>
               </div>
               
               {loading ? (
@@ -449,10 +469,16 @@ const Calendar = () => {
                       center: 'title',
                       right: ''
                     }}
+                    dateClick={(arg) => {
+                      const dateStr = arg.dateStr;
+                      const stats = estadisticasDiarias.find(s => s.fecha === dateStr);
+                      setDiaSeleccionado({ fecha: dateStr, stats: stats || null });
+                    }}
                     dayCellDidMount={(arg) => {
                       const dateStr = arg.date.toLocaleDateString('en-CA');
                       const stats = estadisticasDiarias.find(s => s.fecha === dateStr);
                       if (!stats) return;
+                      const divisa = cuentas.find(c => c.id.toString() === cuentaSeleccionada)?.divisa || 'EUR';
                       const color = stats.ganancia_neta > 0 ? '#10f981' : stats.ganancia_neta < 0 ? '#f87171' : '#9ca3af';
                       const bg = stats.ganancia_neta > 0 ? 'rgba(16,185,129,0.25)' : stats.ganancia_neta < 0 ? 'rgba(239,68,68,0.25)' : 'rgba(107,114,128,0.12)';
                       const border = stats.ganancia_neta > 0 ? 'rgba(16,185,129,0.3)' : stats.ganancia_neta < 0 ? 'rgba(239,68,68,0.3)' : 'rgba(107,114,128,0.3)';
@@ -476,7 +502,7 @@ const Calendar = () => {
                       `;
                       overlay.innerHTML = `
                         <div style="font-size:0.95rem;font-weight:800;color:${color};line-height:1.2">
-                          ${stats.ganancia_neta > 0 ? '+' : stats.ganancia_neta < 0 ? '-' : ''}${formatCurrency(Math.abs(stats.ganancia_neta), 'USD')}
+                          ${stats.ganancia_neta > 0 ? '+' : stats.ganancia_neta < 0 ? '-' : ''}${formatCurrency(Math.abs(stats.ganancia_neta), divisa)}
                         </div>
                         <div style="font-size:0.72rem;font-weight:600;color:rgba(255,255,255,0.6);line-height:1">
                           ${stats.total_operaciones} op${stats.total_operaciones !== 1 ? 's' : ''}
@@ -484,6 +510,13 @@ const Calendar = () => {
                       `;
                       frame.style.position = 'relative';
                       frame.appendChild(overlay);
+                    }}
+                    datesSet={(dateInfo) => {
+                      const d = dateInfo.view.currentStart;
+                      const newMonth = (d.getMonth() + 1).toString();
+                      const newYear = d.getFullYear().toString();
+                      setMonth(prev => prev !== newMonth ? newMonth : prev);
+                      setYear(prev => prev !== newYear ? newYear : prev);
                     }}
                     height="auto"
                     aspectRatio={1.8}
@@ -498,6 +531,39 @@ const Calendar = () => {
                       list: 'Lista'
                     }}
                   />
+                </div>
+              )}
+
+              {/* Panel de notas del día seleccionado */}
+              {diaSeleccionado && (
+                <div className="mt-6 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full bg-yellow-400 shadow-lg shadow-yellow-400/40"></div>
+                      <h3 className="text-white font-bold text-lg">
+                        Notas del {new Date(diaSeleccionado.fecha + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setDiaSeleccionado(null)}
+                      className="text-gray-400 hover:text-white transition-colors text-xl leading-none"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {!diaSeleccionado.stats || diaSeleccionado.stats.notas_operaciones.length === 0 ? (
+                    <p className="text-gray-400 text-sm italic">No hay notas registradas en las operaciones de este día.</p>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {diaSeleccionado.stats.notas_operaciones.map((nota, i) => (
+                        <div key={i} className="flex gap-3 bg-white/5 rounded-xl p-4 border border-white/10">
+                          <div className="mt-1 w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0"></div>
+                          <p className="text-gray-200 text-sm leading-relaxed">{nota}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
