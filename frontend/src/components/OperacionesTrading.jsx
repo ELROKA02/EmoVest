@@ -476,20 +476,20 @@ const OperacionesTrading = () => {
                 />
               </div>
 
-              <div className="flex flex-col items-start sm:items-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowFilters(prev => !prev)}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-full text-sm transition-all"
-                >
-                  {showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
-                </button>
+              <div className="flex flex-col items-start sm:items-end gap-6">
                 <button
                   onClick={handleCreate}
                   disabled={!cuentaSeleccionada || loading}
                   className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-all duration-300"
                 >
                   {loading ? 'Cargando...' : 'Crear Operación'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFilters(prev => !prev)}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-full text-sm transition-all"
+                >
+                  {showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
                 </button>
               </div>
             </div>
@@ -498,41 +498,29 @@ const OperacionesTrading = () => {
                 <div className="grid gap-4 lg:grid-cols-4 items-end">
                   <div className="flex flex-col gap-2">
                     <label className="text-sm text-gray-300">Filtrar por tipo</label>
-                    <select
-                      value={filterType}
-                      onChange={(e) => setFilterType(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-[#1a2235]/90 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                    >
-                      <option value="TODOS">Todos</option>
-                      <option value="LONG">LONG</option>
-                      <option value="SHORT">SHORT</option>
-                    </select>
+                    <CustomSelect
+                      value={filterType === 'TODOS' ? 'Todos' : filterType}
+                      onChange={(val) => setFilterType(val === 'Todos' ? 'TODOS' : val)}
+                      options={['Todos', 'LONG', 'SHORT']}
+                    />
                   </div>
 
                   <div className="flex flex-col gap-2">
                     <label className="text-sm text-gray-300">Filtrar por activo</label>
-                    <select
-                      value={filterActivo}
-                      onChange={(e) => setFilterActivo(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-[#1a2235]/90 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                    >
-                      <option value="TODOS">Todos</option>
-                      {activosDisponibles.map(activo => (
-                        <option key={activo} value={activo}>{activo}</option>
-                      ))}
-                    </select>
+                    <CustomSelect
+                      value={filterActivo === 'TODOS' ? 'Todos' : filterActivo}
+                      onChange={(val) => setFilterActivo(val === 'Todos' ? 'TODOS' : val)}
+                      options={['Todos', ...activosDisponibles]}
+                    />
                   </div>
 
                   <div className="flex flex-col gap-2">
                     <label className="text-sm text-gray-300">Ordenar por</label>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-[#1a2235]/90 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                    >
-                      <option value="fecha">Fecha</option>
-                      <option value="beneficio">Beneficio</option>
-                    </select>
+                    <CustomSelect
+                      value={sortBy === 'fecha' ? 'Fecha' : 'Beneficio'}
+                      onChange={(val) => setSortBy(val === 'Fecha' ? 'fecha' : 'beneficio')}
+                      options={['Fecha', 'Beneficio']}
+                    />
                   </div>
 
                   <div className="flex flex-col gap-2">
@@ -549,7 +537,7 @@ const OperacionesTrading = () => {
               </div>
             )}
 
-            <div className="mt-12 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 overflow-x-auto">
+            <div className="mt-4 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 overflow-x-auto">
               {loading && (
                 <div className="py-8 text-center text-gray-300">
                   <p>Cargando operaciones...</p>
