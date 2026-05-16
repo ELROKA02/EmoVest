@@ -2,7 +2,7 @@ import React from 'react';
 
 const Footer = () => {
   // Ocultar footer si el usuario ha iniciado sesión
-  const isLoggedIn = !!localStorage.getItem('token');
+  const isLoggedIn = !!sessionStorage.getItem('token');
   
   if (isLoggedIn) {
     return null;

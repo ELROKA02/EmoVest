@@ -56,7 +56,7 @@ const Calendar = () => {
 
   useEffect(() => {
     const cargarCuentas = async () => {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       if (!token) return;
       try {
         const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
@@ -82,7 +82,7 @@ const Calendar = () => {
       setLoading(true);
       setError(null);
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         if (!token) {
           setError('No hay sesión activa');
           return;
@@ -115,7 +115,7 @@ const Calendar = () => {
   }, [month, year]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
     localStorage.removeItem('userName');
     navigate('/login');

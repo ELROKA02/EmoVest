@@ -25,7 +25,7 @@ const Login = () => {
             if (response.ok) {
                 const data = await response.json();
                 console.log('✅ Login exitoso:', data);
-                localStorage.setItem('token', data.access_token);
+                sessionStorage.setItem('token', data.access_token);
                 try {
                     await fetchAndStoreUserName();
                 } catch (meError) {

@@ -247,7 +247,7 @@ const Dashboard = () => {
 
     setLoadingEstadisticas(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const url = selectedAccount === 'all'
         ? `http://localhost:8000/cuentas/0/estadisticas/resumen-cuentas?year=${selectedYear}&month=${selectedMonth}`
         : `http://localhost:8000/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`;
@@ -341,7 +341,7 @@ const Dashboard = () => {
   const yDomain = [minSaldo - paddingY, maxSaldo + paddingY];
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
     localStorage.removeItem('userName');
     navigate('/login');
@@ -351,7 +351,7 @@ const Dashboard = () => {
     e.preventDefault();
 
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await fetch('http://localhost:8000/cuentas/crearcuenta', {
         method: 'POST',
         headers: {
@@ -407,7 +407,7 @@ const Dashboard = () => {
   // Fetch trading accounts on component mount
   const fetchTradingAccounts = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
         method: 'GET',
         headers: {

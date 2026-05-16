@@ -8,7 +8,7 @@ import { formatCurrency } from '../utils/currency';
 const API_BASE_URL = 'http://localhost:8000';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
   return {
     'Content-Type': 'application/json',
     ...(token && { 'Authorization': `Bearer ${token}` })
@@ -172,7 +172,7 @@ const OperacionesTrading = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
     localStorage.removeItem('userName');
     navigate('/login');
