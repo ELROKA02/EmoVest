@@ -7,7 +7,7 @@ function Navbar() {
   const [hoveredButton, setHoveredButton] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const isLoggedIn = !!localStorage.getItem('token');
+  const isLoggedIn = !!sessionStorage.getItem('token');
   const showLogout = isLoggedIn && location.pathname === '/dashboard';
 
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
@@ -46,7 +46,7 @@ function Navbar() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
     localStorage.removeItem('userName');
     setIsOpen(false);

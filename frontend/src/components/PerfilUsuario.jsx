@@ -34,7 +34,7 @@ const PerfilUsuario = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         if (!token) {
           navigate('/login');
           return;
@@ -65,7 +65,7 @@ const PerfilUsuario = () => {
   const fetchCuentas = async () => {
     setLoadingCuentas(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       if (!token) {
         navigate('/login');
         return;
@@ -97,7 +97,7 @@ const PerfilUsuario = () => {
 
   const handleAccountSubmit = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     const isEditing = !!editingAccount;
     const url = isEditing
       ? `http://localhost:8000/cuentas/actualizarcuenta/${editingAccount.id}`
@@ -139,7 +139,7 @@ const PerfilUsuario = () => {
   const handleDeleteCuenta = async (id) => {
     if (!window.confirm('¿Estás seguro de eliminar esta cuenta de trading? Esta acción no se puede deshacer.')) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await fetch(`http://localhost:8000/cuentas/eliminarcuenta/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -196,7 +196,7 @@ const PerfilUsuario = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await fetch(`http://localhost:8000/cuentas/actualizarcuenta/${selectedAccountForFunds.id}`, {
         method: 'PUT',
         headers: {
@@ -227,7 +227,7 @@ const PerfilUsuario = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
     localStorage.removeItem('userName');
     navigate('/login');

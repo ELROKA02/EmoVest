@@ -72,7 +72,7 @@ const EstadisticasEmocionales = () => {
   useEffect(() => {
     const cargarCuentas = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -102,7 +102,7 @@ const EstadisticasEmocionales = () => {
       setLoading(true);
       setError(null);
       try {
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         const response = await fetch(`http://localhost:8000/cuentas/${cuentaSeleccionada}/estadisticas/emociones?year=${year}&month=${month}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -122,7 +122,7 @@ const EstadisticasEmocionales = () => {
   }, [cuentaSeleccionada, year, month]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     localStorage.removeItem('rememberedEmail');
     localStorage.removeItem('userName');
     navigate('/login');

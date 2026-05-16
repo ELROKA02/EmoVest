@@ -12,23 +12,9 @@ import PerfilUsuario from './components/PerfilUsuario';
 import EstadisticasEmocionales from './components/EstadisticasEmocionales';
 import Calendar from './components/calendar';
 
-import { useEffect } from 'react';
-
 function AppContent() {
   const location = useLocation();
   const isHomePage = location.pathname === '/';
-
-  useEffect(() => {
-    const handleUnload = () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('userName');
-    };
-
-    window.addEventListener('beforeunload', handleUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleUnload);
-    };
-  }, []);
 
   return (
     <div className="min-h-screen flex flex-col">
