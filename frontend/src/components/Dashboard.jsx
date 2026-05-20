@@ -801,7 +801,7 @@ const Dashboard = () => {
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-4 h-4 rounded-full bg-cyan-500 shadow-lg shadow-cyan-500/50"></div>
-                  <h3 className="text-white font-bold text-lg">Estadísticas</h3>
+                  <h3 className="text-white font-bold text-lg">Racha media</h3>
                   <InfoIcon text="Promedio de operaciones hasta ganar/perder y racha actual de operaciones ganadoras" />
                 </div>
                 <div className="space-y-3">
