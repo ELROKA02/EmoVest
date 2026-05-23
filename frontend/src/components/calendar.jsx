@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
+import { API_BASE_URL } from '../config';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -59,7 +60,7 @@ const Calendar = () => {
       const token = sessionStorage.getItem('token');
       if (!token) return;
       try {
-        const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
+        const response = await fetch(`${API_BASE_URL}/cuentas/vercuentas`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
@@ -88,7 +89,7 @@ const Calendar = () => {
           return;
         }
         const statsResponse = await fetch(
-          `http://localhost:8000/cuentas/${cuentaSeleccionada}/estadisticas/calendario?year=${year}&month=${month}`,
+          `${API_BASE_URL}/cuentas/${cuentaSeleccionada}/estadisticas/calendario?year=${year}&month=${month}`,
           { headers: { 'Authorization': `Bearer ${token}` } }
         );
         if (statsResponse.ok) {

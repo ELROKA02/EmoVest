@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
+import { API_BASE_URL } from '../config';
 
 const EstadisticasEmocionales = () => {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -73,7 +74,7 @@ const EstadisticasEmocionales = () => {
     const cargarCuentas = async () => {
       try {
         const token = sessionStorage.getItem('token');
-        const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
+        const response = await fetch(`${API_BASE_URL}/cuentas/vercuentas`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
@@ -103,7 +104,7 @@ const EstadisticasEmocionales = () => {
       setError(null);
       try {
         const token = sessionStorage.getItem('token');
-        const response = await fetch(`http://localhost:8000/cuentas/${cuentaSeleccionada}/estadisticas/emociones?year=${year}&month=${month}`, {
+        const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/estadisticas/emociones?year=${year}&month=${month}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
