@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import logo from '../assets/logoEmoVest.png'; 
 import { Link, useNavigate } from 'react-router-dom';
 import { fetchAndStoreUserName } from '../utils/userSession';
+import { API_BASE_URL } from '../config';
 
 const Login = () => {
     const [email, setEmail] = useState(() => localStorage.getItem('rememberedEmail') || '');
@@ -18,7 +19,7 @@ const Login = () => {
             formData.append('username', email);
             formData.append('password', password);
 
-            const response = await fetch('http://localhost:8000/login', {
+            const response = await fetch(`${API_BASE_URL}/login`, {
                 method: 'POST',
                 body: formData, // Enviar como FormData, no JSON
             });

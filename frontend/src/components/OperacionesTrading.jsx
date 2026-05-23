@@ -4,8 +4,7 @@ import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
-
-const API_BASE_URL = 'http://localhost:8000';
+import { API_BASE_URL } from '../config';
 
 const getAuthHeaders = () => {
   const token = sessionStorage.getItem('token');

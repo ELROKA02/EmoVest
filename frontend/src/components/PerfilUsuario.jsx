@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
 import { formatCurrency } from '../utils/currency';
+import { API_BASE_URL } from '../config';
 
 const PerfilUsuario = () => {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -39,7 +40,7 @@ const PerfilUsuario = () => {
           navigate('/login');
           return;
         }
-        const response = await fetch('http://localhost:8000/me', {
+        const response = await fetch(`${API_BASE_URL}/me`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -70,7 +71,7 @@ const PerfilUsuario = () => {
         navigate('/login');
         return;
       }
-      const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
+      const response = await fetch(`${API_BASE_URL}/cuentas/vercuentas`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -100,8 +101,8 @@ const PerfilUsuario = () => {
     const token = sessionStorage.getItem('token');
     const isEditing = !!editingAccount;
     const url = isEditing
-      ? `http://localhost:8000/cuentas/actualizarcuenta/${editingAccount.id}`
-      : 'http://localhost:8000/cuentas/crearcuenta';
+      ? `${API_BASE_URL}/cuentas/actualizarcuenta/${editingAccount.id}`
+      : `${API_BASE_URL}/cuentas/crearcuenta`;
     const method = isEditing ? 'PUT' : 'POST';
 
     const payload = isEditing ? {
@@ -140,7 +141,7 @@ const PerfilUsuario = () => {
     if (!window.confirm('¿Estás seguro de eliminar esta cuenta de trading? Esta acción no se puede deshacer.')) return;
     try {
       const token = sessionStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/cuentas/eliminarcuenta/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/cuentas/eliminarcuenta/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -197,7 +198,7 @@ const PerfilUsuario = () => {
 
     try {
       const token = sessionStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/cuentas/actualizarcuenta/${selectedAccountForFunds.id}`, {
+      const response = await fetch(`${API_BASE_URL}/cuentas/actualizarcuenta/${selectedAccountForFunds.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

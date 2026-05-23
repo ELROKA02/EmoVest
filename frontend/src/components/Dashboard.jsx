@@ -5,6 +5,7 @@ import CustomSelect from './CustomSelect';
 import Sidebar from './Sidebar';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
+import { API_BASE_URL } from '../config';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 const InfoIcon = ({ text }) => (
@@ -249,8 +250,8 @@ const Dashboard = () => {
     try {
       const token = sessionStorage.getItem('token');
       const url = selectedAccount === 'all'
-        ? `http://localhost:8000/cuentas/0/estadisticas/resumen-cuentas?year=${selectedYear}&month=${selectedMonth}`
-        : `http://localhost:8000/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`;
+        ? `${API_BASE_URL}/cuentas/0/estadisticas/resumen-cuentas?year=${selectedYear}&month=${selectedMonth}`
+        : `${API_BASE_URL}/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -352,7 +353,7 @@ const Dashboard = () => {
 
     try {
       const token = sessionStorage.getItem('token');
-      const response = await fetch('http://localhost:8000/cuentas/crearcuenta', {
+      const response = await fetch(`${API_BASE_URL}/cuentas/crearcuenta`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -408,7 +409,7 @@ const Dashboard = () => {
   const fetchTradingAccounts = async () => {
     try {
       const token = sessionStorage.getItem('token');
-      const response = await fetch('http://localhost:8000/cuentas/vercuentas', {
+      const response = await fetch(`${API_BASE_URL}/cuentas/vercuentas`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
