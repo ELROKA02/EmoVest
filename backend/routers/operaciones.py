@@ -5,13 +5,12 @@ from typing import Annotated, Literal, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
-from jose import JWTError, jwt
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Cuenta_Trading, Operacion, Usuario
-from routers.auth import ALGORITHM, SECRET_KEY, get_current_user
+from routers.auth import get_current_user
 from rq_queue import enqueue_emociones_job
 from storage import image_storage
 
@@ -48,22 +47,10 @@ def autenticar_usuario_desde_request(request: Request, db: Session, token: str |
     if authorization_header and authorization_header.lower().startswith("bearer "):
         jwt_token = authorization_header.split(" ", 1)[1].strip()
 
-    if not jwt_token:
+    if jwt_token is None:
         raise HTTPException(status_code=401, detail="Token inválido")
 
-    try:
-        payload = jwt.decode(jwt_token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_email = payload.get("sub")
-        if user_email is None:
-            raise HTTPException(status_code=401, detail="Token inválido")
-
-        user = db.query(Usuario).filter(Usuario.correo_electronico == user_email).first()
-        if user is None:
-            raise HTTPException(status_code=401, detail="Usuario no encontrado")
-
-        return user
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido")
+    return get_current_user(token=jwt_token, db=db)
 
 
 def build_screenshot_url(cuenta_id: int, operacion_id: int, screenshot_path: str | None) -> str | None:
@@ -166,8 +153,14 @@ def create_operacion(
     )
 
     db.add(nueva_operacion)
-    db.commit()
-    db.refresh(nueva_operacion)
+    try:
+        db.commit()
+        db.refresh(nueva_operacion)
+    except Exception:
+        db.rollback()
+        if screenshot_path:
+            image_storage.delete_image(screenshot_path)
+        raise
 
     if resultado is not None:
         actualizar_saldo_cuenta(db, cuenta.id, Decimal(str(resultado)))
@@ -207,7 +200,8 @@ def create_operacion(
         }
     }
 )
-def update_operacion(
+async def update_operacion(
+    request: Request,
     cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading propietaria de la operacion.", examples=[1])],
     id: Annotated[int, Path(description="Identificador de la operacion a actualizar.", examples=[10])],
     fecha_hora: Annotated[Optional[datetime], Form()] = None,
@@ -228,6 +222,7 @@ def update_operacion(
     current_user=Depends(get_current_user)
 ):
     cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
+    form_payload = await request.form()
 
     op = db.query(Operacion).filter(Operacion.id == id, Operacion.id_cuenta == cuenta.id).first()
 
@@ -248,7 +243,7 @@ def update_operacion(
         "ratio_rr": ratio_rr,
         "nivel_confianza": nivel_confianza,
     }
-    datos_filtrados = {key: value for key, value in datos.items() if value is not None}
+    datos_filtrados = {key: value for key, value in datos.items() if key in form_payload}
 
     if "resultado" in datos_filtrados:
         resultado_anterior = Decimal(str(op.resultado)) if op.resultado is not None else Decimal("0")
@@ -260,18 +255,25 @@ def update_operacion(
         setattr(op, key, value)
 
     screenshot_path_anterior = op.screenshot if isinstance(op.screenshot, str) else None
+    nueva_ruta_screenshot: str | None = None
     if screenshot:
         nueva_ruta = image_storage.save_operation_image(screenshot)
-        if screenshot_path_anterior:
-            image_storage.delete_image(screenshot_path_anterior)
+        nueva_ruta_screenshot = nueva_ruta
         op.screenshot = nueva_ruta
     elif remove_screenshot:
-        if screenshot_path_anterior:
-            image_storage.delete_image(screenshot_path_anterior)
         op.screenshot = None
 
-    db.commit()
-    db.refresh(op)
+    try:
+        db.commit()
+        db.refresh(op)
+    except Exception:
+        db.rollback()
+        if nueva_ruta_screenshot:
+            image_storage.delete_image(nueva_ruta_screenshot)
+        raise
+
+    if screenshot_path_anterior and (remove_screenshot or nueva_ruta_screenshot):
+        image_storage.delete_image(screenshot_path_anterior)
 
     return {
         "message": "Operacion actualizada exitosamente",
@@ -315,11 +317,13 @@ def delete_operacion(
     if op.resultado is not None:
         actualizar_saldo_cuenta(db, cuenta.id, -Decimal(str(op.resultado)))
 
-    if isinstance(op.screenshot, str):
-        image_storage.delete_image(op.screenshot)
+    screenshot_a_eliminar = op.screenshot if isinstance(op.screenshot, str) else None
 
     db.delete(op)
     db.commit()
+
+    if screenshot_a_eliminar:
+        image_storage.delete_image(screenshot_a_eliminar)
     return {"message": "Operacion eliminada exitosamente", "operacion_id": id, "cuenta_id": cuenta.id}
 
 

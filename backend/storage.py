@@ -68,7 +68,7 @@ class LocalImageStorage:
 
     def resolve_image_path(self, relative_path: str) -> Path:
         absolute_path = (self.base_dir / relative_path).resolve()
-        if self.base_dir not in absolute_path.parents and absolute_path != self.base_dir:
+        if not absolute_path.is_relative_to(self.base_dir) or absolute_path == self.base_dir:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ruta de imagen inválida")
         return absolute_path
 

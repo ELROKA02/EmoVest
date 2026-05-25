@@ -35,6 +35,12 @@ const withScreenshotToken = (screenshotUrl) => {
   return `${API_BASE_URL}${screenshotUrl}${token ? `${separator}token=${encodeURIComponent(token)}` : ''}`;
 };
 
+const revokeBlobUrl = (url) => {
+  if (url && url.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
+};
+
 const InfoIcon = ({ text }) => {
   const [alignRight, setAlignRight] = useState(false);
   const iconRef = useRef(null);
@@ -276,23 +282,40 @@ const OperacionesTrading = () => {
         return;
       }
       const previewUrl = URL.createObjectURL(file);
-      setFormData(prev => ({
-        ...prev,
-        screenshot: previewUrl,
-        screenshotFile: file,
-        remove_screenshot: false
-      }));
+      setFormData(prev => {
+        revokeBlobUrl(prev.screenshot);
+        return {
+          ...prev,
+          screenshot: previewUrl,
+          screenshotFile: file,
+          remove_screenshot: false
+        };
+      });
     }
   };
 
   const handleRemoveImage = () => {
-    setFormData(prev => ({
-      ...prev,
-      screenshot: null,
-      screenshotFile: null,
-      remove_screenshot: true
-    }));
+    setFormData(prev => {
+      revokeBlobUrl(prev.screenshot);
+      return {
+        ...prev,
+        screenshot: null,
+        screenshotFile: null,
+        remove_screenshot: true
+      };
+    });
   };
+
+  const handleCloseForm = () => {
+    revokeBlobUrl(formData.screenshot);
+    handleCloseForm();
+  };
+
+  useEffect(() => {
+    return () => {
+      revokeBlobUrl(formData.screenshot);
+    };
+  }, [formData.screenshot]);
 
   const activosDisponibles = Array.from(new Set(operaciones.map(op => op.activo))).sort();
 
@@ -938,7 +961,7 @@ const OperacionesTrading = () => {
                     <div className="flex justify-end gap-2 pt-2">
                       <button
                         type="button"
-                        onClick={() => setShowForm(false)}
+                        onClick={handleCloseForm}
                         disabled={loading}
                         className="px-4 py-1.5 text-xs text-white bg-gray-700 hover:bg-gray-600 disabled:bg-gray-700/50 rounded-full transition-colors disabled:cursor-not-allowed"
                       >
