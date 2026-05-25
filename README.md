@@ -55,7 +55,7 @@ EmoVest hace eso, y va un paso más allá: cada vez que escribes notas en una op
 
 - Puede registrar operaciones LONG o SHORT con fecha, activo, precios y cantidad.
 - Puede anadir contexto real de cada operacion: stop loss, take profit y nivel de confianza.
-- Puede adjuntar una captura para recordar el grafico o escenario exacto.
+- Puede adjuntar una captura para recordar el grafico o escenario exacto (se guarda en filesystem local, no en la BD).
 - Puede editar o eliminar operaciones y ver la lista por cuenta.
 
 ### Rendimiento y seguimiento mensual
@@ -130,6 +130,19 @@ flowchart LR
 | Autenticación | JWT (python-jose + bcrypt) |
 | IA emocional | Ollama (modelo local `clasificador_texto`) |
 | Validación | Pydantic v2 |
+
+---
+
+## 🖼️ Storage de imágenes (operaciones)
+
+- Las capturas se guardan en disco local (`backend/images/` por defecto).
+- En base de datos solo se guarda la ruta relativa del archivo.
+- El backend expone la imagen mediante endpoint autenticado por JWT.
+- Configuración rápida vía variables de entorno en `backend/config.py`:
+  - `IMAGE_STORAGE_DIR` (ruta base de imágenes)
+  - `MAX_IMAGE_SIZE_MB` (límite por imagen)
+
+Esto deja la capa preparada para migrar más adelante a un storage externo (S3 u otro) cambiando la implementación de `backend/storage.py`.
 
 ---
 

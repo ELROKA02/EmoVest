@@ -34,3 +34,7 @@ EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", EMAIL_USERNAME)
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "EmoVest")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+# Almacenamiento local de imágenes de operaciones.
+IMAGE_STORAGE_DIR = os.getenv("IMAGE_STORAGE_DIR", "images")
+MAX_IMAGE_SIZE_MB = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))

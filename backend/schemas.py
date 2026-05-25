@@ -34,7 +34,7 @@ class OperacionCreate(BaseModel):
     resultado: Optional[float] = None
     ratio_rr: Optional[float] = None
     nivel_confianza: Optional[int] = None
-    screenshot: Optional[bytes] = None
+    screenshot: Optional[str] = None
 
 class OperacionUpdate(BaseModel):
     fecha_hora: Optional[datetime] = None
@@ -49,7 +49,7 @@ class OperacionUpdate(BaseModel):
     resultado: Optional[float] = None
     ratio_rr: Optional[float] = None
     nivel_confianza: Optional[int] = None
-    screenshot: Optional[bytes] = None
+    screenshot: Optional[str] = None
 
 
 class CuentaOperacionPathParams(BaseModel):

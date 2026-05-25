@@ -150,6 +150,10 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 # Redis y cola RQ (los valores por defecto son los correctos en local)
 REDIS_URL=redis://localhost:6379/0
 RQ_QUEUE_NAME=emociones
+
+# Imágenes de operaciones (filesystem local)
+IMAGE_STORAGE_DIR=/opt/emovest/backend/images
+MAX_IMAGE_SIZE_MB=5
 ```
 
 Ajusta los nombres de variable a las que realmente usa `backend/config.py` y los routers de auth — este `.env` es la plantilla recomendada.

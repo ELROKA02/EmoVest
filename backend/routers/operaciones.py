@@ -1,14 +1,19 @@
+from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import FileResponse
+from jose import JWTError, jwt
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+
 from database import get_db
-from models import Operacion, Cuenta_Trading
+from models import Cuenta_Trading, Operacion, Usuario
+from routers.auth import ALGORITHM, SECRET_KEY, get_current_user
 from rq_queue import enqueue_emociones_job
-from schemas import OperacionCreate, OperacionUpdate
-from routers.auth import get_current_user
+from storage import image_storage
 
 router = APIRouter(prefix="/cuentas/{cuenta_id_trading}/operaciones", tags=["operaciones"])
 
@@ -37,6 +42,43 @@ def actualizar_saldo_cuenta(db: Session, cuenta_id: int, diferencia: Decimal) ->
     )
 
 
+def autenticar_usuario_desde_request(request: Request, db: Session, token: str | None = None) -> Usuario:
+    jwt_token = token
+    authorization_header = request.headers.get("Authorization")
+    if authorization_header and authorization_header.lower().startswith("bearer "):
+        jwt_token = authorization_header.split(" ", 1)[1].strip()
+
+    if not jwt_token:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    try:
+        payload = jwt.decode(jwt_token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_email = payload.get("sub")
+        if user_email is None:
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+        user = db.query(Usuario).filter(Usuario.correo_electronico == user_email).first()
+        if user is None:
+            raise HTTPException(status_code=401, detail="Usuario no encontrado")
+
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+
+def build_screenshot_url(cuenta_id: int, operacion_id: int, screenshot_path: str | None) -> str | None:
+    if not screenshot_path:
+        return None
+    return f"/cuentas/{cuenta_id}/operaciones/{operacion_id}/screenshot"
+
+
+def serialize_operacion(cuenta_id: int, operacion: Operacion) -> dict:
+    data = jsonable_encoder(operacion)
+    screenshot_path = operacion.screenshot if isinstance(operacion.screenshot, str) else None
+    data["screenshot"] = build_screenshot_url(cuenta_id, operacion.id, screenshot_path)
+    return data
+
+
 @router.get(
     "/",
     summary="Obtener operaciones de una cuenta",
@@ -63,7 +105,7 @@ def get_operaciones(
 
     operaciones = db.query(Operacion).filter(Operacion.id_cuenta == cuenta.id).all()
 
-    return operaciones
+    return [serialize_operacion(cuenta.id, operacion) for operacion in operaciones]
 
 
 
@@ -86,46 +128,65 @@ def get_operaciones(
 )
 def create_operacion(
     cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading donde se registrara la operacion.", examples=[1])],
-    operacion: OperacionCreate,
+    fecha_hora: Annotated[datetime, Form(...)],
+    tipo_operacion: Annotated[Literal["LONG", "SHORT"], Form(...)],
+    cantidad: Annotated[float, Form(...)],
+    activo: Annotated[str, Form(...)],
+    precio_entrada: Annotated[float, Form(...)],
+    precio_salida: Annotated[Optional[float], Form()] = None,
+    notas: Annotated[Optional[str], Form()] = None,
+    stop_loss: Annotated[Optional[float], Form()] = None,
+    take_profit: Annotated[Optional[float], Form()] = None,
+    resultado: Annotated[Optional[float], Form()] = None,
+    ratio_rr: Annotated[Optional[float], Form()] = None,
+    nivel_confianza: Annotated[Optional[int], Form()] = None,
+    screenshot: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
     cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
 
+    screenshot_path = image_storage.save_operation_image(screenshot) if screenshot else None
+
     nueva_operacion = Operacion(
         id_cuenta=cuenta.id,
-        fecha_hora=operacion.fecha_hora,
-        tipo_operacion=operacion.tipo_operacion,
-        cantidad=operacion.cantidad,
-        activo=operacion.activo,
-        precio_entrada=operacion.precio_entrada,
-        precio_salida=operacion.precio_salida,
-        notas=operacion.notas,
-        stop_loss=operacion.stop_loss,
-        take_profit=operacion.take_profit,
-        resultado=operacion.resultado,
-        ratio_rr=operacion.ratio_rr,
-        nivel_confianza=operacion.nivel_confianza,
-        screenshot=operacion.screenshot
+        fecha_hora=fecha_hora,
+        tipo_operacion=tipo_operacion,
+        cantidad=cantidad,
+        activo=activo,
+        precio_entrada=precio_entrada,
+        precio_salida=precio_salida,
+        notas=notas,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        resultado=resultado,
+        ratio_rr=ratio_rr,
+        nivel_confianza=nivel_confianza,
+        screenshot=screenshot_path,
     )
 
     db.add(nueva_operacion)
     db.commit()
     db.refresh(nueva_operacion)
 
-    if operacion.resultado is not None:
-        actualizar_saldo_cuenta(db, cuenta.id, Decimal(str(operacion.resultado)))
+    if resultado is not None:
+        actualizar_saldo_cuenta(db, cuenta.id, Decimal(str(resultado)))
         db.commit()
 
-    if operacion.notas:
+    if notas:
         try:
             # Encola el analisis emocional en segundo plano para responder rapido.
-            enqueue_emociones_job(nueva_operacion.id, operacion.notas)
+            enqueue_emociones_job(nueva_operacion.id, notas)
         except Exception as error:
             # Si Redis/RQ falla, no se rompe el endpoint: la operacion ya esta guardada.
             print(f"Advertencia: fallo al encolar registro emocional, la operacion ya fue guardada. Error: {error}")
 
-    return {"message": "Operacion creada exitosamente", "operacion_id": nueva_operacion.id, "cuenta_id": cuenta.id}
+    return {
+        "message": "Operacion creada exitosamente",
+        "operacion_id": nueva_operacion.id,
+        "cuenta_id": cuenta.id,
+        "screenshot_url": build_screenshot_url(cuenta.id, nueva_operacion.id, screenshot_path),
+    }
 
 
 
@@ -149,7 +210,20 @@ def create_operacion(
 def update_operacion(
     cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading propietaria de la operacion.", examples=[1])],
     id: Annotated[int, Path(description="Identificador de la operacion a actualizar.", examples=[10])],
-    operacion: OperacionUpdate,
+    fecha_hora: Annotated[Optional[datetime], Form()] = None,
+    tipo_operacion: Annotated[Optional[Literal["LONG", "SHORT"]], Form()] = None,
+    cantidad: Annotated[Optional[float], Form()] = None,
+    activo: Annotated[Optional[str], Form()] = None,
+    precio_entrada: Annotated[Optional[float], Form()] = None,
+    precio_salida: Annotated[Optional[float], Form()] = None,
+    notas: Annotated[Optional[str], Form()] = None,
+    stop_loss: Annotated[Optional[float], Form()] = None,
+    take_profit: Annotated[Optional[float], Form()] = None,
+    resultado: Annotated[Optional[float], Form()] = None,
+    ratio_rr: Annotated[Optional[float], Form()] = None,
+    nivel_confianza: Annotated[Optional[int], Form()] = None,
+    remove_screenshot: Annotated[bool, Form()] = False,
+    screenshot: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -160,22 +234,51 @@ def update_operacion(
     if not op:
         raise HTTPException(status_code=404, detail="Operacion no encontrada")
 
-    # model_dump con exclude_unset para obtener solo los campos que se estan actualizando, y asi evitar sobreescribir campos no incluidos en la request con valores por defecto o None
-    datos = operacion.model_dump(exclude_unset=True)
+    datos = {
+        "fecha_hora": fecha_hora,
+        "tipo_operacion": tipo_operacion,
+        "cantidad": cantidad,
+        "activo": activo,
+        "precio_entrada": precio_entrada,
+        "precio_salida": precio_salida,
+        "notas": notas,
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
+        "resultado": resultado,
+        "ratio_rr": ratio_rr,
+        "nivel_confianza": nivel_confianza,
+    }
+    datos_filtrados = {key: value for key, value in datos.items() if value is not None}
 
-    if "resultado" in datos:
+    if "resultado" in datos_filtrados:
         resultado_anterior = Decimal(str(op.resultado)) if op.resultado is not None else Decimal("0")
-        resultado_nuevo = Decimal(str(datos["resultado"])) if datos["resultado"] is not None else Decimal("0")
+        resultado_nuevo = Decimal(str(datos_filtrados["resultado"]))
         diferencia = resultado_nuevo - resultado_anterior
         actualizar_saldo_cuenta(db, cuenta.id, diferencia)
 
-    for key, value in datos.items():
+    for key, value in datos_filtrados.items():
         setattr(op, key, value)
+
+    screenshot_path_anterior = op.screenshot if isinstance(op.screenshot, str) else None
+    if screenshot:
+        nueva_ruta = image_storage.save_operation_image(screenshot)
+        if screenshot_path_anterior:
+            image_storage.delete_image(screenshot_path_anterior)
+        op.screenshot = nueva_ruta
+    elif remove_screenshot:
+        if screenshot_path_anterior:
+            image_storage.delete_image(screenshot_path_anterior)
+        op.screenshot = None
 
     db.commit()
     db.refresh(op)
 
-    return {"message": "Operacion actualizada exitosamente", "operacion_id": op.id, "cuenta_id": cuenta.id}
+    return {
+        "message": "Operacion actualizada exitosamente",
+        "operacion_id": op.id,
+        "cuenta_id": cuenta.id,
+        "screenshot_url": build_screenshot_url(cuenta.id, op.id, op.screenshot if isinstance(op.screenshot, str) else None),
+    }
 
 
 
@@ -212,6 +315,40 @@ def delete_operacion(
     if op.resultado is not None:
         actualizar_saldo_cuenta(db, cuenta.id, -Decimal(str(op.resultado)))
 
+    if isinstance(op.screenshot, str):
+        image_storage.delete_image(op.screenshot)
+
     db.delete(op)
     db.commit()
     return {"message": "Operacion eliminada exitosamente", "operacion_id": id, "cuenta_id": cuenta.id}
+
+
+@router.get(
+    "/{id}/screenshot",
+    summary="Obtener screenshot de una operación",
+    description="Devuelve la imagen adjunta de una operación si el usuario autenticado es dueño de la cuenta.",
+    responses={
+        200: {"description": "Imagen recuperada correctamente."},
+        401: {"description": "Token inválido o ausente."},
+        404: {"description": "No se encontró la operación o no tiene imagen."},
+    },
+)
+def get_operacion_screenshot(
+    request: Request,
+    cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading.", examples=[1])],
+    id: Annotated[int, Path(description="Identificador de la operación.", examples=[10])],
+    token: Annotated[str | None, Query(description="Token JWT opcional para uso en etiquetas de imagen.")] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = autenticar_usuario_desde_request(request, db, token)
+    cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
+
+    op = db.query(Operacion).filter(Operacion.id == id, Operacion.id_cuenta == cuenta.id).first()
+    if not op or not isinstance(op.screenshot, str):
+        raise HTTPException(status_code=404, detail="La operación no tiene imagen asociada")
+
+    screenshot_path = image_storage.resolve_image_path(op.screenshot)
+    if not screenshot_path.exists():
+        raise HTTPException(status_code=404, detail="La imagen no existe en el servidor")
+
+    return FileResponse(path=screenshot_path)

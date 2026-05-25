@@ -6,12 +6,33 @@ import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
 import { API_BASE_URL } from '../config';
 
-const getAuthHeaders = () => {
+const getAuthHeaders = ({ isJson = true } = {}) => {
   const token = sessionStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
+  const headers = {
     ...(token && { 'Authorization': `Bearer ${token}` })
   };
+
+  if (isJson) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  return headers;
+};
+
+const withScreenshotToken = (screenshotUrl) => {
+  if (!screenshotUrl) return null;
+  if (
+    screenshotUrl.startsWith('data:') ||
+    screenshotUrl.startsWith('blob:') ||
+    screenshotUrl.startsWith('http://') ||
+    screenshotUrl.startsWith('https://')
+  ) {
+    return screenshotUrl;
+  }
+
+  const token = sessionStorage.getItem('token');
+  const separator = screenshotUrl.includes('?') ? '&' : '?';
+  return `${API_BASE_URL}${screenshotUrl}${token ? `${separator}token=${encodeURIComponent(token)}` : ''}`;
 };
 
 const InfoIcon = ({ text }) => {
@@ -157,7 +178,11 @@ const OperacionesTrading = () => {
         throw new Error('Error al cargar operaciones');
       }
       const data = await response.json();
-      setOperaciones(data);
+      const operacionesConImagen = data.map(op => ({
+        ...op,
+        screenshot: withScreenshotToken(op.screenshot)
+      }));
+      setOperaciones(operacionesConImagen);
     } catch (err) {
       setError(err.message);
       console.error(err);
@@ -211,7 +236,9 @@ const OperacionesTrading = () => {
     resultado: '',
     ratio_rr: '',
     nivel_confianza: 0,
-    screenshot: null
+    screenshot: null,
+    screenshotFile: null,
+    remove_screenshot: false
   });
 
   // Efecto para calcular el resultado automáticamente
@@ -248,17 +275,23 @@ const OperacionesTrading = () => {
         setError('La imagen no debe superar 5MB');
         return;
       }
-      // Convertir a base64
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setFormData(prev => ({...prev, screenshot: event.target?.result}));
-      };
-      reader.readAsDataURL(file);
+      const previewUrl = URL.createObjectURL(file);
+      setFormData(prev => ({
+        ...prev,
+        screenshot: previewUrl,
+        screenshotFile: file,
+        remove_screenshot: false
+      }));
     }
   };
 
   const handleRemoveImage = () => {
-    setFormData(prev => ({...prev, screenshot: null}));
+    setFormData(prev => ({
+      ...prev,
+      screenshot: null,
+      screenshotFile: null,
+      remove_screenshot: true
+    }));
   };
 
   const activosDisponibles = Array.from(new Set(operaciones.map(op => op.activo))).sort();
@@ -306,7 +339,9 @@ const OperacionesTrading = () => {
       resultado: '',
       ratio_rr: '',
       nivel_confianza: 0,
-      screenshot: null
+      screenshot: null,
+      screenshotFile: null,
+      remove_screenshot: false
     });
     setShowForm(true);
   };
@@ -326,7 +361,9 @@ const OperacionesTrading = () => {
       resultado: op.resultado || '',
       ratio_rr: op.ratio_rr || '',
       nivel_confianza: op.nivel_confianza ?? 0,
-      screenshot: op.screenshot || null
+      screenshot: op.screenshot || null,
+      screenshotFile: null,
+      remove_screenshot: false
     });
     setShowForm(true);
   };
@@ -361,21 +398,28 @@ const OperacionesTrading = () => {
       return;
     }
 
-    const data = {
-      fecha_hora: new Date(formData.fecha_hora).toISOString(),
-      tipo_operacion: formData.tipo_operacion,
-      cantidad: parseFloat(formData.cantidad),
-      activo: formData.activo,
-      precio_entrada: parseFloat(formData.precio_entrada),
-      precio_salida: formData.precio_salida ? parseFloat(formData.precio_salida) : null,
-      notas: formData.notas || null,
-      stop_loss: formData.stop_loss ? parseFloat(formData.stop_loss) : null,
-      take_profit: formData.take_profit ? parseFloat(formData.take_profit) : null,
-      resultado: formData.resultado ? parseFloat(formData.resultado) : null,
-      ratio_rr: formData.ratio_rr ? parseFloat(formData.ratio_rr) : null,
-      nivel_confianza: formData.nivel_confianza ? parseInt(formData.nivel_confianza) : null,
-      screenshot: formData.screenshot
-    };
+    const data = new FormData();
+    data.append('fecha_hora', new Date(formData.fecha_hora).toISOString());
+    data.append('tipo_operacion', formData.tipo_operacion);
+    data.append('cantidad', String(parseFloat(formData.cantidad)));
+    data.append('activo', formData.activo);
+    data.append('precio_entrada', String(parseFloat(formData.precio_entrada)));
+
+    if (formData.precio_salida) data.append('precio_salida', String(parseFloat(formData.precio_salida)));
+    if (formData.notas) data.append('notas', formData.notas);
+    if (formData.stop_loss) data.append('stop_loss', String(parseFloat(formData.stop_loss)));
+    if (formData.take_profit) data.append('take_profit', String(parseFloat(formData.take_profit)));
+    if (formData.resultado) data.append('resultado', String(parseFloat(formData.resultado)));
+    if (formData.ratio_rr) data.append('ratio_rr', String(parseFloat(formData.ratio_rr)));
+    if (formData.nivel_confianza !== null && formData.nivel_confianza !== undefined && formData.nivel_confianza !== '') {
+      data.append('nivel_confianza', String(parseInt(formData.nivel_confianza)));
+    }
+    if (formData.screenshotFile) {
+      data.append('screenshot', formData.screenshotFile);
+    }
+    if (editing && formData.remove_screenshot) {
+      data.append('remove_screenshot', 'true');
+    }
 
     setLoading(true);
     setError(null);
@@ -383,18 +427,18 @@ const OperacionesTrading = () => {
       if (editing) {
         const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/${editing}`, {
           method: 'PUT',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(data)
+          headers: getAuthHeaders({ isJson: false }),
+          body: data
         });
         if (!response.ok) {
           throw new Error('Error al actualizar operación');
         }
-        setOperaciones(operaciones.map(op => op.id === editing ? { ...op, ...data, id: editing } : op));
+        await cargarOperacionesDeCuenta();
       } else {
         const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/`, {
           method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(data)
+          headers: getAuthHeaders({ isJson: false }),
+          body: data
         });
         if (!response.ok) {
           throw new Error('Error al crear operación');
