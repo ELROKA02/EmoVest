@@ -59,10 +59,17 @@ class LocalImageStorage:
                             detail=f"La imagen no debe superar {MAX_IMAGE_SIZE_MB}MB",
                         )
                     output_file.write(chunk)
-        except Exception:
+        except HTTPException:
             if absolute_path.exists():
                 absolute_path.unlink()
             raise
+        except OSError as exc:
+            if absolute_path.exists():
+                absolute_path.unlink()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"No se pudo guardar la imagen: {exc}",
+            ) from exc
 
         return str(relative_path).replace("\\", "/")
 

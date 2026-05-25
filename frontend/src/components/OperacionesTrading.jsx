@@ -308,7 +308,7 @@ const OperacionesTrading = () => {
 
   const handleCloseForm = () => {
     revokeBlobUrl(formData.screenshot);
-    handleCloseForm();
+    setShowForm(false);
   };
 
   useEffect(() => {
