@@ -5,6 +5,7 @@ from typing import Annotated, Literal, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -156,7 +157,7 @@ def create_operacion(
     try:
         db.commit()
         db.refresh(nueva_operacion)
-    except Exception:
+    except SQLAlchemyError:
         db.rollback()
         if screenshot_path:
             image_storage.delete_image(screenshot_path)
@@ -222,6 +223,7 @@ async def update_operacion(
     current_user=Depends(get_current_user)
 ):
     cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
+    # Se consulta el payload bruto para distinguir campos omitidos de campos enviados explícitamente.
     form_payload = await request.form()
 
     op = db.query(Operacion).filter(Operacion.id == id, Operacion.id_cuenta == cuenta.id).first()
@@ -266,7 +268,7 @@ async def update_operacion(
     try:
         db.commit()
         db.refresh(op)
-    except Exception:
+    except SQLAlchemyError:
         db.rollback()
         if nueva_ruta_screenshot:
             image_storage.delete_image(nueva_ruta_screenshot)
