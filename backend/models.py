@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DECIMAL, DateTime ,ForeignKey, Boolean, Enum, LargeBinary
+from sqlalchemy import Column, Integer, String, DECIMAL, DateTime ,ForeignKey, Boolean, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -138,7 +138,7 @@ class Operacion(Base):
 
     nivel_confianza = Column(Integer, nullable=True)  # 1–10
 
-    screenshot = Column(LargeBinary, nullable=True)
+    screenshot = Column(String(255), nullable=True)
 
     
     cuenta_trading = relationship("Cuenta_Trading", back_populates="operaciones")
