@@ -41,6 +41,11 @@ const revokeBlobUrl = (url) => {
   }
 };
 
+const toLocalDatetimeInputValue = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 const InfoIcon = ({ text }) => {
   const [alignRight, setAlignRight] = useState(false);
   const iconRef = useRef(null);
@@ -350,7 +355,7 @@ const OperacionesTrading = () => {
   const handleCreate = () => {
     setEditing(null);
     setFormData({
-      fecha_hora: new Date().toISOString().slice(0, 16),
+      fecha_hora: toLocalDatetimeInputValue(new Date()),
       tipo_operacion: 'LONG',
       cantidad: '',
       activo: '',
@@ -372,7 +377,7 @@ const OperacionesTrading = () => {
   const handleEdit = (op) => {
     setEditing(op.id);
     setFormData({
-      fecha_hora: new Date(op.fecha_hora).toISOString().slice(0, 16),
+      fecha_hora: toLocalDatetimeInputValue(new Date(op.fecha_hora)),
       tipo_operacion: op.tipo_operacion,
       cantidad: op.cantidad,
       activo: op.activo,
