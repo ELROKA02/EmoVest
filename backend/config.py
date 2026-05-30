@@ -33,6 +33,7 @@ EMAIL_USERNAME = os.getenv("EMAIL_USERNAME", "tu_usuario_de_email@gmail.com")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_FROM = os.getenv("EMAIL_FROM", EMAIL_USERNAME)
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "EmoVest")
+SIGNUP_NOTIFY_TO = os.getenv("SIGNUP_NOTIFY_TO", EMAIL_FROM)
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 # Almacenamiento local de imágenes de operaciones.

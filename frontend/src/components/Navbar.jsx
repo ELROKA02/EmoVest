@@ -58,26 +58,10 @@ function Navbar() {
     navigate('/dashboard');
   };
 
-  const links = isLoggedIn ? [] : [
-    { name: 'Quiénes somos', href: '#que-somos' },
-    { name: 'Suscripciones', href: '#suscripciones' },
-    { name: 'Sobre nosotros', href: '#sobre-nosotros' },
-  ];
-
   return (
     <nav className="relative">
       {/* Desktop Menu */}
-      <ul className="hidden md:flex items-center space-x-6 lg:space-x-8">
-        {links.map(link => (
-          <li key={link.name}>
-            <a 
-              href={link.href} 
-              className="bg-gradient-to-r from-transparent to-transparent text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider hover:from-purple-600 hover:to-purple-700 border border-purple-600/30 hover:border-purple-500"
-            >
-              {link.name}
-            </a>
-          </li>
-        ))}
+      <ul className="hidden md:flex items-center space-x-3 lg:space-x-4">
         {isLoggedIn && location.pathname !== '/trading' && location.pathname !== '/perfil' && location.pathname !== '/estadisticas' && location.pathname !== '/calendar' && (
           <li>
             <button
@@ -121,12 +105,12 @@ function Navbar() {
                 onClick={handleButtonClick}
                 onMouseEnter={() => setHoveredButton('login')}
                 onMouseLeave={() => setHoveredButton(null)}
-                className={`bg-gradient-to-r text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider ${
+                className={`border px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider ${
                   hoveredButton === 'login' 
-                    ? 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800' 
+                    ? 'border-violet-400/40 bg-violet-500/20 text-white shadow-violet-900/20' 
                     : hoveredButton === 'register'
-                    ? 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800'
-                    : 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
+                    ? 'border-fuchsia-400/40 bg-fuchsia-500/15 text-white shadow-fuchsia-900/20'
+                    : 'border-white/15 bg-white/5 text-slate-100 backdrop-blur-xl hover:border-violet-300/50 hover:bg-white/10'
                 }`}
               >
                 Iniciar Sesión
@@ -139,10 +123,10 @@ function Navbar() {
                 onMouseLeave={() => setHoveredButton(null)}
                 className={`bg-gradient-to-r text-white px-4 lg:px-6 py-2.5 lg:py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg text-xs lg:text-sm uppercase tracking-wider ${
                   hoveredButton === 'register' 
-                    ? 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800' 
+                    ? 'from-blue-600 to-violet-700 hover:from-blue-500 hover:to-violet-600' 
                     : hoveredButton === 'login'
-                    ? 'from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
-                    : 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800'
+                    ? 'from-blue-600 to-violet-700 hover:from-blue-500 hover:to-violet-600'
+                    : 'from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500'
                 }`}
               >
                 Registrarse
@@ -164,20 +148,9 @@ function Navbar() {
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden absolute top-full right-0 mt-2 w-64 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl overflow-hidden">
+        <div className="md:hidden absolute top-full right-0 mt-2 w-64 bg-[#111827]/80 backdrop-blur-2xl rounded-2xl border border-violet-400/20 shadow-2xl overflow-hidden">
           <ul className="flex flex-col p-4 space-y-3">
-            {links.map(link => (
-              <li key={link.name}>
-                <a 
-                  href={link.href}
-                  onClick={() => setIsOpen(false)}
-                  className="block text-sm font-medium text-gray-300 hover:text-white transition-all duration-300 px-3 py-2 rounded-lg hover:bg-white/10"
-                >
-                  {link.name}
-                </a>
-              </li>
-            ))}
-            <li className="pt-3 border-t border-white/20 space-y-3">
+            <li className="space-y-3">
               {showLogout ? (
                 <button 
                   onClick={handleLogout} 
@@ -189,13 +162,13 @@ function Navbar() {
                 <>
                   <button 
                     onClick={handleButtonClick} 
-                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-full font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-300 text-xs uppercase tracking-wider"
+                    className="w-full border border-white/15 bg-white/5 text-white px-4 py-3 rounded-full font-semibold hover:border-violet-300/50 hover:bg-white/10 transition-all duration-300 text-xs uppercase tracking-wider"
                   >
                     Iniciar Sesión
                   </button>
                   <button 
                     onClick={handleRegisterClick} 
-                    className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-3 rounded-full font-semibold hover:from-green-700 hover:to-green-800 transition-all duration-300 text-xs uppercase tracking-wider"
+                    className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white px-4 py-3 rounded-full font-semibold hover:from-violet-500 hover:to-fuchsia-500 transition-all duration-300 text-xs uppercase tracking-wider"
                   >
                     Registrarse
                   </button>

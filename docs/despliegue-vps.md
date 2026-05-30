@@ -293,6 +293,7 @@ EMAIL_USERNAME=tu-email@gmail.com
 EMAIL_PASSWORD=<app-password-de-google>
 EMAIL_FROM=tu-email@gmail.com
 EMAIL_FROM_NAME=EmoVest
+SIGNUP_NOTIFY_TO=contactoemovest@gmail.com
 ```
 
 Permisos restrictivos:
@@ -311,9 +312,9 @@ sudo systemctl restart emovest-api emovest-worker
 > ```
 > Cambiar `SECRET_KEY` invalida los JWT existentes (todos los usuarios tendrán que volver a iniciar sesión).
 
-### 4.4. RECOMENDABLE — Configurar SMTP para reset password
+### 4.4. RECOMENDABLE — Configurar SMTP para reset password y avisos internos
 
-El endpoint de "olvidé mi contraseña" ([backend/routers/auth.py:88](../backend/routers/auth.py)) requiere `EMAIL_SMTP_SERVER`, `EMAIL_USERNAME`, `EMAIL_PASSWORD` y `EMAIL_FROM`. Si faltan, el endpoint lanza error y los emails no se envían.
+El endpoint de "olvidé mi contraseña" ([backend/routers/auth.py:88](../backend/routers/auth.py)) requiere `EMAIL_SMTP_SERVER`, `EMAIL_USERNAME`, `EMAIL_PASSWORD` y `EMAIL_FROM`. Si faltan, el endpoint lanza error y los emails no se envían. Los avisos internos de nuevos registros usan la misma configuración SMTP y se envían a `SIGNUP_NOTIFY_TO`; si el aviso falla, el registro del usuario no se bloquea.
 
 Para Gmail: hay que crear una **App Password** en la cuenta de Google (Settings → Security → 2-Step Verification → App passwords) — no funciona la contraseña normal. Configurar como en 4.3.
 

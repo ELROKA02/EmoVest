@@ -23,6 +23,7 @@ from config import (
     EMAIL_PASSWORD,
     EMAIL_FROM,
     EMAIL_FROM_NAME,
+    SIGNUP_NOTIFY_TO,
     FRONTEND_URL,
 )
 
@@ -77,6 +78,37 @@ def build_password_reset_message(correo: str, token: str) -> EmailMessage:
   <p>Este enlace expirará en 30 minutos.</p>
   <p>Si no solicitaste este cambio, ignora este correo.</p>
   <p>Saludos,<br/>Equipo EmoVest</p>
+</body>
+</html>""",
+        subtype="html",
+    )
+    return message
+
+
+def build_signup_notification_message(usuario: Usuario, tipo_plan: str, fecha_registro: datetime) -> EmailMessage:
+    fecha_formateada = fecha_registro.strftime("%Y-%m-%d %H:%M:%S")
+    message = EmailMessage()
+    message["Subject"] = "Nuevo registro en EmoVest"
+    message["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_FROM}>"
+    message["To"] = SIGNUP_NOTIFY_TO
+    message.set_content(
+        "Nuevo registro en EmoVest\n\n"
+        f"Nombre: {usuario.nombre}\n"
+        f"Correo: {usuario.correo_electronico}\n"
+        f"Plan: {tipo_plan}\n"
+        f"Fecha: {fecha_formateada}\n"
+    )
+    message.add_alternative(
+        f"""<html>
+<body style=\"font-family: Arial, sans-serif; color:#111;\">
+  <h2>Nuevo registro en EmoVest</h2>
+  <p>Se ha registrado un nuevo usuario en la plataforma.</p>
+  <table style=\"border-collapse: collapse;\">
+    <tr><td style=\"padding:6px 12px;font-weight:bold;\">Nombre</td><td style=\"padding:6px 12px;\">{usuario.nombre}</td></tr>
+    <tr><td style=\"padding:6px 12px;font-weight:bold;\">Correo</td><td style=\"padding:6px 12px;\">{usuario.correo_electronico}</td></tr>
+    <tr><td style=\"padding:6px 12px;font-weight:bold;\">Plan</td><td style=\"padding:6px 12px;\">{tipo_plan}</td></tr>
+    <tr><td style=\"padding:6px 12px;font-weight:bold;\">Fecha</td><td style=\"padding:6px 12px;\">{fecha_formateada}</td></tr>
+  </table>
 </body>
 </html>""",
         subtype="html",
@@ -281,6 +313,19 @@ def signup(usuario: SignUp, db: Session = Depends(get_db)):
 
         db.add(suscripcion)
         db.commit()
+
+        try:
+            mensaje = build_signup_notification_message(
+                nuevo_usuario,
+                usuario.tipo_plan,
+                now
+            )
+            send_email_message(mensaje)
+        except Exception as exc:
+            print(
+                "Advertencia: fallo al enviar aviso de nuevo registro, "
+                f"el usuario ya fue guardado. Error: {type(exc).__name__} - {str(exc)}"
+            )
 
         return {"msg": "Usuario creado correctamente"}
 

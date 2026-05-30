@@ -151,6 +151,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 REDIS_URL=redis://localhost:6379/0
 RQ_QUEUE_NAME=emociones
 
+# Correo transaccional y avisos internos
+EMAIL_SMTP_SERVER=smtp.gmail.com
+EMAIL_SMTP_PORT=465
+EMAIL_USERNAME=tu-email@gmail.com
+EMAIL_PASSWORD=<app-password-de-google>
+EMAIL_FROM=tu-email@gmail.com
+EMAIL_FROM_NAME=EmoVest
+SIGNUP_NOTIFY_TO=contactoemovest@gmail.com
+
 # Imágenes de operaciones (filesystem local)
 IMAGE_STORAGE_DIR=/opt/emovest/backend/images
 MAX_IMAGE_SIZE_MB=5
