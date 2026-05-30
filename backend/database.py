@@ -6,7 +6,12 @@ import os
 # Cargar .env
 load_dotenv()
 
-DATABASE_URL = os.getenv("dataBase_url")
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("dataBase_url")
+
+if not DATABASE_URL:
+    raise RuntimeError(
+        "Falta configurar DATABASE_URL o dataBase_url para conectar con la base de datos."
+    )
 
 engine = create_engine(
     DATABASE_URL,

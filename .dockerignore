@@ -1,0 +1,12 @@
+.git
+.env
+.env.local-server
+backend/.env
+backend/venv
+backend/__pycache__
+backend/images
+frontend/node_modules
+frontend/dist
+testsprite_tests/tmp
+*.log
+.DS_Store

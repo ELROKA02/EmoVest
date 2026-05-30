@@ -36,6 +36,9 @@ EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "EmoVest")
 SIGNUP_NOTIFY_TO = os.getenv("SIGNUP_NOTIFY_TO", EMAIL_FROM)
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
+# URL base del servicio Ollama. En Docker local apunta al host.
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+
 # Almacenamiento local de imágenes de operaciones.
 IMAGE_STORAGE_DIR = os.getenv("IMAGE_STORAGE_DIR", "images")
 MAX_IMAGE_SIZE_MB = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))

@@ -1,4 +1,5 @@
 .env
+.env.local-server
 venv
 backend/__pycache__
 # Dependencias
