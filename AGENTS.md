@@ -14,10 +14,10 @@ Guia breve para que agentes de codigo sean productivos en EmoVest desde el prime
 Ejecuta los comandos en la carpeta correcta:
 
 - Frontend (`frontend/`):
-- `npm install`
-- `npm run dev`
-- `npm run build`
-- `npm run lint`
+- `pnpm install`
+- `pnpm dev`
+- `pnpm build`
+- `pnpm lint`
 
 - Backend (`backend/`):
 - `python -m venv venv`
@@ -51,7 +51,6 @@ Ejecuta los comandos en la carpeta correcta:
 - En frontend, usa scripts de `frontend/package.json`; no introduzcas tooling alternativo sin peticion.
 - Antes de proponer despliegue o systemd/nginx, enlaza la documentacion oficial del repo en lugar de duplicarla.
 - Para repartir trabajo o hablar con el equipo de EmoVest, usa Discord como canal de coordinacion.
-- En correos de EmoVest, incluye siempre el banner de `automation_assets/emovest-email-banner.svg` cuando el formato del correo lo permita.
 
 ## Equipo y reparto por Discord
 
@@ -76,5 +75,5 @@ Ejecuta los comandos en la carpeta correcta:
 ## Checklist rapido al terminar cambios
 
 - Backend: app levanta sin errores (`uvicorn app:app --reload`).
-- Frontend: build/lint pasan (`npm run build`, `npm run lint`).
+- Frontend: build/lint pasan (`pnpm build`, `pnpm lint`).
 - Si tocaste flujo emocional: worker activo y procesamiento de cola verificado.

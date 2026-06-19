@@ -7,19 +7,10 @@ class SignUp(BaseModel):
     nombre: str
     correo_electronico: EmailStr
     contrasena: str
-    tipo_plan: Literal["FREE","PRO"]
 
 class login(BaseModel):
     correo_electronico: EmailStr
     contrasena: str
-
-class PasswordResetRequest(BaseModel):
-    correo_electronico: EmailStr
-
-class PasswordResetConfirm(BaseModel):
-    token: str
-    contrasena: str
-    confirmar_contrasena: str
 
 class OperacionCreate(BaseModel):
     fecha_hora: datetime

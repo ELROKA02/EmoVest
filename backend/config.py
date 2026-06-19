@@ -26,15 +26,18 @@ RQ_RETRY_MAX = int(os.getenv("RQ_RETRY_MAX", "3"))
 
 # Espera entre reintentos (segundos): 2s, 4s y 8s.
 RQ_RETRY_INTERVALS = [2, 4, 8]
-# Configuración de correo para recuperación de contraseña.
-EMAIL_SMTP_SERVER = os.getenv("EMAIL_SMTP_SERVER", "")
-EMAIL_SMTP_PORT = int(os.getenv("EMAIL_SMTP_PORT", "465"))
-EMAIL_USERNAME = os.getenv("EMAIL_USERNAME", "tu_usuario_de_email@gmail.com")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
-EMAIL_FROM = os.getenv("EMAIL_FROM", EMAIL_USERNAME)
-EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "EmoVest")
-SIGNUP_NOTIFY_TO = os.getenv("SIGNUP_NOTIFY_TO", EMAIL_FROM)
+
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+# Orígenes permitidos para CORS, separados por comas.
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:8080,http://127.0.0.1:8080",
+    ).split(",")
+    if origin.strip()
+]
 
 # URL base del servicio Ollama. En Docker local apunta al host.
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")

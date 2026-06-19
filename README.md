@@ -1,164 +1,121 @@
 ![Banner de EmoVest](docs/Emovest.png)
 
-EmoVest convierte el diario de trading en inteligencia emocional accionable. Registra tus operaciones, escribe cómo te sientes y la IA detecta qué emociones están afectando tus decisiones.
+# EmoVest
 
+![version](https://img.shields.io/badge/version-0.3.1-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
 
+EmoVest es un diario de trading open source y gratuito para ejecutar en tu propio entorno. Registra operaciones, notas y capturas; cruza tus resultados con contexto emocional; y usa un modelo local con Ollama para detectar patrones en tus decisiones.
 
-https://github.com/user-attachments/assets/7aa16d35-055a-4fea-b33c-defe37a71cf4
+EMOVEST no proporciona asesoramiento financiero. Es una herramienta de analisis conductual y estadistico.
 
+## Que hace
 
+- Gestiona usuarios locales con email y contrasena.
+- Permite crear varias cuentas de trading por usuario.
+- Registra operaciones LONG/SHORT con precios, cantidad, resultado, stop loss, take profit, confianza, notas y captura opcional.
+- Calcula metricas mensuales como beneficio neto, win rate, drawdown, rachas y rendimiento por dia.
+- Encola el analisis emocional con Redis/RQ para que la app no dependa de una respuesta inmediata de Ollama.
+- Guarda las capturas en filesystem local (`backend/images/` por defecto).
 
-![versión](https://img.shields.io/badge/versión-0.3.1-blue)
+## Stack
 
----
+| Capa | Tecnologia |
+|---|---|
+| Frontend | React + Vite + Tailwind CSS |
+| Backend | FastAPI + SQLAlchemy |
+| Base de datos | MySQL |
+| Cola | Redis + RQ |
+| IA emocional | Ollama con modelo local |
+| Auth | JWT |
 
-## 🎯 El Problema
+## Instalacion rapida con Docker
 
-La mayoría de traders mide precio y riesgo, pero no mide su estado mental al decidir. Sin ese dato, repiten sesgos con apariencia de estrategia.
+Requisitos:
 
-EmoVest cuantifica lo que hasta ahora era intangible: **tu estado emocional en cada operación**.
+- Docker Desktop o Docker Engine
+- Ollama corriendo en la maquina host si quieres analisis emocional real
 
----
-
-## ⚡ Qué hace EmoVest
-
-Un **diario de trading** es el registro sistemático de cada operación: activo, dirección (LONG/SHORT), precio de entrada y salida, resultado, notas y contexto. Los traders profesionales lo usan para identificar errores repetidos y mejorar su proceso de decisión con datos reales en lugar de intuición.
-
-EmoVest hace eso, y va un paso más allá: cada vez que escribes notas en una operación, **un modelo de IA local analiza el texto y cuantifica tu estado emocional** en cinco dimensiones. El resultado queda vinculado al resultado financiero, convirtiendo el diario en un espejo psicológico de tu trading.
-
-| Aspecto | 📓 Otros diarios | 🧠 EmoVest |
-|------|------|------|
-| 📝 Registro de operaciones | Guardan datos básicos de entrada, salida y resultado | Guarda los datos de la operación y añade contexto emocional y operativo |
-| ❤️ Lectura emocional | Las emociones quedan en texto libre o no se registran | Analiza tus notas con IA local y cuantifica 5 emociones |
-| 🔗 Relación emoción-rendimiento | No muestran si un estado mental mejora o empeora tus resultados | Vincula cada emoción con el resultado real de tus operaciones |
-| 📊 Métricas mensuales | Suelen limitarse a profit, win rate o balance | Añade drawdown, rachas, días más rentables y métricas emocionales |
-| 🔍 Detección de patrones | Depende de revisar manualmente tus anotaciones | Facilita detectar patrones repetidos por mes, día y estado emocional |
-| 🎯 Utilidad práctica | Sirven como historial | Sirve como historial y como herramienta de mejora psicológica y estadística |
-
----
-
-## 🚀 Funcionalidades
-
-### Cuenta y acceso
-
-- Puede crear su cuenta personal con plan inicial y entrar en segundos.
-- Puede mantener la sesion activa para volver sin repetir el correo cada vez.
-- Puede ver su perfil con nombre y correo dentro del panel.
-
-### Gestion de cuentas de trading
-
-- Puede crear varias cuentas de trading para separar estrategias o mercados.
-- Puede editar nombre y saldo de cada cuenta cuando cambie su estructura.
-- Puede eliminar cuentas que ya no use desde su perfil.
-
-### Diario de operaciones
-
-- Puede registrar operaciones LONG o SHORT con fecha, activo, precios y cantidad.
-- Puede anadir contexto real de cada operacion: stop loss, take profit y nivel de confianza.
-- Puede adjuntar una captura para recordar el grafico o escenario exacto (se guarda en filesystem local, no en la BD).
-- Puede editar o eliminar operaciones y ver la lista por cuenta.
-
-### Rendimiento y seguimiento mensual
-
-- Puede ver sus resultados del mes con ganancias netas, win rate y drawdown.
-- Puede identificar rachas ganadoras y perdedoras para evaluar consistencia.
-- Puede detectar que dias de la semana le generan mejores y peores resultados.
-- Puede seguir su evolucion mensual con un resumen que se conserva en el tiempo.
-
-### Lectura emocional del trading
-
-- Puede escribir notas personales y recibir una lectura emocional de cada operacion.
-- Puede comparar el rendimiento por emocion para entender que estado le favorece.
-- Puede ver un panel emocional por mes con win rate y beneficio total por emocion.
-
----
-
-## 🧠 Cómo funciona
-
-### Flujo general de EmoVest
-
-```mermaid
-flowchart TB
-    A[Creas tu cuenta personal] --> B[Entras a tu panel]
-    B --> C[Creas una o varias cuentas de trading]
-    C --> D[Registras cada operacion con sus datos]
-    D --> E[EmoVest actualiza tu saldo automaticamente]
-    E --> F[EmoVest calcula tus metricas del mes]
-    F --> G[Ves rendimiento y patrones por dia]
-    G --> H[Comparas resultados contra tu estado emocional]
-
-    subgraph Datos que registras en cada operacion
-    D1[Activo y direccion]
-    D2[Entrada, salida y resultado]
-    D3[Nivel de confianza y notas]
-    D4[Captura de pantalla opcional]
-    end
-
-    D --> D1
-    D --> D2
-    D --> D3
-    D --> D4
+```bash
+cp .env.local-server.example .env.local-server
+docker compose --env-file .env.local-server -f docker-compose.local-server.yml up --build
 ```
 
-### Flujo emocional (cuando escribes notas)
+Abre:
 
-```mermaid
-flowchart LR
-    N[Escribes notas de la operacion] --> O[EmoVest interpreta el tono emocional]
-    O --> P[Asigna peso a 5 emociones]
-    P --> Q[Vincula emocion con resultado real]
-    Q --> R[Actualiza metricas emocionales del mes]
-    R --> S[Te muestra que emociones coinciden con mejores o peores resultados]
+- Frontend: http://localhost:8080
+- API: http://localhost:8080/api/
+
+Si Ollama no esta disponible, las operaciones se siguen guardando. El analisis emocional puede quedar pendiente o guardarse con valores de fallback segun el estado del worker.
+
+## Desarrollo manual
+
+### Backend
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+python create_tables.py
+uvicorn app:app --reload
 ```
 
-1. Creas tu perfil e inicias sesion para acceder a tu espacio de trabajo.
-2. Registras una o varias cuentas de trading segun tu forma de operar.
-3. Guardas cada operacion con contexto completo para construir tu diario.
-4. EmoVest recalcula tu saldo y tus metricas cada vez que actualizas resultados.
-5. Si añades notas, EmoVest analiza la parte emocional y la cruza con tu rendimiento.
-6. En estadisticas, puedes filtrar por cuenta, mes y ano para detectar patrones de mejora.
+En Windows, activa el entorno con:
 
----
+```bash
+venv\Scripts\activate
+```
 
-## 🛠️ Stack Tecnológico
+### Worker RQ
 
-| Capa | Tecnología |
-|------|-----------|
-| Frontend | React 18 + Vite + Tailwind CSS |
-| Backend | FastAPI + SQLAlchemy 2.0 |
-| Base de datos | MySQL (PyMySQL) |
-| Autenticación | JWT (python-jose + bcrypt) |
-| IA emocional | Ollama (modelo local `clasificador_texto`) |
-| Validación | Pydantic v2 |
+En otra terminal:
 
----
+```bash
+cd backend
+source venv/bin/activate
+python worker.py
+```
 
-## 🖼️ Storage de imágenes (operaciones)
+### Frontend
 
-- Las capturas se guardan en disco local (`backend/images/` por defecto).
-- En base de datos solo se guarda la ruta relativa del archivo.
-- El backend expone la imagen mediante endpoint autenticado por JWT.
-- Configuración rápida vía variables de entorno en `backend/config.py`:
-  - `IMAGE_STORAGE_DIR` (ruta base de imágenes)
-  - `MAX_IMAGE_SIZE_MB` (límite por imagen)
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
 
-Esto deja la capa preparada para migrar más adelante a un storage externo (S3 u otro) cambiando la implementación de `backend/storage.py`.
+Comandos utiles:
 
----
+```bash
+pnpm lint
+pnpm build
+```
 
+## Variables de entorno
 
-## 👥 Equipo
+El backend usa `backend/.env.example` como plantilla. Las variables principales son:
 
-| Nombre | Rol | GitHub |
-|--------|-----|--------|
-| Annabel | Frontend | @Annabel707 |
-| Enrique | Frontend | @3gr00 |
-| Alejandro | Backend | @21AlexMedina |
-| Samuel | Backend | @ELROKA02 |
+- `DATABASE_URL`: conexion SQLAlchemy a MySQL.
+- `SECRET_KEY`: clave secreta para firmar JWT.
+- `REDIS_URL`: conexion a Redis.
+- `RQ_QUEUE_NAME`: cola donde se encolan analisis emocionales.
+- `FRONTEND_URL`: URL del frontend local.
+- `CORS_ALLOWED_ORIGINS`: origenes permitidos separados por comas.
+- `OLLAMA_HOST`: URL de Ollama.
+- `IMAGE_STORAGE_DIR`: carpeta local para capturas.
+- `MAX_IMAGE_SIZE_MB`: limite por captura.
 
----
+EmoVest no envia correos transaccionales en la version open source inicial. El correo electronico se usa solo como identificador de cuenta.
 
-## ⚠️ Aviso
+## Documentacion
 
-EMOVEST no proporciona asesoramiento financiero.  
-Es una herramienta de análisis conductual y estadístico.
+- Entorno Docker local: [LOCAL_SERVER.md](LOCAL_SERVER.md)
+- Redis, workers y troubleshooting: [docs/redis-workers.md](docs/redis-workers.md)
+- Despliegue avanzado en VPS: [docs/despliegue.md](docs/despliegue.md)
+- Estado historico del VPS anterior: [docs/despliegue-vps.md](docs/despliegue-vps.md)
+
+## Licencia
+
+EmoVest se publica bajo licencia MIT. Consulta [LICENSE](LICENSE).

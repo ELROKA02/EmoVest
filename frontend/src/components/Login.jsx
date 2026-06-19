@@ -95,7 +95,7 @@ const Login = () => {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                         />
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-start">
                             <label className="flex items-center space-x-2 cursor-pointer">
                                 <input
                                     type="checkbox"
@@ -107,9 +107,6 @@ const Login = () => {
                                     Recordar usuario
                                 </span>
                             </label>
-                            <Link to="/forgot-password" className="text-[10px] sm:text-[12px] text-blue-400/80 hover:text-blue-300 transition-colors">
-                                ¿Olvidaste tu contraseña?
-                            </Link>
                         </div>
                     </div>
 

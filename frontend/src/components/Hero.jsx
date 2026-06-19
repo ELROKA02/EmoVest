@@ -67,7 +67,7 @@ const Hero = () => {
                 to="/signup"
                 className="inline-flex justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-8 py-4 text-sm font-bold uppercase tracking-wider text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-fuchsia-500"
               >
-                Crear mi diario gratis
+                Crear cuenta local
               </Link>
               <a
                 href="#como-funciona"
@@ -77,7 +77,7 @@ const Hero = () => {
               </a>
             </div>
             <p className="mt-5 text-sm text-slate-400">
-              Prueba gratuita disponible del 29 de mayo al 21 de junio de 2026.
+              Proyecto open source gratuito para usar en tu propio entorno.
             </p>
           </div>
 
@@ -171,15 +171,15 @@ const Hero = () => {
         </div>
       </section>
 
-      <section id="suscripciones" className="py-20">
+      <section id="open-source" className="py-20">
         <div className="container mx-auto max-w-7xl px-6 sm:px-8 lg:px-12">
           <div className="mx-auto max-w-3xl text-center">
-            <p className="text-sm font-semibold uppercase tracking-wider text-violet-300">Por qué probarlo ahora</p>
+            <p className="text-sm font-semibold uppercase tracking-wider text-violet-300">Open source y self-hosted</p>
             <h2 className="mt-3 text-3xl font-bold sm:text-4xl">
               Construye un historial que explique algo más que ganancias y pérdidas.
             </h2>
             <p className="mt-4 text-lg leading-8 text-slate-300">
-              El MVP está en desarrollo activo y ahora puedes entrar gratis para validar si tu proceso mejora cuando revisas emoción, operación y resultado juntos.
+              Descarga EmoVest, ejecútalo en local y conserva tus datos en tu propio entorno mientras revisas emoción, operación y resultado juntos.
             </p>
           </div>
 
@@ -197,9 +197,9 @@ const Hero = () => {
 
           <div className={`${glassCard} mt-8 p-7 md:flex md:items-center md:justify-between md:gap-8`}>
             <div>
-              <h3 className="text-2xl font-bold">Acceso actual: prueba gratuita</h3>
+              <h3 className="text-2xl font-bold">Acceso local gratuito</h3>
               <p className="mt-2 max-w-2xl text-slate-300">
-                Empieza registrando tus operaciones y revisa qué patrones aparecen. Si tienes dudas sobre acceso, soporte o colaboración, escríbenos.
+                Instala la app, crea tu cuenta local y revisa qué patrones aparecen. Si quieres colaborar o reportar mejoras, escríbenos.
               </p>
             </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row md:mt-0">
@@ -207,7 +207,7 @@ const Hero = () => {
                 to="/signup"
                 className="inline-flex justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-3 text-sm font-bold uppercase tracking-wider text-white transition hover:from-violet-500 hover:to-fuchsia-500"
               >
-                Crear cuenta gratis
+                Crear cuenta local
               </Link>
               <a
                 href={`mailto:${contactEmail}`}

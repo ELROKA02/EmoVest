@@ -235,7 +235,7 @@ La aplicación es una SPA (React Router). Cualquier URL que no exista como archi
        redir https://tudominio.com{uri} permanent
    }
    ```
-   Caddy detecta el dominio, solicita el cert a Let's Encrypt vía ACME y lo renueva solo.
+   Caddy detecta el dominio, solicita el cert a Let's Encrypt via ACME y lo actualiza solo.
 
 3. **Abrir el puerto 443:**
    ```bash
@@ -255,7 +255,7 @@ La aplicación es una SPA (React Router). Cualquier URL que no exista como archi
    pnpm build
    ```
 
-6. **Actualizar `FRONTEND_URL` en `.env` del backend** (ver punto 4.3) para que los emails de reset password lleven al dominio correcto.
+6. **Actualizar `FRONTEND_URL` en `.env` del backend** (ver punto 4.3) para que la configuracion del entorno quede alineada con el dominio.
 
 7. **Actualizar `allow_origins` en `backend/app.py`** para añadir `https://tudominio.com` (estrictamente no es necesario por ser mismo origen, pero conviene como red de seguridad).
 
@@ -285,15 +285,6 @@ Verificar que existe `/home/ubuntu/Emovest/EmoVest/backend/.env` con al menos:
 dataBase_url=mysql+pymysql://usuario:pass@127.0.0.1/emovest
 SECRET_KEY=<una-cadena-aleatoria-larga-y-secreta>
 FRONTEND_URL=http://164.132.42.86
-
-# Opcional (para emails de reset password):
-EMAIL_SMTP_SERVER=smtp.gmail.com
-EMAIL_SMTP_PORT=465
-EMAIL_USERNAME=tu-email@gmail.com
-EMAIL_PASSWORD=<app-password-de-google>
-EMAIL_FROM=tu-email@gmail.com
-EMAIL_FROM_NAME=EmoVest
-SIGNUP_NOTIFY_TO=contactoemovest@gmail.com
 ```
 
 Permisos restrictivos:
@@ -312,13 +303,7 @@ sudo systemctl restart emovest-api emovest-worker
 > ```
 > Cambiar `SECRET_KEY` invalida los JWT existentes (todos los usuarios tendrán que volver a iniciar sesión).
 
-### 4.4. RECOMENDABLE — Configurar SMTP para reset password y avisos internos
-
-El endpoint de "olvidé mi contraseña" ([backend/routers/auth.py:88](../backend/routers/auth.py)) requiere `EMAIL_SMTP_SERVER`, `EMAIL_USERNAME`, `EMAIL_PASSWORD` y `EMAIL_FROM`. Si faltan, el endpoint lanza error y los emails no se envían. Los avisos internos de nuevos registros usan la misma configuración SMTP y se envían a `SIGNUP_NOTIFY_TO`; si el aviso falla, el registro del usuario no se bloquea.
-
-Para Gmail: hay que crear una **App Password** en la cuenta de Google (Settings → Security → 2-Step Verification → App passwords) — no funciona la contraseña normal. Configurar como en 4.3.
-
-### 4.5. RECOMENDABLE — Limitar tamaño de logs de systemd
+### 4.4. RECOMENDABLE — Limitar tamaño de logs de systemd
 
 Por defecto journald acumula logs sin límite y puede llenar el disco con el tiempo. Editar `/etc/systemd/journald.conf`:
 ```
@@ -326,7 +311,7 @@ SystemMaxUse=500M
 ```
 Y `sudo systemctl restart systemd-journald`.
 
-### 4.6. RECOMENDABLE — Ruta catch-all en React Router
+### 4.5. RECOMENDABLE — Ruta catch-all en React Router
 
 Cuando alguien visita una URL inexistente (ej: `http://164.132.42.86/cualquier-cosa`), Caddy sirve `index.html` (correcto para SPA) pero React Router no encuentra ruta y se ve la página solo con el header. Añadir una ruta `path="*"` que muestre un "404 - Página no encontrada" o redirija a `/`.
 
