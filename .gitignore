@@ -1,6 +1,7 @@
 .env
 .env.local-server
 venv
+.codex_local_pydeps/
 backend/__pycache__
 # Dependencias
 node_modules/

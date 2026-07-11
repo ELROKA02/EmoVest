@@ -42,6 +42,26 @@ CORS_ALLOWED_ORIGINS = [
 # URL base del servicio Ollama. En Docker local apunta al host.
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 
+# Configuracion base de IA. Mantiene Ollama como valor por defecto para no romper
+# instalaciones actuales.
+AI_PROVIDER = os.getenv("AI_PROVIDER", "ollama").strip().lower()
+AI_MODEL = os.getenv("AI_MODEL", "clasificador_emociones_gemma4:latest").strip()
+AI_BASE_URL = os.getenv("AI_BASE_URL", OLLAMA_HOST).rstrip("/")
+AI_INSTALL_MODE = os.getenv("AI_INSTALL_MODE", "manual").strip().lower()
+
+# Configuracion especifica por uso. La clasificacion emocional y el chat pueden
+# usar proveedores/modelos distintos.
+AI_EMOTION_PROVIDER = os.getenv("AI_EMOTION_PROVIDER", AI_PROVIDER).strip().lower()
+AI_EMOTION_MODEL = os.getenv("AI_EMOTION_MODEL", AI_MODEL).strip()
+AI_EMOTION_BASE_URL = os.getenv("AI_EMOTION_BASE_URL", AI_BASE_URL).rstrip("/")
+
+AI_CHAT_PROVIDER = os.getenv("AI_CHAT_PROVIDER", AI_PROVIDER).strip().lower()
+AI_CHAT_MODEL = os.getenv("AI_CHAT_MODEL", os.getenv("AI_MODEL", "llama3.2:3b")).strip()
+AI_CHAT_BASE_URL = os.getenv("AI_CHAT_BASE_URL", AI_BASE_URL).rstrip("/")
+
+# URL por defecto para llama.cpp cuando se ejecute llama-server en local.
+LLAMACPP_BASE_URL = os.getenv("LLAMACPP_BASE_URL", "http://localhost:8080").rstrip("/")
+
 # Almacenamiento local de imágenes de operaciones.
 IMAGE_STORAGE_DIR = os.getenv("IMAGE_STORAGE_DIR", "images")
 MAX_IMAGE_SIZE_MB = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))

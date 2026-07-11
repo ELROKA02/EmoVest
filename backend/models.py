@@ -159,3 +159,15 @@ class Registro_emocional(Base):
     neutral = Column(DECIMAL(3,2))
 
     operacion = relationship("Operacion", back_populates="registro_emocional")
+
+
+class AiSetting(Base):
+    __tablename__ = "ai_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    use_case = Column(String(50), nullable=False, unique=True)
+    provider = Column(String(50), nullable=False)
+    model = Column(String(120), nullable=False)
+    base_url = Column(String(255), nullable=False)
+    install_mode = Column(String(50), nullable=False, default="manual")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
