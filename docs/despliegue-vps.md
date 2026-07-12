@@ -1,4 +1,6 @@
-# Despliegue real en el VPS (estado actual)
+# Despliegue real en el VPS (documentación histórica)
+
+> EmoVest se distribuye actualmente para ejecutarse en local mediante Docker Compose. Esta guía se conserva como referencia histórica y no forma parte del flujo recomendado.
 
 Documento que recoge lo que se ha desplegado el **2026-05-23** en el VPS de OVH `164.132.42.86`. Cubre qué cambios se hicieron y por qué, cómo está montado ahora mismo, cómo operar el sistema en el día a día, y qué queda pendiente para considerarlo producción "completa".
 

@@ -78,7 +78,7 @@ El análisis emocional es una interpretación orientativa de tus notas; no susti
 | Procesamiento asíncrono | Redis y RQ |
 | IA emocional | Ollama y modelos locales |
 | Autenticación | JWT |
-| Entorno local | Docker Compose y Caddy |
+| Entorno local | Docker Compose |
 
 ## ⚙️ Empieza en minutos
 
@@ -91,7 +91,7 @@ cp .env.local-server.example .env.local-server
 docker compose --env-file .env.local-server -f docker-compose.local-server.yml up --build
 ```
 
-Abre [http://localhost:8080](http://localhost:8080). La API estará disponible en [http://localhost:8080/api/](http://localhost:8080/api/).
+Abre [http://localhost:5173](http://localhost:5173). La API y su documentación interactiva estarán disponibles en [http://localhost:8000](http://localhost:8000) y [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ### Tus datos se conservan
 
@@ -150,7 +150,6 @@ El procesamiento emocional es asíncrono: recibir un `201` al crear una operaci�
 |---|---|
 | [Guía de entorno local](LOCAL_SERVER.md) | Docker, variables y verificación local |
 | [Redis y workers](docs/redis-workers.md) | Cola, worker y resolución de problemas |
-| [Despliegue](docs/despliegue.md) | Servicios y despliegue en VPS |
 | [Vídeo de presentación](docs/Video_presentacion.mp4) | Vista general del proyecto |
 | [API interactiva](http://localhost:8000/docs) | OpenAPI/Swagger cuando el backend está en ejecución manual |
 

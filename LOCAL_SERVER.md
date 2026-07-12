@@ -1,6 +1,6 @@
-# Entorno local tipo servidor
+# Entorno local con Docker
 
-Este entorno reproduce el VPS real de EmoVest de forma practica: Caddy sirve el frontend compilado, proxya `/api/*` al backend FastAPI, y Docker levanta MySQL, Redis y el worker RQ. Ollama no se instala en Docker; se usa el servicio local de tu maquina en `localhost:11434`.
+Este entorno permite ejecutar EmoVest localmente: Docker levanta el frontend compilado, la API FastAPI, MySQL, Redis y el worker RQ. No requiere proxy inverso ni servidor. Ollama no se instala en Docker; se usa el servicio local de tu maquina en `localhost:11434`.
 
 ## Arranque
 
@@ -11,15 +11,18 @@ cp .env.local-server.example .env.local-server
 docker compose --env-file .env.local-server -f docker-compose.local-server.yml up --build
 ```
 
+Si ya tenias un `.env.local-server` de una version anterior, actualiza `VITE_API_URL` a `http://localhost:8000`, `FRONTEND_URL` a `http://localhost:5173` y `WEB_PORT` a `5173`.
+
 Abre:
 
-- Frontend: http://localhost:8080
-- API via Caddy: http://localhost:8080/api/
+- Frontend: http://localhost:5173
+- API: http://localhost:8000/
+- Documentación API: http://localhost:8000/docs
 
 ## Comprobaciones rapidas
 
 ```bash
-curl http://localhost:8080/api/
+curl http://localhost:8000/
 docker compose --env-file .env.local-server -f docker-compose.local-server.yml ps
 docker compose --env-file .env.local-server -f docker-compose.local-server.yml logs -f api worker
 ```

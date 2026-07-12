@@ -55,12 +55,29 @@ AI_EMOTION_PROVIDER = os.getenv("AI_EMOTION_PROVIDER", AI_PROVIDER).strip().lowe
 AI_EMOTION_MODEL = os.getenv("AI_EMOTION_MODEL", AI_MODEL).strip()
 AI_EMOTION_BASE_URL = os.getenv("AI_EMOTION_BASE_URL", AI_BASE_URL).rstrip("/")
 
-AI_CHAT_PROVIDER = os.getenv("AI_CHAT_PROVIDER", AI_PROVIDER).strip().lower()
-AI_CHAT_MODEL = os.getenv("AI_CHAT_MODEL", os.getenv("AI_MODEL", "llama3.2:3b")).strip()
-AI_CHAT_BASE_URL = os.getenv("AI_CHAT_BASE_URL", AI_BASE_URL).rstrip("/")
-
-# URL por defecto para llama.cpp cuando se ejecute llama-server en local.
+# Proveedores OpenAI-compatible usados por el chat. Las claves permanecen
+# exclusivamente en variables de entorno y nunca se persisten ni se exponen.
 LLAMACPP_BASE_URL = os.getenv("LLAMACPP_BASE_URL", "http://localhost:8080").rstrip("/")
+LLAMACPP_API_KEY = os.getenv("LLAMACPP_API_KEY", "")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+
+AI_CHAT_PROVIDER = os.getenv("AI_CHAT_PROVIDER", AI_PROVIDER).strip().lower()
+AI_CHAT_MODEL = os.getenv("AI_CHAT_MODEL", "qwen3.5:latest").strip()
+AI_CHAT_BASE_URL = os.getenv(
+    "AI_CHAT_BASE_URL",
+    OPENROUTER_BASE_URL if AI_CHAT_PROVIDER == "openrouter" else AI_BASE_URL,
+).rstrip("/")
+
+# llama-server y OpenRouter no exponen un endpoint estándar para consultar las
+# capacidades de cada modelo. Estas listas son el contrato explícito del
+# despliegue para permitir tool calling. En Ollama se comprueba /api/show.
+LLAMACPP_TOOL_CALLING_MODELS = {
+    model.strip() for model in os.getenv("LLAMACPP_TOOL_CALLING_MODELS", "").split(",") if model.strip()
+}
+OPENROUTER_TOOL_CALLING_MODELS = {
+    model.strip() for model in os.getenv("OPENROUTER_TOOL_CALLING_MODELS", "").split(",") if model.strip()
+}
 
 # Almacenamiento local de imágenes de operaciones.
 IMAGE_STORAGE_DIR = os.getenv("IMAGE_STORAGE_DIR", "images")

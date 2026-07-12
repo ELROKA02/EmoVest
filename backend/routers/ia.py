@@ -105,6 +105,7 @@ def guardar_registro_emocional(texto: str, id_operacion: int, db: Session) -> Re
 
 @router.get(
     "/providers",
+    tags=["configuracion"],
     summary="Listar proveedores de IA soportados",
     status_code=status.HTTP_200_OK,
 )
@@ -119,6 +120,7 @@ def listar_proveedores(
 
 @router.get(
     "/config",
+    tags=["configuracion"],
     summary="Obtener configuracion activa de IA",
     status_code=status.HTTP_200_OK,
 )
@@ -142,6 +144,7 @@ def obtener_configuracion_ia(
 
 @router.put(
     "/config/{use_case}",
+    tags=["configuracion"],
     summary="Actualizar configuracion de IA por uso",
     status_code=status.HTTP_200_OK,
 )
@@ -197,6 +200,7 @@ def actualizar_configuracion_ia(
 
 @router.get(
     "/status",
+    tags=["configuracion"],
     summary="Consultar estado del proveedor de IA activo",
     status_code=status.HTTP_200_OK,
 )
@@ -248,6 +252,7 @@ def probar_ia(
 
 @router.post(
     "/chat/test",
+    tags=["chat_ia"],
     summary="Probar respuesta de chat con la configuracion de chat activa",
     status_code=status.HTTP_200_OK,
 )

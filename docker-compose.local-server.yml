@@ -33,6 +33,8 @@ services:
     command: sh -c "python create_tables.py && uvicorn app:app --host 0.0.0.0 --port 8000"
     env_file:
       - .env.local-server
+    ports:
+      - "${API_PORT:-8000}:8000"
     volumes:
       - backend-images:/app/images
     depends_on:
@@ -65,9 +67,9 @@ services:
       context: .
       dockerfile: docker/local-server/web.Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "${WEB_PORT:-5173}:4173"
     depends_on:
       api:
         condition: service_started

@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS frontend-build
+FROM node:22-bookworm-slim
 
 WORKDIR /app
 
@@ -8,11 +8,10 @@ COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY frontend/ .
-ARG VITE_API_URL=/api
+ARG VITE_API_URL=http://localhost:8000
 ENV VITE_API_URL=$VITE_API_URL
 RUN pnpm build
 
-FROM caddy:2-alpine
+EXPOSE 4173
 
-COPY docker/local-server/Caddyfile /etc/caddy/Caddyfile
-COPY --from=frontend-build /app/dist /srv
+CMD ["pnpm", "preview", "--host", "0.0.0.0", "--port", "4173"]

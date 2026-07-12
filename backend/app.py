@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import CORS_ALLOWED_ORIGINS
-from routers import auth, exportaciones, ia, operaciones, cuentaTrading, estadisticas
+from routers import auth, chat, exportaciones, ia, operaciones, cuentaTrading, estadisticas
 
 app = FastAPI(
     title="EMOVEST API",
@@ -27,12 +27,20 @@ app = FastAPI(
             "description": "Gestion de cuentas de trading y configuraciones asociadas."
         },
         {
+            "name": "configuracion",
+            "description": "Consulta y gestion de la configuracion de la plataforma, incluidos proveedores y modelos de IA."
+        },
+        {
             "name": "operaciones",
             "description": "Registro y consulta de operaciones financieras realizadas por el usuario."
         },
         {
             "name": "emociones",
             "description": "Registro y analisis del contexto emocional vinculado a las operaciones."
+        },
+        {
+            "name": "chat_ia",
+            "description": "Endpoints de conversacion y pruebas del asistente de IA."
         },
         {
             "name": "estadisticas",
@@ -60,6 +68,7 @@ app.include_router(operaciones.router)
 app.include_router(cuentaTrading.router)
 app.include_router(estadisticas.router)
 app.include_router(ia.router)
+app.include_router(chat.router)
 
 @app.get(
     "/",

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ai.providers.base import AiRuntimeSettings, AIProvider
 from ai.providers.llamacpp import LlamaCppProvider
 from ai.providers.ollama import OllamaProvider
+from ai.providers.openrouter import OpenRouterProvider
 from config import (
     AI_CHAT_BASE_URL,
     AI_CHAT_MODEL,
@@ -13,6 +14,7 @@ from config import (
     AI_EMOTION_PROVIDER,
     AI_INSTALL_MODE,
     LLAMACPP_BASE_URL,
+    OPENROUTER_BASE_URL,
 )
 from models import AiSetting
 
@@ -30,6 +32,7 @@ SUPPORTED_AI_USE_CASES = {AI_USE_CASE_EMOTION, AI_USE_CASE_CHAT}
 PROVIDERS: dict[str, type[AIProvider]] = {
     OllamaProvider.provider_id: OllamaProvider,
     LlamaCppProvider.provider_id: LlamaCppProvider,
+    OpenRouterProvider.provider_id: OpenRouterProvider,
 }
 
 
@@ -60,6 +63,11 @@ RECOMMENDED_MODELS = {
     "chat": {
         "ollama": [
             {
+                "id": "qwen3.5:latest",
+                "name": "Qwen 3.5 (recomendado)",
+                "description": "Modelo local recomendado para análisis conversacional y tool calling.",
+            },
+            {
                 "id": "llama3.2:3b",
                 "name": "Chat ligero",
                 "description": "Recomendado para respuestas rápidas en equipos modestos.",
@@ -87,6 +95,13 @@ RECOMMENDED_MODELS = {
                 "description": "Mejor calidad conversacional local, requiere más memoria.",
             },
         ],
+        "openrouter": [
+            {
+                "id": "qwen/qwen3.5-9b",
+                "name": "Qwen 3.5",
+                "description": "Ejemplo de modelo externo; debe habilitarse para tools en el entorno.",
+            },
+        ],
     },
 }
 
@@ -103,6 +118,8 @@ def default_base_url_for_provider(provider: str, use_case: str = AI_USE_CASE_EMO
     """Devuelve la URL base predeterminada según el proveedor y el caso de uso."""
     if provider == "llamacpp":
         return LLAMACPP_BASE_URL
+    if provider == "openrouter":
+        return OPENROUTER_BASE_URL
     if normalize_use_case(use_case) == AI_USE_CASE_CHAT:
         return AI_CHAT_BASE_URL
     return AI_EMOTION_BASE_URL
@@ -170,6 +187,17 @@ def get_provider(settings: AiRuntimeSettings) -> AIProvider:
     if provider_class is None:
         raise ValueError(f"Proveedor de IA no soportado: {settings.provider}")
     return provider_class(settings)
+
+
+def get_langchain_chat_model(settings: AiRuntimeSettings):
+    """Obtiene un modelo LangChain validado para el chat con herramientas.
+
+    LangChain es una capa de interoperabilidad. No autoriza usuarios ni accede
+    a la base de datos, Redis, archivos o endpoints internos de EmoVest.
+    """
+    from ai.chat_models import validate_tool_calling_model
+
+    return validate_tool_calling_model(settings)
 
 
 def get_provider_catalog() -> list[dict]:

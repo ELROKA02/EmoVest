@@ -20,6 +20,9 @@ httpx==0.28.1
 idna==3.11
 mysql-connector-python==9.6.0
 ollama==0.6.1
+langchain-core>=0.3,<2
+langchain-ollama>=0.3,<2
+langchain-openai>=0.3,<2
 passlib==1.7.4
 pyasn1==0.6.3
 pycparser==3.0
