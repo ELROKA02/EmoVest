@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
@@ -24,6 +24,11 @@ const PerfilUsuario = () => {
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [defaultCurrency, setDefaultCurrency] = useState(() => localStorage.getItem('defaultCurrency') || 'EUR');
+  const [prefsSaved, setPrefsSaved] = useState(false);
+  const [avatar, setAvatar] = useState(() => localStorage.getItem('userAvatar') || '');
+  const [avatarError, setAvatarError] = useState(null);
+  const fileInputRef = useRef(null);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [showFundsModal, setShowFundsModal] = useState(false);
@@ -175,7 +180,7 @@ const PerfilUsuario = () => {
   const openCreateForm = () => {
     setEditingAccount(null);
     setActionError(null);
-    setAccountData({ nombre_cuenta: '', divisa: 'EUR', saldo: '' });
+    setAccountData({ nombre_cuenta: '', divisa: defaultCurrency, saldo: '' });
     setShowAccountForm(true);
   };
 
@@ -248,6 +253,47 @@ const PerfilUsuario = () => {
     }
   };
 
+  const handleDefaultCurrencyChange = (value) => {
+    setDefaultCurrency(value);
+    localStorage.setItem('defaultCurrency', value);
+    setPrefsSaved(true);
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarError(null);
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('El archivo debe ser una imagen.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError('La imagen no puede superar 2 MB.');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      setAvatar(dataUrl);
+      localStorage.setItem('userAvatar', dataUrl);
+    };
+    reader.onerror = () => setAvatarError('No se pudo leer la imagen.');
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatar('');
+    setAvatarError(null);
+    localStorage.removeItem('userAvatar');
+  };
+
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
   };
@@ -274,9 +320,13 @@ const PerfilUsuario = () => {
           </div>
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2 text-white transition-colors">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+              {avatar ? (
+                <img src={avatar} alt="Avatar del usuario" className="w-8 h-8 rounded-full object-cover border border-white/20" />
+              ) : (
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              )}
               <span className="font-medium">{userData.name}</span>
             </div>
             <button onClick={handleLogout} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-full transition-all duration-300 flex items-center gap-2">
@@ -287,38 +337,86 @@ const PerfilUsuario = () => {
         </header>
 
         <main className="flex-1 overflow-auto p-8">
-          <div className="max-w-3xl mx-auto">
-            <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10 shadow-2xl">
+          <div className="max-w-6xl mx-auto">
+            <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 md:p-10 border border-white/10 shadow-2xl min-h-[70vh]">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-8 border-b border-white/10">
                 <div className="flex items-center gap-6">
-                  <div className="w-24 h-24 bg-blue-600/20 border border-blue-500/50 rounded-full flex items-center justify-center text-blue-400">
-                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      onClick={handleAvatarClick}
+                      title="Cambiar imagen"
+                      className="w-24 h-24 rounded-full overflow-hidden bg-blue-600/20 border border-blue-500/50 flex items-center justify-center text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                    >
+                      {avatar ? (
+                        <img src={avatar} alt="Avatar del usuario" className="w-full h-full object-cover" />
+                      ) : (
+                        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      )}
+                      <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                        Cambiar
+                      </span>
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="hidden"
+                    />
                   </div>
                   <div>
                     <h3 className="text-2xl font-bold text-white">{userData.name}</h3>
                     <p className="text-gray-400">{userData.email}</p>
+                    <div className="mt-2 flex items-center gap-3">
+                      <button type="button" onClick={handleAvatarClick} className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors">
+                        Cambiar imagen
+                      </button>
+                      {avatar && (
+                        <button type="button" onClick={handleRemoveAvatar} className="text-xs font-medium text-red-400 hover:text-red-300 transition-colors">
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                    {avatarError && (
+                      <p className="mt-1 text-xs text-red-400">{avatarError}</p>
+                    )}
                   </div>
                 </div>
                 
-                {/* Selector de Vistas */}
-                <div className="w-full md:w-64">
-                  <CustomSelect
-                    value={currentView}
-                    onChange={handleViewChange}
-                    options={['Información Personal', 'Información de Cuentas']}
-                  />
-                </div>
               </div>
 
-              {error && (
-                <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
-                  {error}
-                </div>
-              )}
+              <div className="flex flex-col md:flex-row gap-8">
+                <nav className="md:w-56 flex-shrink-0">
+                  <ul className="flex flex-wrap md:flex-col gap-2">
+                    {['Información Personal', 'Información de Cuentas', 'Ajustes'].map((opt) => (
+                      <li key={opt} className="flex-1 md:flex-none">
+                        <button
+                          type="button"
+                          onClick={() => handleViewChange(opt)}
+                          className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all duration-300 ${
+                            currentView === opt
+                              ? 'bg-blue-600/30 text-blue-400 border border-blue-500/30'
+                              : 'text-gray-300 hover:bg-white/10 hover:text-white border border-transparent'
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
 
-              {currentView === 'Información Personal' ? (
+                <div className="flex-1 min-w-0">
+                  {error && (
+                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
+                      {error}
+                    </div>
+                  )}
+
+                  {currentView === 'Información Personal' ? (
                 <div className="space-y-6 animate-in fade-in duration-300">
                   <h4 className="text-lg font-semibold text-white mb-4">Información Personal</h4>
                   
@@ -333,17 +431,8 @@ const PerfilUsuario = () => {
                     </div>
                   </div>
 
-                  <div className="pt-6 mt-6 border-t border-white/10">
-                    <h4 className="text-lg font-semibold text-white mb-4">Ajustes</h4>
-                    <p className="text-gray-400 text-sm mb-4">
-                      Esta sección permite configurar preferencias locales de la cuenta en el futuro.
-                    </p>
-                    <button className="px-6 py-2.5 bg-blue-600/50 text-white font-semibold rounded-xl cursor-not-allowed border border-blue-500/30">
-                      Editar Perfil (Próximamente)
-                    </button>
-                  </div>
                 </div>
-              ) : (
+              ) : currentView === 'Información de Cuentas' ? (
                 <div className="space-y-6 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-lg font-semibold text-white">Tus Cuentas de Trading</h4>
@@ -410,7 +499,87 @@ const PerfilUsuario = () => {
                     </div>
                   )}
                 </div>
+              ) : (
+                <div className="space-y-8 animate-in fade-in duration-300">
+                  {/* Preferencias */}
+                  <div>
+                    <h4 className="text-lg font-semibold text-white mb-4">Preferencias</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-400 block">Divisa por defecto</label>
+                        <CustomSelect
+                          value={defaultCurrency}
+                          onChange={handleDefaultCurrencyChange}
+                          options={['EUR', 'USD']}
+                        />
+                        <p className="text-xs text-gray-500">Se usará como divisa predeterminada al crear nuevas cuentas.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-400 block">Menú lateral</label>
+                        <button
+                          type="button"
+                          onClick={() => setSidebarOpen(prev => !prev)}
+                          className="w-full flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-3 text-white hover:bg-white/10 transition-colors"
+                        >
+                          <span>{sidebarOpen ? 'Expandido' : 'Contraído'}</span>
+                          <span className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${sidebarOpen ? 'bg-blue-600' : 'bg-gray-600'}`}>
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sidebarOpen ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </span>
+                        </button>
+                        <p className="text-xs text-gray-500">Preferencia guardada en este dispositivo.</p>
+                      </div>
+                    </div>
+                    {prefsSaved && (
+                      <p className="mt-3 text-sm text-green-400">Preferencias guardadas.</p>
+                    )}
+                  </div>
+
+                  {/* Cuenta (requiere backend, no disponible) */}
+                  <div className="pt-6 border-t border-white/10">
+                    <h4 className="text-lg font-semibold text-white mb-2">Cuenta</h4>
+                    <p className="text-gray-400 text-sm mb-4">Estas opciones aún no están disponibles.</p>
+                    <div className="flex flex-wrap gap-3">
+                      <button disabled title="No disponible" className="px-6 py-2.5 bg-blue-600/40 text-white/70 font-semibold rounded-xl cursor-not-allowed border border-blue-500/30">
+                        Editar nombre y correo
+                      </button>
+                      <button disabled title="No disponible" className="px-6 py-2.5 bg-white/5 text-white/70 font-semibold rounded-xl cursor-not-allowed border border-white/10">
+                        Cambiar contraseña
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Suscripción (requiere backend, no disponible) */}
+                  <div className="pt-6 border-t border-white/10">
+                    <h4 className="text-lg font-semibold text-white mb-2">Suscripción</h4>
+                    <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-4">
+                      <div>
+                        <p className="text-white font-medium">Plan actual</p>
+                        <p className="text-xs text-gray-500">Gestión de plan no disponible.</p>
+                      </div>
+                      <span className="px-3 py-1 rounded-full bg-gray-600/40 text-gray-300 text-xs font-semibold border border-white/10">No disponible</span>
+                    </div>
+                  </div>
+
+                  {/* Sesión y zona de peligro */}
+                  <div className="pt-6 border-t border-white/10">
+                    <h4 className="text-lg font-semibold text-white mb-4">Sesión</h4>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={handleLogout}
+                        className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors inline-flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        Cerrar Sesión
+                      </button>
+                      <button disabled title="No disponible" className="px-6 py-2.5 bg-red-900/30 text-red-300/60 font-semibold rounded-xl cursor-not-allowed border border-red-500/20">
+                        Eliminar cuenta
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
+                </div>
+              </div>
             </div>
           </div>
 
