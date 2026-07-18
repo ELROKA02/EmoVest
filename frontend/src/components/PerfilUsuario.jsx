@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
 import { formatCurrency } from '../utils/currency';
 import { API_BASE_URL } from '../config';
+import { Spinner, LoadingState, ErrorState, EmptyState } from './ui';
 
 const PerfilUsuario = () => {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -20,6 +21,9 @@ const PerfilUsuario = () => {
   const [currentView, setCurrentView] = useState('Información Personal');
   const [cuentas, setCuentas] = useState([]);
   const [loadingCuentas, setLoadingCuentas] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [actionError, setActionError] = useState(null);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [showFundsModal, setShowFundsModal] = useState(false);
@@ -98,6 +102,7 @@ const PerfilUsuario = () => {
 
   const handleAccountSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     const token = sessionStorage.getItem('token');
     const isEditing = !!editingAccount;
     const url = isEditing
@@ -114,6 +119,8 @@ const PerfilUsuario = () => {
       saldo_inicial: parseFloat(accountData.saldo)
     };
 
+    setSubmitting(true);
+    setActionError(null);
     try {
       const response = await fetch(url, {
         method,
@@ -125,20 +132,26 @@ const PerfilUsuario = () => {
       });
 
       if (response.ok) {
-        fetchCuentas();
+        await fetchCuentas();
         setShowAccountForm(false);
         setEditingAccount(null);
       } else {
         const errData = await response.json();
-        alert(errData.detail || 'Error al guardar la cuenta');
+        setActionError(errData.detail || 'Error al guardar la cuenta');
       }
     } catch (error) {
-      alert('Error de conexión al servidor',error);
+      setActionError('Error de conexión al servidor');
+      console.error(error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDeleteCuenta = async (id) => {
+    if (deletingId) return;
     if (!window.confirm('¿Estás seguro de eliminar esta cuenta de trading? Esta acción no se puede deshacer.')) return;
+    setDeletingId(id);
+    setActionError(null);
     try {
       const token = sessionStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/cuentas/eliminarcuenta/${id}`, {
@@ -146,24 +159,29 @@ const PerfilUsuario = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
-        fetchCuentas();
+        await fetchCuentas();
       } else {
         const errData = await response.json();
-        alert(errData.detail || 'Error al eliminar la cuenta');
+        setActionError(errData.detail || 'Error al eliminar la cuenta');
       }
     } catch (error) {
-      alert('Error de conexión al servidor', error);
+      setActionError('Error de conexión al servidor');
+      console.error(error);
+    } finally {
+      setDeletingId(null);
     }
   };
 
   const openCreateForm = () => {
     setEditingAccount(null);
+    setActionError(null);
     setAccountData({ nombre_cuenta: '', divisa: 'EUR', saldo: '' });
     setShowAccountForm(true);
   };
 
   const openEditForm = (cuenta) => {
     setEditingAccount(cuenta);
+    setActionError(null);
     setAccountData({
       nombre_cuenta: cuenta.nombre_cuenta,
       divisa: cuenta.divisa,
@@ -176,14 +194,16 @@ const PerfilUsuario = () => {
     setSelectedAccountForFunds(cuenta);
     setFundsType(type);
     setFundsAmount('');
+    setActionError(null);
     setShowFundsModal(true);
   };
 
   const handleFundsSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     const amount = parseFloat(fundsAmount);
     if (isNaN(amount) || amount <= 0) {
-      alert('Por favor ingresa un monto válido mayor a 0');
+      setActionError('Por favor ingresa un monto válido mayor a 0');
       return;
     }
 
@@ -192,10 +212,12 @@ const PerfilUsuario = () => {
       : selectedAccountForFunds.saldo_actual - amount;
 
     if (newSaldo < 0) {
-      alert('No puedes retirar más fondos de los que tienes en la cuenta');
+      setActionError('No puedes retirar más fondos de los que tienes en la cuenta');
       return;
     }
 
+    setSubmitting(true);
+    setActionError(null);
     try {
       const token = sessionStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/cuentas/actualizarcuenta/${selectedAccountForFunds.id}`, {
@@ -210,16 +232,19 @@ const PerfilUsuario = () => {
       });
 
       if (response.ok) {
-        fetchCuentas();
+        await fetchCuentas();
         setShowFundsModal(false);
         setFundsAmount('');
         setSelectedAccountForFunds(null);
       } else {
         const errData = await response.json();
-        alert(errData.detail || 'Error al actualizar el saldo');
+        setActionError(errData.detail || 'Error al actualizar el saldo');
       }
     } catch (error) {
-      alert('Error de conexión al servidor', error);
+      setActionError('Error de conexión al servidor');
+      console.error(error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -330,12 +355,14 @@ const PerfilUsuario = () => {
                     </button>
                   </div>
 
+                  {actionError && (
+                    <ErrorState variant="inline" message={actionError} onDismiss={() => setActionError(null)} className="mb-4" />
+                  )}
+
                   {loadingCuentas ? (
-                    <div className="text-center py-8 text-gray-400">Cargando cuentas...</div>
+                    <LoadingState message="Cargando cuentas..." />
                   ) : cuentas.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400 border border-dashed border-white/10 rounded-xl">
-                      No tienes cuentas de trading registradas.
-                    </div>
+                    <EmptyState message="No tienes cuentas de trading registradas." />
                   ) : (
                     <div className="space-y-4">
                       {cuentas.map(cuenta => (
@@ -350,27 +377,32 @@ const PerfilUsuario = () => {
                           <div className="flex gap-2">
                             <button
                               onClick={() => openFundsModal(cuenta, 'add')}
-                              className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-full transition-colors"
+                              disabled={deletingId === cuenta.id}
+                              className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               + Fondos
                             </button>
                             <button
                               onClick={() => openFundsModal(cuenta, 'withdraw')}
-                              className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-full transition-colors"
+                              disabled={deletingId === cuenta.id}
+                              className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               - Fondos
                             </button>
                             <button
                               onClick={() => openEditForm(cuenta)}
-                              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-full transition-colors"
+                              disabled={deletingId === cuenta.id}
+                              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               Editar
                             </button>
                             <button
                               onClick={() => handleDeleteCuenta(cuenta.id)}
-                              className="px-4 py-2 bg-red-600/80 hover:bg-red-700 text-white text-sm font-semibold rounded-full transition-colors"
+                              disabled={deletingId === cuenta.id}
+                              className="px-4 py-2 bg-red-600/80 hover:bg-red-700 text-white text-sm font-semibold rounded-full transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              Eliminar
+                              {deletingId === cuenta.id && <Spinner size="sm" />}
+                              {deletingId === cuenta.id ? 'Eliminando...' : 'Eliminar'}
                             </button>
                           </div>
                         </div>
@@ -389,6 +421,9 @@ const PerfilUsuario = () => {
                 <h2 className="text-xl font-bold mb-4 text-white">
                   {editingAccount ? 'Editar Cuenta' : 'Crear Cuenta Trading'}
                 </h2>
+                {actionError && (
+                  <ErrorState variant="inline" message={actionError} onDismiss={() => setActionError(null)} className="mb-4" />
+                )}
                 <form onSubmit={handleAccountSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs text-white mb-1">Nombre de Cuenta</label>
@@ -426,8 +461,11 @@ const PerfilUsuario = () => {
                   </div>
                   
                   <div className="flex justify-end gap-3 pt-4">
-                    <button type="button" onClick={() => setShowAccountForm(false)} className="px-5 py-2 text-sm text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors">Cancelar</button>
-                    <button type="submit" className="px-5 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors font-semibold">Guardar</button>
+                    <button type="button" onClick={() => setShowAccountForm(false)} disabled={submitting} className="px-5 py-2 text-sm text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancelar</button>
+                    <button type="submit" disabled={submitting} className="px-5 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors font-semibold inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                      {submitting && <Spinner size="sm" />}
+                      {submitting ? 'Guardando...' : 'Guardar'}
+                    </button>
                   </div>
                 </form>
               </div>
@@ -445,6 +483,9 @@ const PerfilUsuario = () => {
                   Cuenta: <strong>{selectedAccountForFunds.nombre_cuenta}</strong> ({selectedAccountForFunds.divisa})<br />
                   Saldo Actual: <strong>{formatCurrency(selectedAccountForFunds.saldo_actual, selectedAccountForFunds.divisa)}</strong>
                 </p>
+                {actionError && (
+                  <ErrorState variant="inline" message={actionError} onDismiss={() => setActionError(null)} className="mb-4" />
+                )}
                 <form onSubmit={handleFundsSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs text-white mb-1">
@@ -463,9 +504,10 @@ const PerfilUsuario = () => {
                   </div>
                   
                   <div className="flex justify-end gap-3 pt-4">
-                    <button type="button" onClick={() => setShowFundsModal(false)} className="px-5 py-2 text-sm text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors">Cancelar</button>
-                    <button type="submit" className="px-5 py-2 text-sm text-white bg-green-600 hover:bg-green-700 rounded-full transition-colors font-semibold">
-                      {fundsType === 'add' ? 'Añadir' : 'Retirar'}
+                    <button type="button" onClick={() => setShowFundsModal(false)} disabled={submitting} className="px-5 py-2 text-sm text-white bg-gray-700 hover:bg-gray-600 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Cancelar</button>
+                    <button type="submit" disabled={submitting} className="px-5 py-2 text-sm text-white bg-green-600 hover:bg-green-700 rounded-full transition-colors font-semibold inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                      {submitting && <Spinner size="sm" />}
+                      {submitting ? 'Procesando...' : (fundsType === 'add' ? 'Añadir' : 'Retirar')}
                     </button>
                   </div>
                 </form>
