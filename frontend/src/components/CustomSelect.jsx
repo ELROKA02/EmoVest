@@ -15,7 +15,7 @@ export default function CustomSelect({ value, onChange, options, className = "" 
         top: rect.bottom + 4,
         left: rect.left,
         minWidth: rect.width,
-        zIndex: 9999,
+        zIndex: 10010,
       });
     }
   };

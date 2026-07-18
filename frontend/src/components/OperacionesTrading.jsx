@@ -6,12 +6,69 @@ import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
 import { API_BASE_URL } from '../config';
 
-const getAuthHeaders = () => {
+const getAuthHeaders = ({ isJson = true } = {}) => {
   const token = sessionStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
+  const headers = {
     ...(token && { 'Authorization': `Bearer ${token}` })
   };
+
+  if (isJson) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  return headers;
+};
+
+const withScreenshotToken = (screenshotUrl) => {
+  if (!screenshotUrl) return null;
+  if (
+    screenshotUrl.startsWith('data:') ||
+    screenshotUrl.startsWith('blob:') ||
+    screenshotUrl.startsWith('http://') ||
+    screenshotUrl.startsWith('https://')
+  ) {
+    return screenshotUrl;
+  }
+
+  const token = sessionStorage.getItem('token');
+  const separator = screenshotUrl.includes('?') ? '&' : '?';
+  return `${API_BASE_URL}${screenshotUrl}${token ? `${separator}token=${encodeURIComponent(token)}` : ''}`;
+};
+
+const revokeBlobUrl = (url) => {
+  if (url && url.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
+};
+
+const toLocalDatetimeInputValue = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const parseNumericField = (value) => {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const calculateRiskRewardRatio = ({ tipo_operacion, precio_entrada, stop_loss, take_profit }) => {
+  const entry = parseNumericField(precio_entrada);
+  const stopLoss = parseNumericField(stop_loss);
+  const takeProfit = parseNumericField(take_profit);
+
+  if (entry === null || stopLoss === null || takeProfit === null) {
+    return '';
+  }
+
+  const isLong = tipo_operacion === 'LONG';
+  const risk = isLong ? entry - stopLoss : stopLoss - entry;
+  const reward = isLong ? takeProfit - entry : entry - takeProfit;
+
+  if (risk <= 0 || reward <= 0) {
+    return '';
+  }
+
+  return (reward / risk).toFixed(2);
 };
 
 const InfoIcon = ({ text }) => {
@@ -157,7 +214,11 @@ const OperacionesTrading = () => {
         throw new Error('Error al cargar operaciones');
       }
       const data = await response.json();
-      setOperaciones(data);
+      const operacionesConImagen = data.map(op => ({
+        ...op,
+        screenshot: withScreenshotToken(op.screenshot)
+      }));
+      setOperaciones(operacionesConImagen);
     } catch (err) {
       setError(err.message);
       console.error(err);
@@ -189,6 +250,8 @@ const OperacionesTrading = () => {
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [isListeningNotes, setIsListeningNotes] = useState(false);
+  const recognitionRef = useRef(null);
 
   // Cerrar dropdowns cuando se abre el modal
   useEffect(() => {
@@ -208,11 +271,41 @@ const OperacionesTrading = () => {
     notas: '',
     stop_loss: '',
     take_profit: '',
+    comisiones: '',
     resultado: '',
     ratio_rr: '',
     nivel_confianza: 0,
-    screenshot: null
+    screenshot: null,
+    screenshotFile: null,
+    remove_screenshot: false
   });
+
+  const calculatedRatioRR = calculateRiskRewardRatio(formData);
+
+  const getSpeechRecognition = () => {
+    if (typeof window === 'undefined') return null;
+    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  };
+
+  const requestMicrophoneAccess = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('mediaDevices.getUserMedia no está disponible en este navegador.');
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(track => track.stop());
+  };
+
+  const getMicrophonePermissionState = async () => {
+    if (!navigator.permissions?.query) return 'desconocido';
+
+    try {
+      const permission = await navigator.permissions.query({ name: 'microphone' });
+      return permission.state;
+    } catch {
+      return 'desconocido';
+    }
+  };
 
   // Efecto para calcular el resultado automáticamente
   useEffect(() => {
@@ -248,17 +341,115 @@ const OperacionesTrading = () => {
         setError('La imagen no debe superar 5MB');
         return;
       }
-      // Convertir a base64
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setFormData(prev => ({...prev, screenshot: event.target?.result}));
-      };
-      reader.readAsDataURL(file);
+      const previewUrl = URL.createObjectURL(file);
+      setFormData(prev => {
+        revokeBlobUrl(prev.screenshot);
+        return {
+          ...prev,
+          screenshot: previewUrl,
+          screenshotFile: file,
+          remove_screenshot: false
+        };
+      });
     }
   };
 
   const handleRemoveImage = () => {
-    setFormData(prev => ({...prev, screenshot: null}));
+    setFormData(prev => {
+      revokeBlobUrl(prev.screenshot);
+      return {
+        ...prev,
+        screenshot: null,
+        screenshotFile: null,
+        remove_screenshot: true
+      };
+    });
+  };
+
+  const handleCloseForm = () => {
+    recognitionRef.current?.stop();
+    revokeBlobUrl(formData.screenshot);
+    setShowForm(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      revokeBlobUrl(formData.screenshot);
+    };
+  }, [formData.screenshot]);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, []);
+
+  const handleToggleVoiceNotes = async () => {
+    if (isListeningNotes) {
+      recognitionRef.current?.stop();
+      setIsListeningNotes(false);
+      return;
+    }
+
+    const SpeechRecognition = getSpeechRecognition();
+    if (!SpeechRecognition) {
+      setError('Tu navegador no soporta dictado por voz. Prueba con Chrome o Edge.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'es-ES';
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .slice(event.resultIndex)
+        .filter(result => result.isFinal)
+        .map(result => result[0].transcript.trim())
+        .filter(Boolean)
+        .join(' ');
+
+      if (!transcript) return;
+
+      setFormData(prev => ({
+        ...prev,
+        notas: prev.notas ? `${prev.notas.trim()} ${transcript}` : transcript
+      }));
+    };
+
+    recognition.onerror = async (event) => {
+      setIsListeningNotes(false);
+      const permissionState = await getMicrophonePermissionState();
+      const errorMessages = {
+        'not-allowed': `Chrome bloqueó el inicio del dictado. Permiso del micro: ${permissionState}.`,
+        'audio-capture': 'Chrome no detecta ningún micrófono disponible para capturar audio.',
+        network: 'El servicio de reconocimiento de voz de Chrome no está disponible ahora.',
+        'no-speech': 'No se detectó voz. Pulsa el micro e inténtalo de nuevo.',
+        aborted: 'Dictado cancelado.'
+      };
+
+      setError(errorMessages[event.error] || `No se pudo transcribir el audio. Error: ${event.error || 'desconocido'}.`);
+    };
+
+    recognition.onend = () => {
+      setIsListeningNotes(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    setError(null);
+    try {
+      await requestMicrophoneAccess();
+      recognition.start();
+      setIsListeningNotes(true);
+    } catch (err) {
+      console.error('Error al iniciar dictado:', err);
+      recognitionRef.current = null;
+      setIsListeningNotes(false);
+      const permissionState = await getMicrophonePermissionState();
+      setError(`${err?.name || 'Error'} al iniciar el dictado. Permiso del micro: ${permissionState}. ${err?.message || 'Inténtalo de nuevo.'}`);
+    }
   };
 
   const activosDisponibles = Array.from(new Set(operaciones.map(op => op.activo))).sort();
@@ -294,7 +485,7 @@ const OperacionesTrading = () => {
   const handleCreate = () => {
     setEditing(null);
     setFormData({
-      fecha_hora: new Date().toISOString().slice(0, 16),
+      fecha_hora: toLocalDatetimeInputValue(new Date()),
       tipo_operacion: 'LONG',
       cantidad: '',
       activo: '',
@@ -303,10 +494,13 @@ const OperacionesTrading = () => {
       notas: '',
       stop_loss: '',
       take_profit: '',
+      comisiones: '',
       resultado: '',
       ratio_rr: '',
       nivel_confianza: 0,
-      screenshot: null
+      screenshot: null,
+      screenshotFile: null,
+      remove_screenshot: false
     });
     setShowForm(true);
   };
@@ -314,7 +508,7 @@ const OperacionesTrading = () => {
   const handleEdit = (op) => {
     setEditing(op.id);
     setFormData({
-      fecha_hora: new Date(op.fecha_hora).toISOString().slice(0, 16),
+      fecha_hora: toLocalDatetimeInputValue(new Date(op.fecha_hora)),
       tipo_operacion: op.tipo_operacion,
       cantidad: op.cantidad,
       activo: op.activo,
@@ -323,10 +517,13 @@ const OperacionesTrading = () => {
       notas: op.notas || '',
       stop_loss: op.stop_loss || '',
       take_profit: op.take_profit || '',
+      comisiones: op.comisiones || '',
       resultado: op.resultado || '',
       ratio_rr: op.ratio_rr || '',
       nivel_confianza: op.nivel_confianza ?? 0,
-      screenshot: op.screenshot || null
+      screenshot: op.screenshot || null,
+      screenshotFile: null,
+      remove_screenshot: false
     });
     setShowForm(true);
   };
@@ -361,21 +558,28 @@ const OperacionesTrading = () => {
       return;
     }
 
-    const data = {
-      fecha_hora: new Date(formData.fecha_hora).toISOString(),
-      tipo_operacion: formData.tipo_operacion,
-      cantidad: parseFloat(formData.cantidad),
-      activo: formData.activo,
-      precio_entrada: parseFloat(formData.precio_entrada),
-      precio_salida: formData.precio_salida ? parseFloat(formData.precio_salida) : null,
-      notas: formData.notas || null,
-      stop_loss: formData.stop_loss ? parseFloat(formData.stop_loss) : null,
-      take_profit: formData.take_profit ? parseFloat(formData.take_profit) : null,
-      resultado: formData.resultado ? parseFloat(formData.resultado) : null,
-      ratio_rr: formData.ratio_rr ? parseFloat(formData.ratio_rr) : null,
-      nivel_confianza: formData.nivel_confianza ? parseInt(formData.nivel_confianza) : null,
-      screenshot: formData.screenshot
-    };
+    const data = new FormData();
+    data.append('fecha_hora', new Date(formData.fecha_hora).toISOString());
+    data.append('tipo_operacion', formData.tipo_operacion);
+    data.append('cantidad', String(parseFloat(formData.cantidad)));
+    data.append('activo', formData.activo);
+    data.append('precio_entrada', String(parseFloat(formData.precio_entrada)));
+
+    if (formData.precio_salida) data.append('precio_salida', String(parseFloat(formData.precio_salida)));
+    if (formData.notas) data.append('notas', formData.notas);
+    if (formData.stop_loss) data.append('stop_loss', String(parseFloat(formData.stop_loss)));
+    if (formData.take_profit) data.append('take_profit', String(parseFloat(formData.take_profit)));
+    if (formData.resultado) data.append('resultado', String(parseFloat(formData.resultado)));
+    if (calculatedRatioRR) data.append('ratio_rr', String(parseFloat(calculatedRatioRR)));
+    if (formData.nivel_confianza !== null && formData.nivel_confianza !== undefined && formData.nivel_confianza !== '') {
+      data.append('nivel_confianza', String(parseInt(formData.nivel_confianza)));
+    }
+    if (formData.screenshotFile) {
+      data.append('screenshot', formData.screenshotFile);
+    }
+    if (editing && formData.remove_screenshot) {
+      data.append('remove_screenshot', 'true');
+    }
 
     setLoading(true);
     setError(null);
@@ -383,18 +587,18 @@ const OperacionesTrading = () => {
       if (editing) {
         const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/${editing}`, {
           method: 'PUT',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(data)
+          headers: getAuthHeaders({ isJson: false }),
+          body: data
         });
         if (!response.ok) {
           throw new Error('Error al actualizar operación');
         }
-        setOperaciones(operaciones.map(op => op.id === editing ? { ...op, ...data, id: editing } : op));
+        await cargarOperacionesDeCuenta();
       } else {
         const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/`, {
           method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(data)
+          headers: getAuthHeaders({ isJson: false }),
+          body: data
         });
         if (!response.ok) {
           throw new Error('Error al crear operación');
@@ -456,9 +660,9 @@ const OperacionesTrading = () => {
         <main className="flex-1 overflow-auto p-8">
           <div className="container mx-auto">
             {error && (
-              <div className="mb-4 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">
+              <div className={`${showForm ? 'fixed left-1/2 top-6 z-[10001] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 shadow-2xl' : 'mb-4'} p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 backdrop-blur-xl`}>
                 {error}
-                <button onClick={() => setError(null)} className="ml-4 underline">Cerrar</button>
+                <button type="button" onClick={() => setError(null)} className="ml-4 underline">Cerrar</button>
               </div>
             )}
 
@@ -673,25 +877,25 @@ const OperacionesTrading = () => {
                 <div className="bg-[#1a2235]/80 backdrop-blur-lg rounded-2xl p-6 border border-white/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
                   <h2 className="text-2xl font-bold mb-4 text-white">{editing ? 'Editar Operación' : 'Crear Operación'}</h2>
                   <form onSubmit={handleSubmit} className="space-y-3">
-                    <div>
-                      <div className="flex items-center gap-1 mb-1">
-                        <label className="block text-xs text-white">Fecha y Hora</label>
-                        <InfoIcon text="Momento en el que se realizó o registró la operación." />
-                      </div>
-                      <input
-                        type="datetime-local"
-                        value={formData.fecha_hora}
-                        onChange={(e) => setFormData({...formData, fecha_hora: e.target.value})}
-                        className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
-                        disabled={loading}
-                        required
-                      />
-                    </div>
                     <div className="grid grid-cols-3 gap-2">
-                      <div>
+                      <div className="col-span-2">
+                        <div className="flex items-center gap-1 mb-1">
+                          <label className="block text-xs text-white">Fecha y Hora</label>
+                          <InfoIcon text="Fecha y hora de la operación." />
+                        </div>
+                        <input
+                          type="datetime-local"
+                          value={formData.fecha_hora}
+                          onChange={(e) => setFormData({...formData, fecha_hora: e.target.value})}
+                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
+                          disabled={loading}
+                          required
+                        />
+                      </div>
+                      <div className="min-w-0">
                         <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Tipo</label>
-                          <InfoIcon text="Dirección de tu inversión (LONG = Compra y luego vende, SHORT = Vende y luego compra)." />
+                          <InfoIcon text="Elige si la operación fue LONG o SHORT." />
                         </div>
                         <CustomSelect
                           value={formData.tipo_operacion}
@@ -699,10 +903,12 @@ const OperacionesTrading = () => {
                           options={['LONG', 'SHORT']}
                         />
                       </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Activo</label>
-                          <InfoIcon text="Símbolo del mercado o par (Ej: BTC, EUR, USD)." />
+                          <InfoIcon text="Activo o par operado, por ejemplo BTC." />
                         </div>
                         <input
                           type="text"
@@ -717,7 +923,7 @@ const OperacionesTrading = () => {
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Cantidad</label>
-                          <InfoIcon text="Tamaño de la posición operada (Lotaje o unidades)." />
+                          <InfoIcon text="Tamaño de la posición." />
                         </div>
                         <input
                           type="number"
@@ -729,12 +935,27 @@ const OperacionesTrading = () => {
                           required
                         />
                       </div>
+                      <div>
+                        <div className="flex items-start gap-1 mb-1 min-w-0">
+                          <label className="block text-xs text-white">Comisiones</label>
+                          <InfoIcon text="Costes de la operación. No disponible todavía." />
+                        </div>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.comisiones}
+                          readOnly
+                          className="w-full p-1.5 text-xs text-gray-400 bg-white/5 border border-white/10 rounded-xl cursor-not-allowed opacity-80"
+                          disabled
+                          placeholder="No disponible todavía"
+                        />
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Precio Entrada</label>
-                          <InfoIcon text="Precio al que abriste la posición." />
+                          <InfoIcon text="Precio de entrada." />
                         </div>
                         <input
                           type="number"
@@ -749,7 +970,7 @@ const OperacionesTrading = () => {
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Precio Salida</label>
-                          <InfoIcon text="Precio al que cerraste la posición." />
+                          <InfoIcon text="Precio de cierre, si ya saliste." />
                         </div>
                         <input
                           type="number"
@@ -764,7 +985,7 @@ const OperacionesTrading = () => {
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Stop Loss</label>
-                          <InfoIcon text="Precio límite predefinido para cortar pérdidas." />
+                          <InfoIcon text="Precio donde limitas la pérdida." />
                         </div>
                         <input
                           type="number"
@@ -781,7 +1002,7 @@ const OperacionesTrading = () => {
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Take Profit</label>
-                          <InfoIcon text="Precio objetivo predefinido para tomar ganancias." />
+                          <InfoIcon text="Precio objetivo de beneficio." />
                         </div>
                         <input
                           type="number"
@@ -796,7 +1017,7 @@ const OperacionesTrading = () => {
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Resultado</label>
-                          <InfoIcon text="Ganancia o pérdida (Calculado automáticamente con la salida)." />
+                          <InfoIcon text="Ganancia o pérdida de la operación." />
                         </div>
                         <input
                           type="number"
@@ -811,16 +1032,16 @@ const OperacionesTrading = () => {
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Ratio RR</label>
-                          <InfoIcon text="Relación de Riesgo / Beneficio (Risk/Reward)." />
+                          <InfoIcon text="Relación entre riesgo y beneficio previsto." />
                         </div>
                         <input
                           type="number"
                           step="any"
-                          value={formData.ratio_rr}
-                          onChange={(e) => setFormData({...formData, ratio_rr: e.target.value})}
+                          value={calculatedRatioRR}
+                          readOnly
                           className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
                           disabled={loading}
-                          placeholder="R/R"
+                          placeholder="Auto"
                         />
                       </div>
                     </div>
@@ -828,7 +1049,7 @@ const OperacionesTrading = () => {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-1">
                           <label className="block text-xs text-white">Confianza: <span className="text-blue-400 font-bold">{formData.nivel_confianza || 0}%</span></label>
-                          <InfoIcon text="Nivel de seguridad y estado emocional al tomar la decisión." />
+                          <InfoIcon text="Confianza al tomar la operación." />
                         </div>
                       </div>
                       <input
@@ -845,9 +1066,31 @@ const OperacionesTrading = () => {
                       />
                     </div>
                     <div>
-                      <div className="flex items-center gap-1 mb-1">
-                        <label className="block text-xs text-white">Notas</label>
-                        <InfoIcon text="Contexto y razones de la operación. La Inteligencia Artificial analizará este texto para darte una métrica de tus emociones." />
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-1">
+                          <label className="block text-xs text-white">Notas</label>
+                          <InfoIcon text="Anota contexto, motivo o emoción." />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleToggleVoiceNotes}
+                          disabled={loading}
+                          className={`relative inline-flex h-8 w-8 items-center justify-center rounded-full border transition-all duration-200 disabled:opacity-50 ${
+                            isListeningNotes
+                              ? 'voice-neon-recording border-violet-400 bg-violet-700/35 text-violet-100 ring-2 ring-indigo-400/60 hover:bg-violet-700/45'
+                              : 'border-white/10 bg-white/10 text-white hover:border-blue-400 hover:bg-blue-500/20'
+                          }`}
+                          title={isListeningNotes ? 'Detener dictado' : 'Dictar notas'}
+                          aria-label={isListeningNotes ? 'Detener dictado de notas' : 'Iniciar dictado de notas'}
+                        >
+                          {isListeningNotes && (
+                            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.95)] animate-ping" aria-hidden="true"></span>
+                          )}
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 10v2a7 7 0 01-14 0v-2M12 19v2m-4 0h8" />
+                          </svg>
+                        </button>
                       </div>
                       <textarea
                         value={formData.notas}
@@ -859,7 +1102,7 @@ const OperacionesTrading = () => {
                     <div>
                       <div className="flex items-center gap-1 mb-1">
                         <label className="block text-xs text-white">Imagen/Screenshot</label>
-                        <InfoIcon text="Adjunta una captura de pantalla o imagen de la operación (máx. 5MB)." />
+                        <InfoIcon text="Captura o imagen de la operación." />
                       </div>
                       <div className="flex gap-2">
                         <input
@@ -894,7 +1137,7 @@ const OperacionesTrading = () => {
                     <div className="flex justify-end gap-2 pt-2">
                       <button
                         type="button"
-                        onClick={() => setShowForm(false)}
+                        onClick={handleCloseForm}
                         disabled={loading}
                         className="px-4 py-1.5 text-xs text-white bg-gray-700 hover:bg-gray-600 disabled:bg-gray-700/50 rounded-full transition-colors disabled:cursor-not-allowed"
                       >

@@ -311,7 +311,7 @@ const PerfilUsuario = () => {
                   <div className="pt-6 mt-6 border-t border-white/10">
                     <h4 className="text-lg font-semibold text-white mb-4">Ajustes</h4>
                     <p className="text-gray-400 text-sm mb-4">
-                      Esta sección permite configurar preferencias adicionales de la cuenta en el futuro (cambio de contraseña, notificaciones, plan de suscripción).
+                      Esta sección permite configurar preferencias locales de la cuenta en el futuro.
                     </p>
                     <button className="px-6 py-2.5 bg-blue-600/50 text-white font-semibold rounded-xl cursor-not-allowed border border-blue-500/30">
                       Editar Perfil (Próximamente)

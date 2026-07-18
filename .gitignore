@@ -1,4 +1,5 @@
 .env
+.env.local-server
 venv
 backend/__pycache__
 # Dependencias
@@ -27,4 +28,6 @@ skills-lock.json
 emovest-video/
 .claude
 docs/EmoVest_Finanzas.xlsx
-
+backend/images/
+automation_assets
+docs

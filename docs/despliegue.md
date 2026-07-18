@@ -143,13 +143,17 @@ Crear `/opt/emovest/backend/.env`:
 DATABASE_URL=mysql+pymysql://emovest:<password>@localhost:3306/emovest
 
 # JWT / auth (poner valores reales)
-JWT_SECRET_KEY=<cadena-aleatoria-larga>
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
+SECRET_KEY=<cadena-aleatoria-larga>
+FRONTEND_URL=https://tudominio.com
+CORS_ALLOWED_ORIGINS=https://tudominio.com
 
 # Redis y cola RQ (los valores por defecto son los correctos en local)
 REDIS_URL=redis://localhost:6379/0
 RQ_QUEUE_NAME=emociones
+
+# Imágenes de operaciones (filesystem local)
+IMAGE_STORAGE_DIR=/opt/emovest/backend/images
+MAX_IMAGE_SIZE_MB=5
 ```
 
 Ajusta los nombres de variable a las que realmente usa `backend/config.py` y los routers de auth — este `.env` es la plantilla recomendada.
@@ -198,24 +202,25 @@ journalctl -u emovest-api -f
 
 ## 6. Frontend (build estático)
 
-El frontend es React + Vite. En producción se compila a archivos estáticos y se sirven directamente por `nginx`, no se ejecuta `npm run dev`.
+El frontend es React + Vite. En producción se compila a archivos estáticos y se sirven directamente por `nginx`, no se ejecuta `pnpm dev`.
 
 ### Build
 
 En la máquina de desarrollo, o en el propio VPS si tiene Node:
 
 ```bash
-sudo apt install -y nodejs npm    # si no lo tienes
+sudo apt install -y nodejs
+corepack enable
 cd /opt/emovest/frontend
-npm ci
-npm run build
+pnpm install --frozen-lockfile
+pnpm build
 ```
 
 Esto genera `frontend/dist/` con HTML/JS/CSS optimizados.
 
 ### Configurar la URL del backend
 
-Antes del `npm run build`, ajustar la base URL del API en el frontend (suele estar en `frontend/src/utils/` como cliente axios o variable de entorno tipo `VITE_API_URL`). En producción debe apuntar a `/api` (mismo dominio, proxied por nginx) en vez de a `http://localhost:8000`.
+Antes del `pnpm build`, ajustar la base URL del API en el frontend (suele estar en `frontend/src/utils/` como cliente axios o variable de entorno tipo `VITE_API_URL`). En producción debe apuntar a `/api` (mismo dominio, proxied por nginx) en vez de a `http://localhost:8000`.
 
 ---
 
@@ -301,7 +306,7 @@ systemctl status mysql redis-server ollama emovest-api emovest-worker nginx
 - [ ] `backend/.env` rellenado con valores reales
 - [ ] `venv` creado e `pip install -r requirements.txt` ejecutado
 - [ ] `python create_tables.py` ejecutado sin errores
-- [ ] `frontend/dist/` generado con `npm run build`
+- [ ] `frontend/dist/` generado con `pnpm build`
 - [ ] Servicios `emovest-api` y `emovest-worker` activos
 - [ ] `nginx` con dominio configurado
 - [ ] HTTPS activo vía certbot
@@ -337,8 +342,8 @@ exit
 
 # Frontend
 cd /opt/emovest/frontend
-npm ci
-npm run build
+pnpm install --frozen-lockfile
+pnpm build
 
 # Reiniciar servicios afectados
 sudo systemctl restart emovest-api emovest-worker

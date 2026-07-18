@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, operaciones, cuentaTrading, estadisticas
+from config import CORS_ALLOWED_ORIGINS
+from routers import auth, exportaciones, operaciones, cuentaTrading, estadisticas
 
 app = FastAPI(
     title="EMOVEST API",
@@ -46,13 +47,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", 
-        "http://127.0.0.1:5173", 
-        "http://localhost:5174", 
-        "http://127.0.0.1:5174", 
-        "http://164.132.42.86:5173"
-    ],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,6 +55,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(auth.router)
+app.include_router(exportaciones.router)
 app.include_router(operaciones.router)
 app.include_router(cuentaTrading.router)
 app.include_router(estadisticas.router)

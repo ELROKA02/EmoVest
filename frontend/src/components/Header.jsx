@@ -4,21 +4,16 @@ import logo from '../assets/logoEmoVest.png';
 
 
 function Header() {
-
-    const bgGradient = {
-        background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
-    };
-
     const location = useLocation();
 
     // Si la ruta actual es del área privada, no renderizamos el header regular
-    if (location.pathname === '/login' || location.pathname === '/signup' || location.pathname.startsWith('/dashboard') || location.pathname === '/trading' || location.pathname === '/perfil' || location.pathname === '/estadisticas' || location.pathname === '/calendar' || location.pathname === '/forgot-password' || location.pathname === '/reset-password') {
+    if (location.pathname === '/login' || location.pathname === '/signup' || location.pathname.startsWith('/dashboard') || location.pathname === '/trading' || location.pathname === '/perfil' || location.pathname === '/estadisticas' || location.pathname === '/calendar') {
         return null;
     }
 
 
     return (
-        <header style={bgGradient} className="flex justify-between items-center px-6 py-2 backdrop-blur-md text-white fixed top-0 left-0 right-0 z-50 border-b border-white/10">
+        <header className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between border-b border-violet-400/10 bg-[#050a10]/55 px-6 py-2 text-white shadow-lg shadow-black/10 backdrop-blur-2xl">
             <Link to="/" className="flex items-center gap-3">
                 <img
                     src={logo}

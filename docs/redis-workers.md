@@ -192,7 +192,7 @@ Déjala abierta. Cada job ejecutado imprime su id y resultado en esa terminal.
 | 1 | `brew services start redis` (servicio en background) |
 | 2 | `python worker.py` |
 | 3 | `uvicorn app:app --reload` |
-| 4 | `npm run dev` (frontend) |
+| 4 | `pnpm dev` (frontend) |
 
 ---
 

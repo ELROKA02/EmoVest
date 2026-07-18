@@ -2,22 +2,26 @@ from datetime import datetime
 from decimal import Decimal
 
 try:
-    from ollama import chat
+    from ollama import Client
     _OLLAMA_INSTALLED = True
 except ImportError:
-    chat = None
+    Client = None
     _OLLAMA_INSTALLED = False
 
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session
 
 from models import Registro_emocional
+from config import OLLAMA_HOST
 
 import requests
 
+ollama_client = Client(host=OLLAMA_HOST) if _OLLAMA_INSTALLED else None
+
+
 def ollama_disponible() -> bool:
     try:
-        r = requests.get("http://localhost:11434")
+        r = requests.get(OLLAMA_HOST, timeout=5)
         return r.status_code == 200
     except:
         return False
@@ -51,7 +55,7 @@ def clasificar_emociones(texto: str) -> Emociones:
 
     prompt = construir_prompt_emociones(texto)
 
-    response = chat(
+    response = ollama_client.chat(
         model='clasificador_emociones_gemma4:latest',
         messages=[{'role': 'user', 'content': prompt}],
         format=Emociones.model_json_schema(),

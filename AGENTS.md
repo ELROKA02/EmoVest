@@ -7,17 +7,17 @@ Guia breve para que agentes de codigo sean productivos en EmoVest desde el prime
 - Monorepo con 2 apps principales:
 - `backend/`: API FastAPI + SQLAlchemy + MySQL + RQ/Redis + integracion con Ollama.
 - `frontend/`: SPA React con Vite.
-- Documentacion operativa: `docs/despliegue.md` y `docs/redis-workers.md`.
+- Documentacion operativa: `docs/despliegue.md`, `docs/redis-workers.md` y `docs/gestion-semanal-emovest.md`.
 
 ## Comandos de trabajo (desarrollo)
 
 Ejecuta los comandos en la carpeta correcta:
 
 - Frontend (`frontend/`):
-- `npm install`
-- `npm run dev`
-- `npm run build`
-- `npm run lint`
+- `pnpm install`
+- `pnpm dev`
+- `pnpm build`
+- `pnpm lint`
 
 - Backend (`backend/`):
 - `python -m venv venv`
@@ -50,6 +50,15 @@ Ejecuta los comandos en la carpeta correcta:
 - Si agregas configuracion nueva, centralizala en `backend/config.py` y documenta variable de entorno.
 - En frontend, usa scripts de `frontend/package.json`; no introduzcas tooling alternativo sin peticion.
 - Antes de proponer despliegue o systemd/nginx, enlaza la documentacion oficial del repo en lugar de duplicarla.
+- Para repartir trabajo o hablar con el equipo de EmoVest, usa Discord como canal de coordinacion.
+
+## Equipo y reparto por Discord
+
+- `enriquegr10`: frontend.
+- `Alex~`: backend.
+- `Elroka02`: Samuel, backend.
+- `Rei☆★`: Annabel, frontend.
+- Evita asignar trabajo a bots de Discord salvo peticion explicita.
 
 ## Pitfalls importantes
 
@@ -61,9 +70,10 @@ Ejecuta los comandos en la carpeta correcta:
 
 - Despliegue y servicios: [docs/despliegue.md](docs/despliegue.md)
 - Cola Redis + workers + troubleshooting: [docs/redis-workers.md](docs/redis-workers.md)
+- Gestion semanal y soporte operativo: [docs/gestion-semanal-emovest.md](docs/gestion-semanal-emovest.md)
 
 ## Checklist rapido al terminar cambios
 
 - Backend: app levanta sin errores (`uvicorn app:app --reload`).
-- Frontend: build/lint pasan (`npm run build`, `npm run lint`).
+- Frontend: build/lint pasan (`pnpm build`, `pnpm lint`).
 - Si tocaste flujo emocional: worker activo y procesamiento de cola verificado.

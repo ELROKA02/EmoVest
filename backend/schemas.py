@@ -7,19 +7,10 @@ class SignUp(BaseModel):
     nombre: str
     correo_electronico: EmailStr
     contrasena: str
-    tipo_plan: Literal["FREE","PRO"]
 
 class login(BaseModel):
     correo_electronico: EmailStr
     contrasena: str
-
-class PasswordResetRequest(BaseModel):
-    correo_electronico: EmailStr
-
-class PasswordResetConfirm(BaseModel):
-    token: str
-    contrasena: str
-    confirmar_contrasena: str
 
 class OperacionCreate(BaseModel):
     fecha_hora: datetime
@@ -34,7 +25,7 @@ class OperacionCreate(BaseModel):
     resultado: Optional[float] = None
     ratio_rr: Optional[float] = None
     nivel_confianza: Optional[int] = None
-    screenshot: Optional[bytes] = None
+    screenshot: Optional[str] = None
 
 class OperacionUpdate(BaseModel):
     fecha_hora: Optional[datetime] = None
@@ -49,7 +40,7 @@ class OperacionUpdate(BaseModel):
     resultado: Optional[float] = None
     ratio_rr: Optional[float] = None
     nivel_confianza: Optional[int] = None
-    screenshot: Optional[bytes] = None
+    screenshot: Optional[str] = None
 
 
 class CuentaOperacionPathParams(BaseModel):

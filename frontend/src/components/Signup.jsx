@@ -13,7 +13,6 @@ const Signup = () => {
         correo_electronico: '',
         contrasena: '',
         confirmar_contrasena: '',
-        tipo_plan: 'FREE',
         terminos: false
     });
 
@@ -68,8 +67,7 @@ const Signup = () => {
                 body: JSON.stringify({
                     nombre: formData.nombre,
                     correo_electronico: formData.correo_electronico,
-                    contrasena: formData.contrasena,
-                    tipo_plan: formData.tipo_plan
+                    contrasena: formData.contrasena
                 })
             });
 
@@ -177,38 +175,6 @@ const Signup = () => {
                             Acepto los <a href="/docs/Terminos_y_Condiciones_EmoVest_Logo.pdf" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">términos y condiciones</a> y la <a href="/docs/Politica_de_Privacidad_EmoVest.pdf" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">política de privacidad</a>
                         </span>
                     </label>
-
-                    <div className="space-y-3 pt-4">
-                        <label className="text-[16px] text-gray-400 font-medium">Tipo de cuenta</label>
-                        <div className="space-y-2 pt-4">
-                            <label className="flex items-center space-x-3 cursor-pointer group">
-                                <input 
-                                    type="radio" 
-                                    name="tipo_plan" 
-                                    value="FREE"
-                                    checked={formData.tipo_plan === 'FREE'}
-                                    onChange={handleChange}
-                                    className="w-4 h-4 bg-[#0d1117]/90 border border-white/5 rounded text-blue-600 focus:ring-blue-500 focus:ring-2 focus:ring-offset-0 flex-shrink-0"
-                                />
-                                <span className="text-[14px] text-gray-400 group-hover:text-white transition-colors">
-                                    <span className="text-blue-400 font-semibold">Gratis</span> - Plan básico con funciones limitadas
-                                </span>
-                            </label>
-                            <label className="flex items-center space-x-3 cursor-pointer group">
-                                <input 
-                                    type="radio" 
-                                    name="tipo_plan" 
-                                    value="PRO"
-                                    checked={formData.tipo_plan === 'PRO'}
-                                    onChange={handleChange}
-                                    className="w-4 h-4 bg-[#0d1117]/90 border border-white/5 rounded text-blue-600 focus:ring-blue-500 focus:ring-2 focus:ring-offset-0 flex-shrink-0"
-                                />
-                                <span className="text-[14px] text-gray-400 group-hover:text-white transition-colors">
-                                    <span className="text-green-400 font-semibold">Premium</span> - Acceso completo a todas las funciones
-                                </span>
-                            </label>
-                        </div>
-                    </div>
 
                     <button
                         type="submit"
