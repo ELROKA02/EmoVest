@@ -5,6 +5,7 @@ import CustomSelect from './CustomSelect';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
 import { API_BASE_URL } from '../config';
+import { LoadingState, ErrorState, EmptyState } from './ui';
 
 const EstadisticasEmocionales = () => {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -174,7 +175,7 @@ const EstadisticasEmocionales = () => {
 
         <main className="flex-1 overflow-auto p-14">
           <div className="max-w-6xl mx-auto space-y-6">
-            {error && <div className="p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300">{error}</div>}
+            {error && <ErrorState variant="inline" message={error} onDismiss={() => setError(null)} />}
 
             {/* Filtros */}
             <div className="relative z-10 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -210,7 +211,7 @@ const EstadisticasEmocionales = () => {
             </div>
 
             {loading ? (
-              <div className="text-center py-12 text-gray-400">Cargando estadísticas emocionales...</div>
+              <LoadingState message="Cargando estadísticas emocionales..." />
             ) : stats ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
@@ -262,9 +263,7 @@ const EstadisticasEmocionales = () => {
 
               </div>
             ) : (
-              <div className="text-center py-12 text-gray-400 border border-dashed border-white/10 rounded-2xl">
-                No hay datos emocionales disponibles para este período.
-              </div>
+              <EmptyState message="No hay datos emocionales disponibles para este período." />
             )}
           </div>
         </main>

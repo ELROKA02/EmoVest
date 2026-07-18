@@ -5,6 +5,7 @@ import CustomSelect from './CustomSelect';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
 import { API_BASE_URL } from '../config';
+import { LoadingState, ErrorState, EmptyState } from './ui';
 
 const getAuthHeaders = ({ isJson = true } = {}) => {
   const token = sessionStorage.getItem('token');
@@ -125,6 +126,7 @@ const OperacionesTrading = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const isMutatingRef = useRef(false);
 
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
   const selectedAccount = cuentas.find(cuenta => cuenta.id === cuentaSeleccionada);
@@ -529,8 +531,10 @@ const OperacionesTrading = () => {
   };
 
   const handleDelete = async (id) => {
+    if (isMutatingRef.current) return;
     if (!window.confirm('¿Estás seguro de eliminar esta operación?')) return;
 
+    isMutatingRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -546,13 +550,15 @@ const OperacionesTrading = () => {
       setError(err.message);
       console.error(err);
     } finally {
+      isMutatingRef.current = false;
       setLoading(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    if (isMutatingRef.current) return;
+
     if (!cuentaSeleccionada) {
       setError('Debes seleccionar una cuenta');
       return;
@@ -581,6 +587,7 @@ const OperacionesTrading = () => {
       data.append('remove_screenshot', 'true');
     }
 
+    isMutatingRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -610,6 +617,7 @@ const OperacionesTrading = () => {
       setError(err.message);
       console.error(err);
     } finally {
+      isMutatingRef.current = false;
       setLoading(false);
     }
   };
@@ -660,9 +668,8 @@ const OperacionesTrading = () => {
         <main className="flex-1 overflow-auto p-8">
           <div className="container mx-auto">
             {error && (
-              <div className={`${showForm ? 'fixed left-1/2 top-6 z-[10001] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 shadow-2xl' : 'mb-4'} p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 backdrop-blur-xl`}>
-                {error}
-                <button type="button" onClick={() => setError(null)} className="ml-4 underline">Cerrar</button>
+              <div className={showForm ? 'fixed left-1/2 top-6 z-[10001] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 shadow-2xl' : 'mb-4'}>
+                <ErrorState variant="inline" message={error} onDismiss={() => setError(null)} className="backdrop-blur-xl" />
               </div>
             )}
 
@@ -741,20 +748,12 @@ const OperacionesTrading = () => {
             )}
 
             <div className="mt-4 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 overflow-x-auto">
-              {loading && (
-                <div className="py-8 text-center text-gray-300">
-                  <p>Cargando operaciones...</p>
-                </div>
-              )}
-              
-              {!loading && operaciones.length === 0 ? (
-                <div className="py-8 text-center text-gray-300">
-                  <p>No hay operaciones registradas para esta cuenta.</p>
-                </div>
-              ) : !loading && displayedOperaciones.length === 0 ? (
-                <div className="py-8 text-center text-gray-300">
-                  <p>No hay operaciones que coincidan con los filtros seleccionados.</p>
-                </div>
+              {loading ? (
+                <LoadingState message="Cargando operaciones..." />
+              ) : operaciones.length === 0 ? (
+                <EmptyState message="No hay operaciones registradas para esta cuenta." />
+              ) : displayedOperaciones.length === 0 ? (
+                <EmptyState message="No hay operaciones que coincidan con los filtros seleccionados." />
               ) : (
                 <>
                   <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-gray-300">
