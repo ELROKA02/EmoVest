@@ -5,6 +5,7 @@ import CustomSelect from './CustomSelect';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
 import { API_BASE_URL } from '../config';
+import UserAvatar from './UserAvatar';
 import { LoadingState, ErrorState, EmptyState } from './ui';
 
 const EstadisticasEmocionales = () => {
@@ -163,7 +164,7 @@ const EstadisticasEmocionales = () => {
           </div>
           <div className="flex items-center gap-8">
             <div onClick={() => navigate('/perfil')} className="flex items-center gap-2 text-gray-300 hover:text-white cursor-pointer transition-colors" title="Ver perfil">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+              <UserAvatar size="sm" />
               <span className="font-medium">{userName}</span>
             </div>
             <button onClick={handleLogout} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-full transition-all duration-300 flex items-center gap-2">

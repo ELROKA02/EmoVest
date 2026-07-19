@@ -29,6 +29,12 @@ const PerfilUsuario = () => {
   const [avatar, setAvatar] = useState(() => localStorage.getItem('userAvatar') || '');
   const [avatarError, setAvatarError] = useState(null);
   const fileInputRef = useRef(null);
+  const [exportSelection, setExportSelection] = useState('Todas las cuentas');
+  const [importSelection, setImportSelection] = useState('');
+  const [importFile, setImportFile] = useState(null);
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvMessage, setCsvMessage] = useState(null);
+  const importFileRef = useRef(null);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [showFundsModal, setShowFundsModal] = useState(false);
@@ -86,6 +92,7 @@ const PerfilUsuario = () => {
       if (response.ok) {
         const data = await response.json();
         setCuentas(data);
+        setImportSelection(prev => prev || (data[0] ? `${data[0].nombre_cuenta} (#${data[0].id})` : ''));
       } else if (response.status === 404) {
         setCuentas([]);
       } else {
@@ -100,7 +107,7 @@ const PerfilUsuario = () => {
 
   const handleViewChange = (view) => {
     setCurrentView(view);
-    if (view === 'Información de Cuentas') {
+    if (view === 'Información de Cuentas' || view === 'Ajustes') {
       fetchCuentas();
     }
   };
@@ -282,6 +289,7 @@ const PerfilUsuario = () => {
       const dataUrl = reader.result;
       setAvatar(dataUrl);
       localStorage.setItem('userAvatar', dataUrl);
+      window.dispatchEvent(new Event('avatarChange'));
     };
     reader.onerror = () => setAvatarError('No se pudo leer la imagen.');
     reader.readAsDataURL(file);
@@ -292,6 +300,87 @@ const PerfilUsuario = () => {
     setAvatar('');
     setAvatarError(null);
     localStorage.removeItem('userAvatar');
+    window.dispatchEvent(new Event('avatarChange'));
+  };
+
+  const parseCuentaId = (label) => {
+    const match = /#(\d+)\)\s*$/.exec(label || '');
+    return match ? match[1] : null;
+  };
+
+  const handleExportCsv = async () => {
+    setCsvBusy(true);
+    setCsvMessage(null);
+    try {
+      const token = sessionStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (exportSelection !== 'Todas las cuentas') {
+        const id = parseCuentaId(exportSelection);
+        if (id) params.append('cuenta_ids', id);
+      }
+      const qs = params.toString();
+      const response = await fetch(`${API_BASE_URL}/operaciones/export.csv${qs ? `?${qs}` : ''}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        throw new Error('No se pudo exportar el CSV.');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'operaciones.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setCsvMessage({ type: 'success', text: 'CSV exportado correctamente.' });
+    } catch (err) {
+      setCsvMessage({ type: 'error', text: err.message || 'Error al exportar el CSV.' });
+    } finally {
+      setCsvBusy(false);
+    }
+  };
+
+  const handleImportCsv = async () => {
+    const id = parseCuentaId(importSelection);
+    if (!id) {
+      setCsvMessage({ type: 'error', text: 'Selecciona una cuenta destino.' });
+      return;
+    }
+    if (!importFile) {
+      setCsvMessage({ type: 'error', text: 'Selecciona un archivo CSV.' });
+      return;
+    }
+    setCsvBusy(true);
+    setCsvMessage(null);
+    try {
+      const token = sessionStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('cuenta_id', id);
+      formData.append('file', importFile);
+      const response = await fetch(`${API_BASE_URL}/operaciones/import.csv`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = data?.detail;
+        let msg = 'Error al importar el CSV.';
+        if (typeof detail === 'string') msg = detail;
+        else if (detail?.message) msg = detail.message;
+        throw new Error(msg);
+      }
+      setCsvMessage({ type: 'success', text: `Importadas ${data?.created_count ?? 0} operaciones correctamente.` });
+      setImportFile(null);
+      if (importFileRef.current) importFileRef.current.value = '';
+      fetchCuentas();
+    } catch (err) {
+      setCsvMessage({ type: 'error', text: err.message || 'Error al importar el CSV.' });
+    } finally {
+      setCsvBusy(false);
+    }
   };
 
   const bgGradient = {
@@ -532,6 +621,79 @@ const PerfilUsuario = () => {
                     {prefsSaved && (
                       <p className="mt-3 text-sm text-green-400">Preferencias guardadas.</p>
                     )}
+                  </div>
+
+                  {/* Exportar / Importar operaciones (.csv) */}
+                  <div className="pt-6 border-t border-white/10">
+                    <h4 className="text-lg font-semibold text-white mb-4">Operaciones (.csv)</h4>
+
+                    {csvMessage && (
+                      <div className={`mb-4 p-3 rounded-lg text-sm border ${csvMessage.type === 'success' ? 'bg-green-500/15 border-green-500/40 text-green-300' : 'bg-red-500/15 border-red-500/40 text-red-300'}`}>
+                        {csvMessage.text}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Exportar */}
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3 flex flex-col h-full">
+                        <h5 className="text-white font-semibold">Exportar</h5>
+                        <p className="text-xs text-gray-400">Descarga tus operaciones en formato CSV.</p>
+                        <div className="space-y-2">
+                          <label className="text-xs text-gray-400 block">Cuenta</label>
+                          <CustomSelect
+                            value={exportSelection}
+                            onChange={setExportSelection}
+                            options={['Todas las cuentas', ...cuentas.map(c => `${c.nombre_cuenta} (#${c.id})`)]}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleExportCsv}
+                          disabled={csvBusy}
+                          className="mt-auto w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {csvBusy && <Spinner size="sm" />}
+                          Descargar CSV
+                        </button>
+                      </div>
+
+                      {/* Importar */}
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3 flex flex-col h-full">
+                        <h5 className="text-white font-semibold">Importar</h5>
+                        <p className="text-xs text-gray-400">Sube un CSV para añadir operaciones a una cuenta.</p>
+                        <div className="space-y-2">
+                          <label className="text-xs text-gray-400 block">Cuenta destino</label>
+                          {cuentas.length > 0 ? (
+                            <CustomSelect
+                              value={importSelection || 'Selecciona una cuenta'}
+                              onChange={setImportSelection}
+                              options={cuentas.map(c => `${c.nombre_cuenta} (#${c.id})`)}
+                            />
+                          ) : (
+                            <p className="text-xs text-gray-500">No tienes cuentas de trading.</p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs text-gray-400 block">Archivo CSV</label>
+                          <input
+                            ref={importFileRef}
+                            type="file"
+                            accept=".csv,text/csv"
+                            onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                            className="block w-full text-sm text-gray-300 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:cursor-pointer"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleImportCsv}
+                          disabled={csvBusy || cuentas.length === 0}
+                          className="mt-auto w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {csvBusy && <Spinner size="sm" />}
+                          Importar CSV
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Cuenta (requiere backend, no disponible) */}

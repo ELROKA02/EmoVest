@@ -6,6 +6,8 @@ import Sidebar from './Sidebar';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
 import { API_BASE_URL } from '../config';
+import UserAvatar from './UserAvatar';
+import { LoadingState, EmptyState } from './ui';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 const InfoIcon = ({ text }) => (
@@ -577,15 +579,7 @@ const Dashboard = () => {
 
         {/* Grid de Estadísticas Moderno */}
         {loadingEstadisticas ? (
-          <div className="flex justify-center items-center py-20">
-            <div className="relative">
-              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-8 h-8 bg-blue-500 rounded-full animate-pulse"></div>
-              </div>
-            </div>
-            <div className="ml-4 text-white text-lg font-medium">Cargando operaciones...</div>
-          </div>
+          <LoadingState message="Cargando operaciones..." />
         ) : estadisticasCompletas ? (
           <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -952,9 +946,7 @@ const Dashboard = () => {
           </div>
           </>
         ) : selectedAccount ? (
-          <div className="flex justify-center items-center py-12">
-            <div className="text-gray-400 text-lg">No hay datos para el período seleccionado</div>
-          </div>
+          <EmptyState message="No hay datos para el período seleccionado." />
         ) : null}
 
         {/* Formulario modal para crear cuenta */}
@@ -1044,9 +1036,7 @@ const Dashboard = () => {
           <div className="flex items-center gap-8">
             {/* User Icon */}
             <div onClick={() => navigate('/perfil')} className="flex items-center gap-2 text-gray-300 hover:text-white cursor-pointer transition-colors" title="Ver perfil">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+              <UserAvatar size="sm" />
               <span className="font-medium">{userName}</span>
             </div>
 
