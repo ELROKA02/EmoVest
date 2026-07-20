@@ -7,6 +7,7 @@ validates input and turns the service's safe events into Server-Sent Events.
 
 import inspect
 import json
+import logging
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
@@ -23,6 +24,7 @@ from routers.auth import get_current_user
 
 
 router = APIRouter(prefix="/ia/chat", tags=["chat_ia"])
+logger = logging.getLogger(__name__)
 
 _ALLOWED_EVENTS = {"session", "status", "delta", "evidence", "done", "error"}
 _EVENT_ORDER = {"session": 0, "status": 1, "delta": 2, "evidence": 3, "done": 4, "error": 4}
@@ -99,6 +101,7 @@ async def enviar_mensaje(
                 mensaje=payload.mensaje,
                 session_id=payload.session_id,
                 user_id=current_user.id,
+                user_name=current_user.nombre or "Usuario",
                 account_id=payload.account_id,
             )
             async for item in _as_async_iterator(stream):
@@ -121,10 +124,12 @@ async def enviar_mensaje(
             if not terminal_sent:
                 yield _sse("done", {})
         except ChatUnavailableError:
+            logger.exception("El servicio de chat fallo durante el stream SSE.")
             if not error_sent:
                 yield _safe_error()
         except Exception:
             # Tracebacks and provider/database details must never cross the API boundary.
+            logger.exception("Error inesperado durante el stream SSE del chat.")
             if not error_sent:
                 yield _safe_error()
 

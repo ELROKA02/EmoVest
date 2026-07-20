@@ -42,6 +42,18 @@ const menuItems = [
       </svg>
     ),
     path: '/estadisticas'
+  },
+  {
+    id: 'chat',
+    name: 'EVA · Analista IA',
+    icon: (
+      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3v2m-7 5H3v4h2m14-4h2v4h-2M8 5h8a3 3 0 013 3v8a4 4 0 01-4 4H9a4 4 0 01-4-4V8a3 3 0 013-3z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11h.01M15 11h.01M9.5 16h5" />
+        <circle cx="12" cy="2.5" r="1" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+    path: '/chat'
   }
 ];
 

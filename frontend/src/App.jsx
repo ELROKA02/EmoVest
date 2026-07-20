@@ -9,6 +9,8 @@ import OperacionesTrading from './components/OperacionesTrading';
 import PerfilUsuario from './components/PerfilUsuario';
 import EstadisticasEmocionales from './components/EstadisticasEmocionales';
 import Calendar from './components/calendar';
+import ChatIA from './components/ChatIA';
+import { ChatMemoryProvider } from './context/ChatMemoryContext';
 
 function AppContent() {
   const location = useLocation();
@@ -28,6 +30,7 @@ function AppContent() {
           <Route path="/perfil" element={<PerfilUsuario />} />
           <Route path="/estadisticas" element={<EstadisticasEmocionales />} />
           <Route path="/calendar" element={<Calendar />} />
+          <Route path="/chat" element={<ChatIA />} />
         </Routes>
       </main>
       {isHomePage && <Footer />}
@@ -38,7 +41,9 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <AppContent />
+      <ChatMemoryProvider>
+        <AppContent />
+      </ChatMemoryProvider>
     </Router>
   );
 }

@@ -7,7 +7,7 @@ function Header() {
     const location = useLocation();
 
     // Si la ruta actual es del área privada, no renderizamos el header regular
-    if (location.pathname === '/login' || location.pathname === '/signup' || location.pathname.startsWith('/dashboard') || location.pathname === '/trading' || location.pathname === '/perfil' || location.pathname === '/estadisticas' || location.pathname === '/calendar') {
+    if (location.pathname === '/login' || location.pathname === '/signup' || location.pathname.startsWith('/dashboard') || location.pathname === '/trading' || location.pathname === '/perfil' || location.pathname === '/estadisticas' || location.pathname === '/calendar' || location.pathname === '/chat') {
         return null;
     }
 
