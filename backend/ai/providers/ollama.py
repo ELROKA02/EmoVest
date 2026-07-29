@@ -5,10 +5,11 @@ from ai.emotions import Emociones, construir_prompt_emociones
 from ai.providers.base import AIProvider
 
 try:
-    from ollama import Client
+    from ollama import Client, ResponseError
     _OLLAMA_INSTALLED = True
 except ImportError:
     Client = None
+    ResponseError = Exception
     _OLLAMA_INSTALLED = False
 
 
@@ -45,11 +46,25 @@ class OllamaProvider(AIProvider):
             raise RuntimeError("El paquete Python 'ollama' no esta instalado.")
 
         client = Client(host=self.settings.base_url)
-        response = client.chat(
-            model=self.settings.model,
-            messages=[{"role": "user", "content": construir_prompt_emociones(texto)}],
-            format=Emociones.model_json_schema(),
-        )
+        messages = [{"role": "user", "content": construir_prompt_emociones(texto)}]
+
+        try:
+            response = client.chat(
+                model=self.settings.model,
+                messages=messages,
+                format=Emociones.model_json_schema(),
+            )
+        except ResponseError as error:
+            # Algunos runtimes de Ollama fallan de forma intermitente al
+            # convertir un JSON Schema en gramatica. El modo JSON conserva la
+            # salida estructurada y Pydantic sigue validando el contrato.
+            if error.status_code != 400 or "failed to parse grammar" not in str(error).lower():
+                raise
+            response = client.chat(
+                model=self.settings.model,
+                messages=messages,
+                format="json",
+            )
 
         contenido = response.message.content.strip()
         if not contenido:

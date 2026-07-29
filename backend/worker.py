@@ -14,7 +14,9 @@ def main() -> None:
         worker = SimpleWorker([RQ_QUEUE_NAME])
         print(f"Worker escuchando cola: {RQ_QUEUE_NAME}")
         # Bucle bloqueante: procesa jobs continuamente hasta detener el proceso.
-        worker.work()
+        # Los reintentos usan intervalos y RQ los mueve al registro programado;
+        # el scheduler integrado debe estar activo para devolverlos a la cola.
+        worker.work(with_scheduler=True)
 
 
 if __name__ == "__main__":

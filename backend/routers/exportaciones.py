@@ -2,11 +2,12 @@ import csv
 from datetime import datetime
 from decimal import Decimal
 from io import StringIO
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -195,7 +196,7 @@ def parse_csv_operaciones(csv_text: str, cuenta_id: int) -> list[Operacion]:
     summary="Exportar operaciones en CSV",
     description=(
         "Descarga un CSV con operaciones de una, varias o todas las cuentas de trading "
-        "del usuario autenticado, con filtros opcionales por fecha."
+        "del usuario autenticado, con filtros opcionales y orden configurable."
     ),
     status_code=status.HTTP_200_OK,
     responses={
@@ -226,6 +227,22 @@ def export_operaciones_csv(
         datetime | None,
         Query(description="Fecha/hora final inclusiva aplicada a fecha_hora."),
     ] = None,
+    tipo_operacion: Annotated[
+        Literal["LONG", "SHORT"] | None,
+        Query(description="Tipo de operacion a exportar."),
+    ] = None,
+    activo: Annotated[
+        str | None,
+        Query(description="Activo a exportar (comparacion sin distinguir mayusculas)."),
+    ] = None,
+    sort_by: Annotated[
+        Literal["fecha", "beneficio"],
+        Query(description="Campo por el que ordenar las operaciones exportadas."),
+    ] = "fecha",
+    sort_direction: Annotated[
+        Literal["asc", "desc"],
+        Query(description="Direccion del orden de las operaciones exportadas."),
+    ] = "asc",
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -245,16 +262,28 @@ def export_operaciones_csv(
 
     cuenta_ids_propias = list(cuentas_by_id)
 
-    operaciones_query = (
-        db.query(Operacion)
-        .filter(Operacion.id_cuenta.in_(cuenta_ids_propias))
-        .order_by(Operacion.fecha_hora.asc(), Operacion.id.asc())
+    operaciones_query = db.query(Operacion).filter(
+        Operacion.id_cuenta.in_(cuenta_ids_propias)
     )
 
     if fecha_desde is not None:
         operaciones_query = operaciones_query.filter(Operacion.fecha_hora >= fecha_desde)
     if fecha_hasta is not None:
         operaciones_query = operaciones_query.filter(Operacion.fecha_hora <= fecha_hasta)
+    if tipo_operacion is not None:
+        operaciones_query = operaciones_query.filter(Operacion.tipo_operacion == tipo_operacion)
+    if activo:
+        operaciones_query = operaciones_query.filter(
+            func.lower(Operacion.activo) == activo.lower()
+        )
+
+    sort_column = (
+        func.coalesce(Operacion.resultado, 0)
+        if sort_by == "beneficio"
+        else Operacion.fecha_hora
+    )
+    ordered_column = sort_column.asc() if sort_direction == "asc" else sort_column.desc()
+    operaciones_query = operaciones_query.order_by(ordered_column, Operacion.id.asc())
 
     output = StringIO()
     writer = csv.writer(output)
@@ -287,7 +316,8 @@ def export_operaciones_csv(
         content=output.getvalue(),
         media_type="text/csv; charset=utf-8",
         headers={
-            "Content-Disposition": 'attachment; filename="operaciones.csv"'
+            "Content-Disposition": 'attachment; filename="operaciones.csv"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
 

@@ -6,6 +6,8 @@ import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
 import { API_BASE_URL } from '../config';
 import { LoadingState, ErrorState, EmptyState } from './ui';
+import ImportOperationsButton from './operations/ImportOperationsButton';
+import ExportOperationsButton from './operations/ExportOperationsButton';
 
 const getAuthHeaders = ({ isJson = true } = {}) => {
   const token = sessionStorage.getItem('token');
@@ -686,14 +688,65 @@ const OperacionesTrading = () => {
                 />
               </div>
 
-              <div className="flex flex-col items-start sm:items-end gap-6">
-                <button
-                  onClick={handleCreate}
-                  disabled={!cuentaSeleccionada || loading}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-all duration-300"
-                >
-                  {loading ? 'Cargando...' : 'Crear Operación'}
-                </button>
+              <div className="flex w-full flex-col items-stretch gap-4 sm:w-auto sm:items-end">
+                <div className="hidden flex-wrap items-start justify-end gap-3 sm:flex">
+                  <ImportOperationsButton
+                    cuentaId={cuentaSeleccionada}
+                    disabled={!cuentaSeleccionada || loading}
+                    onImported={cargarOperacionesDeCuenta}
+                  />
+                  <ExportOperationsButton
+                    cuentaId={cuentaSeleccionada}
+                    filterType={filterType}
+                    filterActivo={filterActivo}
+                    sortBy={sortBy}
+                    sortDirection={sortDirection}
+                    disabled={!cuentaSeleccionada || loading}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreate}
+                    disabled={!cuentaSeleccionada || loading}
+                    className="inline-flex min-h-11 items-center justify-center rounded-full bg-blue-600 px-6 py-2.5 font-semibold text-white transition-all duration-300 hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-600/50"
+                  >
+                    {loading ? 'Cargando...' : 'Crear Operación'}
+                  </button>
+                </div>
+
+                <div className="flex items-start justify-end gap-2 sm:hidden">
+                  <details className="group relative">
+                    <summary className="inline-flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 rounded-full border border-slate-500/70 bg-slate-800/80 px-5 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-700/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 [&::-webkit-details-marker]:hidden">
+                      Datos
+                      <svg className="h-4 w-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m6 9 6 6 6-6" />
+                      </svg>
+                    </summary>
+                    <div className="absolute right-0 z-30 mt-2 flex w-max max-w-[calc(100vw-3rem)] min-w-56 flex-col gap-3 rounded-2xl border border-white/10 bg-[#111827]/95 p-3 shadow-2xl backdrop-blur-xl">
+                      <ImportOperationsButton
+                        cuentaId={cuentaSeleccionada}
+                        disabled={!cuentaSeleccionada || loading}
+                        onImported={cargarOperacionesDeCuenta}
+                      />
+                      <ExportOperationsButton
+                        cuentaId={cuentaSeleccionada}
+                        filterType={filterType}
+                        filterActivo={filterActivo}
+                        sortBy={sortBy}
+                        sortDirection={sortDirection}
+                        disabled={!cuentaSeleccionada || loading}
+                      />
+                    </div>
+                  </details>
+                  <button
+                    type="button"
+                    onClick={handleCreate}
+                    disabled={!cuentaSeleccionada || loading}
+                    className="inline-flex min-h-11 items-center justify-center rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-600/50"
+                  >
+                    Crear operación
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setShowFilters(prev => !prev)}

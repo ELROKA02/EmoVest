@@ -55,7 +55,7 @@ Mientras los **tres procesos del medio** (backend, redis, worker) y **Ollama** e
 | `backend/config.py` | Lee `REDIS_URL`, nombre de cola, timeouts y políticas de reintento desde `.env`. |
 | `backend/rq_queue.py` | Construye la conexión a Redis y la cola `emociones`. Expone `enqueue_emociones_job()`. |
 | `backend/jobs/emociones.py` | Función que ejecuta el worker para cada job: abre sesión de BD, llama a Ollama, guarda el `Registro_emocional`. |
-| `backend/worker.py` | Proceso del worker. Usa `SimpleWorker` (sin `fork()`). |
+| `backend/worker.py` | Proceso del worker. Usa `SimpleWorker` (sin `fork()`) y activa el scheduler de RQ para los reintentos diferidos. |
 | `backend/routers/operaciones.py` | El endpoint `POST /cuentas/{id}/operaciones` llama a `enqueue_emociones_job()` después de guardar la operación si hay `notas`. |
 | `backend/routers/ia.py` | Lógica de clasificación con Ollama y persistencia del `Registro_emocional`. |
 
@@ -204,7 +204,7 @@ El sistema está pensado para **no romper el endpoint** aunque la cola falle.
 |---|---|
 | Redis caído al crear operación | `enqueue_emociones_job` lanza excepción → el `try/except` de [operaciones.py](../backend/routers/operaciones.py) la captura y solo imprime un *warning*. La operación se guarda igualmente. **No se crea `Registro_emocional`.** |
 | Worker caído | El job se queda en cola. Cuando vuelva el worker, lo procesa. |
-| Ollama caído | El job entra reintentos (`RQ_RETRY_MAX=3`, esperas `2s, 4s, 8s`). Si todos fallan, `guardar_registro_emocional` cae al fallback de valores en `0` y guarda el registro con ceros (ver [routers/ia.py](../backend/routers/ia.py)). |
+| Ollama caído | El job entra en reintentos (`RQ_RETRY_MAX=3`, esperas `2s, 4s, 8s`). Si todos fallan, queda en el registro de jobs fallidos para diagnóstico y no se guarda un análisis falso con valores en `0`. |
 | Job tarda > 180 s | RQ lo marca como timeout. Como usamos `SimpleWorker`, el timeout es *soft*: si Ollama no responde nunca, el worker queda bloqueado hasta reiniciarlo. |
 
 ---

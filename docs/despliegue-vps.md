@@ -105,7 +105,7 @@ Todo pasa por Caddy. Frontend y backend comparten el mismo origen (`http://164.1
 
 **Síntoma:** crear una operación devolvía 200, pero los registros emocionales se guardaban con todos los porcentajes a 0.
 
-**Causa raíz:** Redis no estaba instalado en el VPS (`Connection refused` en puerto 6379), por lo que el worker no podía arrancar. Aunque hubiera arrancado, el código de `routers/ia.py:97-104` se traga silenciosamente las excepciones de Ollama y guarda ceros, así que el problema era invisible desde la web.
+**Causa raíz:** Redis no estaba instalado en el VPS (`Connection refused` en puerto 6379), por lo que el worker no podía arrancar. En la versión de entonces, además, `routers/ia.py` ocultaba las excepciones de Ollama y guardaba ceros; el flujo actual propaga el error a RQ para que aplique los reintentos y conserve el fallo para diagnóstico.
 
 **Fix:**
 1. `sudo apt install -y redis-server` y `systemctl enable --now redis-server`.

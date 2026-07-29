@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { BorderBeam } from 'border-beam';
 import Sidebar from './Sidebar';
 import { API_BASE_URL } from '../config';
 import useChatMemory from '../context/useChatMemory';
@@ -9,8 +10,82 @@ import { fetchAndStoreUserName } from '../utils/userSession';
 import evaAvatar from '../assets/eva-avatar.png';
 
 const MAX_MESSAGE_LENGTH = 4000;
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'text/plain', 'text/csv', 'application/json',
+]);
 const GENERIC_CHAT_ERROR = 'No se pudo completar la respuesta de EVA. Inténtalo de nuevo.';
 const WELCOME_TEXT = 'Hola, soy EVA. Puedo ayudarte a analizar tus resultados, operaciones y patrones emocionales. ¿Qué quieres revisar?';
+const EVA_AVATAR_BEAM_DURATION = 6;
+const randomAvatarBeamOffset = () => Math.random() * EVA_AVATAR_BEAM_DURATION;
+
+const getSpeechRecognition = () => {
+  if (typeof window === 'undefined') return null;
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+};
+
+const stopMediaStream = (stream) => {
+  stream?.getTracks().forEach((track) => track.stop());
+};
+
+const requestMicrophoneAccess = async () => {
+  if (!window.isSecureContext) {
+    throw new DOMException(
+      'El micrófono requiere HTTPS o abrir la aplicación desde localhost.',
+      'SecurityError',
+    );
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new DOMException(
+      'El acceso al micrófono no está disponible en este navegador.',
+      'NotSupportedError',
+    );
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stopMediaStream(stream);
+    return;
+  } catch (error) {
+    if (error?.name !== 'OverconstrainedError' || !navigator.mediaDevices.enumerateDevices) {
+      throw error;
+    }
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const microphones = devices.filter((device) => (
+      device.kind === 'audioinput'
+      && device.deviceId
+      && device.deviceId !== 'default'
+      && device.deviceId !== 'communications'
+    ));
+    let lastError = error;
+
+    for (const microphone of microphones) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { deviceId: { exact: microphone.deviceId } },
+        });
+        stopMediaStream(stream);
+        return;
+      } catch (deviceError) {
+        lastError = deviceError;
+      }
+    }
+
+    throw lastError;
+  }
+};
+
+const getMicrophonePermissionState = async () => {
+  if (!navigator.permissions?.query) return 'desconocido';
+
+  try {
+    const permission = await navigator.permissions.query({ name: 'microphone' });
+    return permission.state;
+  } catch {
+    return 'desconocido';
+  }
+};
 
 let messageSequence = 0;
 
@@ -197,6 +272,11 @@ const ChatIA = () => {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
+  const [avatarBeamOffset, setAvatarBeamOffset] = useState(randomAvatarBeamOffset);
+  const [isListening, setIsListening] = useState(false);
+  const [dictationError, setDictationError] = useState('');
+  const [attachment, setAttachment] = useState(null);
+  const [attachmentError, setAttachmentError] = useState('');
   const {
     messages,
     setMessages,
@@ -220,8 +300,14 @@ const ChatIA = () => {
     clearChatMemory,
   } = useChatMemory();
 
-  const messagesEndRef = useRef(null);
+  const chatScrollRef = useRef(null);
+  const shouldFollowStreamRef = useRef(true);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const ignoreRecognitionErrorRef = useRef(false);
+  const pendingAttachmentRef = useRef(null);
+  const isEvaThinking = isStreaming && Boolean(statusText);
 
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
@@ -255,10 +341,57 @@ const ChatIA = () => {
   }, [chatOwnerTokenRef, clearChatMemory, navigate]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, statusText]);
+    if (!shouldFollowStreamRef.current) return;
+
+    const scrollContainer = chatScrollRef.current;
+    scrollContainer?.scrollTo({
+      top: scrollContainer.scrollHeight,
+      behavior: isStreaming ? 'auto' : 'smooth',
+    });
+  }, [isStreaming, messages, statusText]);
+
+  useEffect(() => {
+    if (messages.length !== 0) return undefined;
+
+    let timeoutId;
+    const scheduleRandomBeamPosition = () => {
+      const waitTime = 7000 + Math.random() * 5000;
+      timeoutId = window.setTimeout(() => {
+        setAvatarBeamOffset(randomAvatarBeamOffset());
+        scheduleRandomBeamPosition();
+      }, waitTime);
+    };
+
+    scheduleRandomBeamPosition();
+    return () => window.clearTimeout(timeoutId);
+  }, [messages.length]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 144)}px`;
+  }, [input]);
+
+  useEffect(() => () => {
+    ignoreRecognitionErrorRef.current = true;
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+  }, []);
+
+  const handleChatScroll = () => {
+    const scrollContainer = chatScrollRef.current;
+    if (!scrollContainer) return;
+
+    const distanceFromBottom = scrollContainer.scrollHeight
+      - scrollContainer.scrollTop
+      - scrollContainer.clientHeight;
+    shouldFollowStreamRef.current = distanceFromBottom < 96;
+  };
 
   const redirectToLogin = () => {
+    ignoreRecognitionErrorRef.current = true;
+    recognitionRef.current?.stop();
     clearChatMemory();
     chatOwnerTokenRef.current = null;
     sessionStorage.removeItem('token');
@@ -274,7 +407,10 @@ const ChatIA = () => {
 
   const sendMessage = async (rawMessage, options = {}) => {
     const message = rawMessage.trim();
-    if (!message || message.length > MAX_MESSAGE_LENGTH || isStreaming) return;
+    const messageAttachment = options.attachment || null;
+    if ((!message && !messageAttachment) || message.length > MAX_MESSAGE_LENGTH || isStreaming) return;
+
+    shouldFollowStreamRef.current = true;
 
     const token = sessionStorage.getItem('token');
     if (!token) {
@@ -295,9 +431,13 @@ const ChatIA = () => {
         id: nextMessageId(),
         role: 'user',
         text: message,
+        attachment: messageAttachment ? { name: messageAttachment.name, contentType: messageAttachment.content_type } : null,
         evidence: [],
       }]);
-      if (!effectiveAccountId) setPendingQuestion(message);
+      if (!effectiveAccountId) {
+        setPendingQuestion(message);
+        pendingAttachmentRef.current = messageAttachment;
+      }
     }
 
     setMessages((current) => [...current, {
@@ -308,16 +448,18 @@ const ChatIA = () => {
       pending: true,
     }]);
     setIsStreaming(true);
-    setStatusText('EVA está consultando…');
+    setStatusText('EVA está preparando el análisis…');
     currentRequestRef.current = controller;
 
     const retryPayload = {
       message,
       accountId: effectiveAccountId,
+      attachment: messageAttachment,
     };
 
     try {
       const payload = { mensaje: message };
+      if (messageAttachment) payload.attachment = messageAttachment;
       if (effectiveSessionId) payload.session_id = effectiveSessionId;
       if (effectiveAccountId) payload.account_id = effectiveAccountId;
 
@@ -365,7 +507,11 @@ const ChatIA = () => {
         }
 
         if (event === 'status') {
-          setStatusText('EVA está consultando…');
+          setStatusText(
+            typeof data.text === 'string' && data.text.trim()
+              ? data.text
+              : 'EVA está preparando el análisis…',
+          );
           return;
         }
 
@@ -472,10 +618,119 @@ const ChatIA = () => {
 
   const submitCurrentMessage = () => {
     const message = input.trim();
-    if (!message || message.length > MAX_MESSAGE_LENGTH || isStreaming) return;
+    if ((!message && !attachment) || message.length > MAX_MESSAGE_LENGTH || isStreaming) return;
+    ignoreRecognitionErrorRef.current = true;
+    recognitionRef.current?.stop();
+    setDictationError('');
     setInput('');
+    const selectedAttachment = attachment;
+    setAttachment(null);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    void sendMessage(message);
+    void sendMessage(message || 'Analiza el archivo adjunto.', { attachment: selectedAttachment });
+  };
+
+  const handleAttachmentChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
+      setAttachmentError('Formato no compatible. Usa JPG, PNG, WebP, TXT, CSV o JSON.');
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      setAttachmentError('El archivo supera el límite de 5 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => setAttachmentError('No se pudo leer el archivo.');
+    reader.onload = () => {
+      setAttachment({
+        name: file.name,
+        content_type: file.type,
+        data: String(reader.result),
+      });
+      setAttachmentError('');
+    };
+    if (file.type.startsWith('image/')) reader.readAsDataURL(file);
+    else reader.readAsText(file);
+  };
+
+  const handleToggleDictation = async () => {
+    if (isListening) {
+      ignoreRecognitionErrorRef.current = true;
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = getSpeechRecognition();
+    if (!SpeechRecognition) {
+      setDictationError('Tu navegador no soporta dictado por voz. Prueba con Chrome o Edge.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    ignoreRecognitionErrorRef.current = false;
+    recognition.lang = 'es-ES';
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .slice(event.resultIndex)
+        .filter((result) => result.isFinal)
+        .map((result) => result[0].transcript.trim())
+        .filter(Boolean)
+        .join(' ');
+
+      if (!transcript) return;
+
+      setInput((current) => {
+        const currentText = current.trimEnd();
+        const nextText = currentText ? `${currentText} ${transcript}` : transcript;
+        return nextText.slice(0, MAX_MESSAGE_LENGTH);
+      });
+    };
+
+    recognition.onerror = async (event) => {
+      setIsListening(false);
+      if (ignoreRecognitionErrorRef.current && event.error === 'aborted') return;
+      const permissionState = await getMicrophonePermissionState();
+      const errorMessages = {
+        'not-allowed': `El navegador bloqueó el dictado. Permiso del micrófono: ${permissionState}.`,
+        'audio-capture': 'No se detectó ningún micrófono disponible.',
+        network: 'El servicio de reconocimiento de voz no está disponible ahora.',
+        'no-speech': 'No se detectó voz. Pulsa el micrófono e inténtalo de nuevo.',
+        aborted: 'Dictado cancelado.',
+      };
+
+      setDictationError(
+        errorMessages[event.error]
+        || `No se pudo transcribir el audio. Error: ${event.error || 'desconocido'}.`,
+      );
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+      ignoreRecognitionErrorRef.current = false;
+    };
+
+    recognitionRef.current = recognition;
+    setDictationError('');
+
+    try {
+      await requestMicrophoneAccess();
+      recognition.start();
+      setIsListening(true);
+    } catch (error) {
+      recognitionRef.current = null;
+      setIsListening(false);
+      const permissionState = await getMicrophonePermissionState();
+      setDictationError(
+        `${error?.name || 'Error'} al iniciar el dictado. Permiso del micrófono: ${permissionState}. ${error?.message || 'Inténtalo de nuevo.'}`,
+      );
+    }
   };
 
   const selectAccount = (account) => {
@@ -502,7 +757,9 @@ const ChatIA = () => {
       displayUser: false,
       accountOverride: account.id,
       sessionOverride: sessionIdRef.current,
+      attachment: pendingAttachmentRef.current,
     });
+    pendingAttachmentRef.current = null;
   };
 
   const retryMessage = (message) => {
@@ -512,6 +769,7 @@ const ChatIA = () => {
       displayUser: false,
       accountOverride: message.retryPayload.accountId,
       sessionOverride: sessionIdRef.current,
+      attachment: message.retryPayload.attachment,
     });
   };
 
@@ -519,6 +777,11 @@ const ChatIA = () => {
     const previousSessionId = sessionIdRef.current;
     const token = sessionStorage.getItem('token');
 
+    ignoreRecognitionErrorRef.current = true;
+    recognitionRef.current?.stop();
+    setDictationError('');
+    setAvatarBeamOffset(randomAvatarBeamOffset());
+    pendingAttachmentRef.current = null;
     clearChatMemory();
     setIsResetting(true);
 
@@ -550,6 +813,8 @@ const ChatIA = () => {
   };
 
   const handleLogout = () => {
+    ignoreRecognitionErrorRef.current = true;
+    recognitionRef.current?.stop();
     clearChatMemory();
     chatOwnerTokenRef.current = null;
     sessionStorage.removeItem('token');
@@ -628,7 +893,11 @@ const ChatIA = () => {
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-44 pt-6 sm:px-6 sm:pb-48 sm:pt-8">
+        <main
+          ref={chatScrollRef}
+          onScroll={handleChatScroll}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-40 pt-6 sm:px-6 sm:pb-44 sm:pt-8"
+        >
           <div
             className={`mx-auto flex w-full max-w-3xl flex-col ${messages.length === 0 ? 'min-h-full items-center justify-center pb-8 text-center' : 'gap-5'}`}
             role="log"
@@ -637,11 +906,24 @@ const ChatIA = () => {
           >
             {messages.length === 0 ? (
               <div className="flex max-w-xl flex-col items-center">
-                <img
-                  src={evaAvatar}
-                  alt="EVA, analista de inteligencia artificial"
-                  className="h-40 w-40 rounded-full object-cover shadow-[0_0_55px_rgba(168,85,247,0.3)] sm:h-52 sm:w-52"
-                />
+                <BorderBeam
+                  size="md"
+                  colorVariant="ocean"
+                  theme="dark"
+                  strength={1}
+                  duration={EVA_AVATAR_BEAM_DURATION}
+                  brightness={2.35}
+                  saturation={1.75}
+                  borderRadius={999}
+                  className="eva-avatar-border-beam rounded-full"
+                  style={{ animationDelay: `-${avatarBeamOffset}s, 0s` }}
+                >
+                  <img
+                    src={evaAvatar}
+                    alt="EVA, analista de inteligencia artificial"
+                    className="h-48 w-48 rounded-full border border-violet-200/60 object-cover shadow-[0_0_28px_rgba(96,165,250,0.5),0_0_85px_rgba(139,92,246,0.65)] sm:h-60 sm:w-60"
+                  />
+                </BorderBeam>
                 <p className="mt-5 text-balance text-base leading-7 text-gray-200 sm:text-lg">
                   {WELCOME_TEXT}
                 </p>
@@ -673,12 +955,20 @@ const ChatIA = () => {
                   {message.pending && !message.text ? (
                     <div className="flex items-center gap-2 text-sm text-gray-300" role="status">
                       <span className="h-2 w-2 animate-pulse rounded-full bg-violet-400" />
-                      EVA está consultando…
+                      {statusText || 'EVA está preparando el análisis…'}
                     </div>
                   ) : message.role === 'assistant' ? (
                     <MarkdownMessage>{message.text}</MarkdownMessage>
                   ) : (
-                    <p className="whitespace-pre-wrap break-words text-sm leading-6 sm:text-[15px]">{message.text}</p>
+                    <>
+                      {message.attachment && (
+                        <div className="mb-2 flex items-center gap-2 rounded-lg bg-black/15 px-2.5 py-2 text-xs text-violet-100">
+                          <span aria-hidden="true">📎</span>
+                          <span className="truncate">{message.attachment.name}</span>
+                        </div>
+                      )}
+                      <p className="whitespace-pre-wrap break-words text-sm leading-6 sm:text-[15px]">{message.text}</p>
+                    </>
                   )}
 
                   {Array.isArray(message.accountOptions) && (
@@ -731,7 +1021,6 @@ const ChatIA = () => {
                 </div>
               </div>
             ))}
-            <div ref={messagesEndRef} />
           </div>
         </main>
 
@@ -751,39 +1040,110 @@ const ChatIA = () => {
               submitCurrentMessage();
             }}
           >
-            <div className="flex items-end gap-2 rounded-2xl border border-white/25 bg-gradient-to-br from-white/[0.14] via-white/[0.08] to-violet-400/[0.06] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_16px_50px_rgba(0,0,0,0.32)] backdrop-blur-2xl backdrop-saturate-150 transition focus-within:border-violet-300/60 focus-within:from-white/[0.18] focus-within:via-white/[0.11]">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(event) => {
-                  setInput(event.target.value);
-                  event.target.style.height = 'auto';
-                  event.target.style.height = `${Math.min(event.target.scrollHeight, 144)}px`;
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    submitCurrentMessage();
-                  }
-                }}
-                maxLength={MAX_MESSAGE_LENGTH}
-                rows={1}
-                disabled={isStreaming || isResetting}
-                placeholder="Escribe un mensaje para EVA…"
-                aria-label="Mensaje para EVA"
-                className="max-h-36 min-h-11 flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-6 text-white outline-none placeholder:text-gray-500 disabled:cursor-not-allowed disabled:opacity-60 sm:text-[15px]"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || isStreaming || isResetting}
-                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
-                aria-label="Enviar mensaje"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14m-6-6l6 6-6 6" />
-                </svg>
-              </button>
-            </div>
+            <BorderBeam
+              size="md"
+              colorVariant="ocean"
+              theme="dark"
+              strength={isEvaThinking ? 1 : 0.72}
+              duration={isEvaThinking ? 2.4 : 4.8}
+              brightness={isEvaThinking ? 1.75 : 1.3}
+              saturation={isEvaThinking ? 1.5 : 1.2}
+              borderRadius={16}
+              className="eva-chat-border-beam w-full"
+            >
+              <div className={`flex items-end gap-2 rounded-2xl border bg-gradient-to-br p-2 backdrop-blur-2xl backdrop-saturate-150 transition-all duration-500 focus-within:from-white/[0.18] focus-within:via-white/[0.11] ${
+                isEvaThinking
+                  ? 'border-violet-300/25 from-violet-400/[0.18] via-white/[0.11] to-indigo-400/[0.1] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_16px_55px_rgba(0,0,0,0.32),0_0_28px_rgba(139,92,246,0.22)]'
+                  : 'border-white/10 from-white/[0.14] via-white/[0.08] to-violet-400/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_16px_50px_rgba(0,0,0,0.32)]'
+              }`}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,.txt,.csv,.json"
+                  onChange={handleAttachmentChange}
+                  className="sr-only"
+                  aria-label="Seleccionar foto o archivo"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isStreaming || isResetting}
+                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-gray-200 transition hover:border-violet-300/60 hover:bg-violet-500/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Añadir foto o archivo"
+                  aria-label="Añadir foto o archivo"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828a4 4 0 10-5.657-5.657L5.757 10.757a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(event) => {
+                    setInput(event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      submitCurrentMessage();
+                    }
+                  }}
+                  maxLength={MAX_MESSAGE_LENGTH}
+                  rows={1}
+                  disabled={isStreaming || isResetting}
+                  placeholder="Escribe un mensaje para EVA…"
+                  aria-label="Mensaje para EVA"
+                  className="max-h-36 min-h-11 flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-6 text-white outline-none placeholder:text-gray-500 disabled:cursor-not-allowed disabled:opacity-60 sm:text-[15px]"
+                />
+                <button
+                  type="button"
+                  onClick={handleToggleDictation}
+                  disabled={isStreaming || isResetting}
+                  className={`relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+                    isListening
+                      ? 'voice-neon-recording border-violet-300 bg-violet-700/40 text-violet-100 ring-2 ring-indigo-400/60'
+                      : 'border-white/10 bg-white/10 text-gray-200 hover:border-violet-300/60 hover:bg-violet-500/20 hover:text-white'
+                  }`}
+                  title={isListening ? 'Detener dictado' : 'Dictar mensaje'}
+                  aria-label={isListening ? 'Detener dictado del mensaje' : 'Iniciar dictado del mensaje'}
+                  aria-pressed={isListening}
+                >
+                  {isListening && (
+                    <span
+                      className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 animate-ping rounded-full bg-violet-400 shadow-[0_0_10px_rgba(139,92,246,0.95)]"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 10v2a7 7 0 01-14 0v-2M12 19v2m-4 0h8" />
+                  </svg>
+                </button>
+                <button
+                  type="submit"
+                  disabled={(!input.trim() && !attachment) || isStreaming || isResetting}
+                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
+                  aria-label="Enviar mensaje"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14m-6-6l6 6-6 6" />
+                  </svg>
+                </button>
+              </div>
+            </BorderBeam>
+            {attachment && (
+              <div className="mt-2 flex w-fit max-w-full items-center gap-2 rounded-xl border border-violet-400/25 bg-violet-500/10 px-3 py-2 text-xs text-violet-100">
+                <span aria-hidden="true">📎</span>
+                <span className="truncate">{attachment.name}</span>
+                <button type="button" onClick={() => setAttachment(null)} className="ml-1 text-gray-400 hover:text-white" aria-label={`Quitar ${attachment.name}`}>×</button>
+              </div>
+            )}
+            {attachmentError && <p className="mt-2 px-1 text-xs text-red-300" role="alert">{attachmentError}</p>}
+            {dictationError && (
+              <p className="mt-2 px-1 text-xs text-red-300" role="alert">
+                {dictationError}
+              </p>
+            )}
             <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-gray-500">
               <span>EVA ofrece análisis educativo, no señales de compra o venta.</span>
               <span className={input.length > 3600 ? 'text-amber-300' : ''}>{input.length}/{MAX_MESSAGE_LENGTH}</span>

@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from ai.chat_agent import ChatAgentService, ChatUnavailableError
@@ -27,13 +27,36 @@ router = APIRouter(prefix="/ia/chat", tags=["chat_ia"])
 logger = logging.getLogger(__name__)
 
 _ALLOWED_EVENTS = {"session", "status", "delta", "evidence", "done", "error"}
-_EVENT_ORDER = {"session": 0, "status": 1, "delta": 2, "evidence": 3, "done": 4, "error": 4}
+_EVENT_ORDER = {"session": 0, "status": 2, "delta": 2, "evidence": 3, "done": 4, "error": 4}
+
+
+class ChatAttachment(BaseModel):
+    name: str = Field(..., min_length=1, max_length=180)
+    content_type: str = Field(..., min_length=1, max_length=100)
+    data: str = Field(..., min_length=1, max_length=7_000_000)
+
+    @field_validator("content_type")
+    @classmethod
+    def tipo_permitido(cls, value: str) -> str:
+        allowed = {"image/jpeg", "image/png", "image/webp", "text/plain", "text/csv", "application/json"}
+        if value not in allowed:
+            raise ValueError("El tipo de archivo no esta permitido.")
+        return value
+
+    @model_validator(mode="after")
+    def contenido_valido(self):
+        if self.content_type.startswith("image/"):
+            prefix = f"data:{self.content_type};base64,"
+            if not self.data.startswith(prefix):
+                raise ValueError("La imagen adjunta no es valida.")
+        return self
 
 
 class ChatMessageRequest(BaseModel):
     mensaje: str = Field(..., min_length=1, max_length=4_000)
     session_id: str | None = Field(default=None, min_length=1, max_length=128)
     account_id: int | None = Field(default=None, gt=0)
+    attachment: ChatAttachment | None = None
 
     @field_validator("mensaje")
     @classmethod
@@ -103,6 +126,7 @@ async def enviar_mensaje(
                 user_id=current_user.id,
                 user_name=current_user.nombre or "Usuario",
                 account_id=payload.account_id,
+                attachment=payload.attachment.model_dump() if payload.attachment else None,
             )
             async for item in _as_async_iterator(stream):
                 if not isinstance(item, dict):

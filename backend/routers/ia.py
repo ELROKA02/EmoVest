@@ -70,6 +70,12 @@ def ollama_disponible(db: Session | None = None) -> bool:
 
 
 def guardar_registro_emocional(texto: str, id_operacion: int, db: Session) -> Registro_emocional:
+    # Clasifica antes de crear o modificar el registro. La resolucion de la
+    # configuracion puede necesitar hacer rollback si una instalacion antigua
+    # aun no tiene la tabla ai_settings; no debe descartar un registro pendiente.
+    # Los errores del proveedor se propagan para que RQ aplique sus reintentos.
+    emociones = clasificar_emociones(texto, db)
+
     registro = db.query(Registro_emocional).filter(
         Registro_emocional.id_operacion == id_operacion
     ).first()
@@ -80,17 +86,6 @@ def guardar_registro_emocional(texto: str, id_operacion: int, db: Session) -> Re
 
     registro.fecha_hora = datetime.now()
     registro.texto_entrada = texto
-
-    try:
-        emociones = clasificar_emociones(texto, db)
-    except Exception as error:
-        print(f"Advertencia: la IA fallo al clasificar emociones, se guardaran valores en cero. Error: {error}")
-        registro.confianza = Decimal("0")
-        registro.duda = Decimal("0")
-        registro.euforia = Decimal("0")
-        registro.miedo = Decimal("0")
-        registro.neutral = Decimal("0")
-        return registro
 
     factor_porcentaje = Decimal("100")
 

@@ -42,4 +42,15 @@
   .eva-thinking-bubble {
     animation: none;
   }
+
+  .eva-chat-border-beam,
+  .eva-chat-border-beam::before,
+  .eva-chat-border-beam::after,
+  .eva-chat-border-beam [data-beam-bloom],
+  .eva-avatar-border-beam,
+  .eva-avatar-border-beam::before,
+  .eva-avatar-border-beam::after,
+  .eva-avatar-border-beam [data-beam-bloom] {
+    animation: none !important;
+  }
 }
