@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import sqlite3
+import tempfile
 import threading
 import zipfile
 from datetime import UTC, datetime
@@ -27,6 +28,23 @@ def _safe_label(label: str) -> str:
     return sanitized[:40] or "backup"
 
 
+def _reserve_destination(prefix: str, suffix: str) -> Path:
+    """Reserva un nombre exclusivo entre procesos y libera el handle para Windows."""
+
+    descriptor, raw_path = tempfile.mkstemp(
+        dir=BACKUP_DIR,
+        prefix=f"{prefix}-{_timestamp()}-",
+        suffix=suffix,
+    )
+    destination = Path(raw_path)
+    try:
+        os.close(descriptor)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return destination
+
+
 def create_database_backup(label: str) -> Path:
     """Crea una copia consistente incluso cuando SQLite trabaja en WAL."""
 
@@ -34,22 +52,25 @@ def create_database_backup(label: str) -> Path:
         if not DATABASE_PATH.exists():
             raise RuntimeError("La base de datos local todavía no existe.")
 
-        destination = BACKUP_DIR / f"{_safe_label(label)}-{_timestamp()}.sqlite3"
-        source_connection = sqlite3.connect(str(DATABASE_PATH))
-        destination_connection = sqlite3.connect(str(destination))
+        destination = _reserve_destination(_safe_label(label), ".sqlite3")
+        source_connection = None
+        destination_connection = None
+        backup_succeeded = False
         try:
+            source_connection = sqlite3.connect(str(DATABASE_PATH))
+            destination_connection = sqlite3.connect(str(destination))
             source_connection.backup(destination_connection)
             integrity = destination_connection.execute("PRAGMA integrity_check").fetchone()
             if not integrity or integrity[0] != "ok":
                 raise RuntimeError("La copia de seguridad no superó la validación de integridad.")
-        except Exception:
-            destination_connection.close()
-            source_connection.close()
-            destination.unlink(missing_ok=True)
-            raise
-        else:
-            destination_connection.close()
-            source_connection.close()
+            backup_succeeded = True
+        finally:
+            if destination_connection is not None:
+                destination_connection.close()
+            if source_connection is not None:
+                source_connection.close()
+            if not backup_succeeded:
+                destination.unlink(missing_ok=True)
         return destination
 
 
@@ -92,17 +113,19 @@ def create_manual_backup_archive(app_version: str) -> Path:
 
     with _BACKUP_LOCK:
         database_backup = create_database_backup("manual-database")
-        archive = BACKUP_DIR / f"EmoVest-backup-{_timestamp()}.zip"
-        temporary_archive = archive.with_suffix(".zip.tmp")
-        manifest = {
-            "format": 1,
-            "created_at": datetime.now(UTC).isoformat(),
-            "app_version": app_version,
-            "schema_revision": current_schema_revision(),
-            "includes": ["database", "images"],
-        }
+        archive = None
+        temporary_archive = None
 
         try:
+            archive = _reserve_destination("EmoVest-backup", ".zip")
+            temporary_archive = _reserve_destination("EmoVest-backup", ".zip.tmp")
+            manifest = {
+                "format": 1,
+                "created_at": datetime.now(UTC).isoformat(),
+                "app_version": app_version,
+                "schema_revision": current_schema_revision(),
+                "includes": ["database", "images"],
+            }
             with zipfile.ZipFile(
                 temporary_archive,
                 mode="w",
@@ -126,10 +149,15 @@ def create_manual_backup_archive(app_version: str) -> Path:
                         archive_path = (Path("images") / relative_path).as_posix()
                         bundle.write(resolved_image, archive_path)
             os.replace(temporary_archive, archive)
+            temporary_archive = None
         except Exception:
-            temporary_archive.unlink(missing_ok=True)
+            if temporary_archive is not None:
+                temporary_archive.unlink(missing_ok=True)
+            if archive is not None:
+                archive.unlink(missing_ok=True)
             raise
         finally:
             database_backup.unlink(missing_ok=True)
 
+        assert archive is not None
         return archive

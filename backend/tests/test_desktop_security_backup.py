@@ -144,6 +144,7 @@ class DesktopBackupTests(unittest.TestCase):
         with (
             patch.object(backup_manager, "DATABASE_PATH", self.database_path),
             patch.object(backup_manager, "BACKUP_DIR", self.backup_dir),
+            patch.object(backup_manager, "_timestamp", return_value="20260729T120000000000Z"),
             ThreadPoolExecutor(max_workers=2) as executor,
         ):
             backups = list(executor.map(
@@ -161,6 +162,88 @@ class DesktopBackupTests(unittest.TestCase):
                 )
             finally:
                 connection.close()
+
+    def test_same_timestamp_backups_remain_independent_snapshots(self):
+        with (
+            patch.object(backup_manager, "DATABASE_PATH", self.database_path),
+            patch.object(backup_manager, "BACKUP_DIR", self.backup_dir),
+            patch.object(backup_manager, "_timestamp", return_value="20260729T120000000000Z"),
+        ):
+            first_backup = backup_manager.create_database_backup("same-clock-tick")
+
+            connection = sqlite3.connect(self.database_path)
+            try:
+                connection.execute("INSERT INTO sample VALUES (?)", ("dato posterior",))
+                connection.commit()
+            finally:
+                connection.close()
+
+            second_backup = backup_manager.create_database_backup("same-clock-tick")
+
+        self.assertNotEqual(first_backup, second_backup)
+        row_counts = []
+        for backup in (first_backup, second_backup):
+            connection = sqlite3.connect(backup)
+            try:
+                row_counts.append(connection.execute("SELECT COUNT(*) FROM sample").fetchone()[0])
+                self.assertEqual(
+                    connection.execute("PRAGMA integrity_check").fetchone()[0],
+                    "ok",
+                )
+            finally:
+                connection.close()
+
+        self.assertEqual(row_counts, [1, 2])
+
+    def test_same_timestamp_manual_archives_have_unique_valid_destinations(self):
+        with (
+            patch.object(backup_manager, "DATABASE_PATH", self.database_path),
+            patch.object(backup_manager, "BACKUP_DIR", self.backup_dir),
+            patch.object(backup_manager, "IMAGE_STORAGE_PATH", self.image_dir),
+            patch.object(backup_manager, "_timestamp", return_value="20260729T120000000000Z"),
+        ):
+            archives = [
+                backup_manager.create_manual_backup_archive("0.4.0"),
+                backup_manager.create_manual_backup_archive("0.4.0"),
+            ]
+
+        self.assertEqual(len(set(archives)), 2)
+        for archive in archives:
+            with zipfile.ZipFile(archive) as bundle:
+                self.assertIsNone(bundle.testzip())
+                self.assertIn("data/emovest.sqlite3", bundle.namelist())
+        self.assertEqual(list(self.backup_dir.glob("*.tmp")), [])
+        self.assertEqual(list(self.backup_dir.glob("manual-database-*.sqlite3")), [])
+
+    def test_reserved_database_destination_is_removed_when_opening_fails(self):
+        source_connection = sqlite3.connect(self.database_path)
+        with (
+            patch.object(backup_manager, "DATABASE_PATH", self.database_path),
+            patch.object(backup_manager, "BACKUP_DIR", self.backup_dir),
+            patch.object(backup_manager, "_timestamp", return_value="20260729T120000000000Z"),
+            patch.object(
+                backup_manager.sqlite3,
+                "connect",
+                side_effect=[source_connection, RuntimeError("fallo simulado")],
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "fallo simulado"):
+                backup_manager.create_database_backup("failed")
+
+        self.assertEqual(list(self.backup_dir.iterdir()), [])
+
+    def test_reserved_archive_destinations_are_removed_when_zip_creation_fails(self):
+        with (
+            patch.object(backup_manager, "DATABASE_PATH", self.database_path),
+            patch.object(backup_manager, "BACKUP_DIR", self.backup_dir),
+            patch.object(backup_manager, "IMAGE_STORAGE_PATH", self.image_dir),
+            patch.object(backup_manager, "_timestamp", return_value="20260729T120000000000Z"),
+            patch.object(backup_manager.zipfile, "ZipFile", side_effect=RuntimeError("fallo zip")),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "fallo zip"):
+                backup_manager.create_manual_backup_archive("0.4.0")
+
+        self.assertEqual(list(self.backup_dir.iterdir()), [])
 
     def test_prunes_only_old_automatic_backups(self):
         with (
