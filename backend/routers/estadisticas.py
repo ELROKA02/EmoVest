@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.orm import Session
 
-from database import get_db
+from database import SessionLocal, get_db
 from routers.auth import get_current_user
 from models import Cuenta_Trading, Estadistica, Operacion
 
@@ -820,27 +820,24 @@ def ya_existe_estadistica(db: Session, cuenta_id: int, year: int, month: int):
 
 def job_estadisticas_mensuales():
     """Funcion que se ejecuta el primer dia de cada mes para calcular y guardar las estadisticas mensuales de cada cuenta de trading."""
-    db = next(get_db())
+    with SessionLocal() as db:
+        now = datetime.now()
 
-    now = datetime.now()
+        if now.month == 1:
+            year = now.year - 1
+            month = 12
+        else:
+            year = now.year
+            month = now.month - 1
 
-    if now.month == 1:
-        year = now.year - 1
-        month = 12
-    else:
-        year = now.year
-        month = now.month - 1
+        cuentas = db.query(Cuenta_Trading).all()
 
-    cuentas = db.query(Cuenta_Trading).all()
+        for cuenta in cuentas:
+            if ya_existe_estadistica(db, cuenta.id, year, month):
+                continue
 
-    for cuenta in cuentas:
-
-        if ya_existe_estadistica(db, cuenta.id, year, month):
-            continue
-
-        stats = obtener_resumen_mensual(db, cuenta.id, year, month)
-
-        guardar_estadistica(db, cuenta.id, stats)
+            stats = obtener_resumen_mensual(db, cuenta.id, year, month)
+            guardar_estadistica(db, cuenta.id, stats)
 
 def calcular_ganancia_neta_y_total_operaciones_diarias_mensual(
     db: Session,
@@ -1353,19 +1350,33 @@ def get_resumen_mensual_todas_cuentas(
     }
 
 
-scheduler = BackgroundScheduler()
-
-scheduler.add_job(
-    job_estadisticas_mensuales,
-    trigger="cron",
-    day=1,
-    hour=0,
-    minute=0
-)
-
-scheduler.start()
+_scheduler = None
 
 
+def start_stats_scheduler() -> None:
+    global _scheduler
+    if _scheduler is not None:
+        return
+    _scheduler = BackgroundScheduler()
+    _scheduler.add_job(
+        job_estadisticas_mensuales,
+        trigger="cron",
+        day=1,
+        hour=0,
+        minute=0,
+        id="monthly-statistics",
+        replace_existing=True,
+    )
+    _scheduler.start()
 
 
- 
+def stop_stats_scheduler() -> None:
+    global _scheduler
+    if _scheduler is None:
+        return
+    # No se dispone el engine hasta que un cálculo ya iniciado haya terminado.
+    _scheduler.shutdown(wait=True)
+    _scheduler = None
+
+
+

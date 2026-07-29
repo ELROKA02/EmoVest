@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { API_BASE_URL } from '../../config';
+import { apiFetch } from '../../config';
 
 const FALLBACK_FILENAME = 'operaciones.csv';
 
@@ -62,7 +62,7 @@ const ExportOperationsButton = ({
       }
 
       const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/operaciones/export.csv?${params}`, {
+      const response = await apiFetch(`/operaciones/export.csv?${params}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 

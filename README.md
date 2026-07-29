@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/versi%C3%B3n-0.3.1-blue" alt="Versión 0.3.1">
+  <img src="https://img.shields.io/badge/versi%C3%B3n-0.4.0-blue" alt="Versión 0.4.0">
   <img src="https://img.shields.io/badge/licencia-MIT-2ea44f" alt="Licencia MIT">
   <img src="https://img.shields.io/badge/IA-local-6f42c1" alt="IA local">
 </p>
@@ -32,7 +32,7 @@ EmoVest reúne la operación y su contexto humano en el mismo lugar. Así puedes
 
 ## ⚡ Qué hace EmoVest
 
-EmoVest es un diario de trading autoalojable para quien quiere operar con más reflexión. Registra cada operación, conserva su contexto y transforma las notas personales en indicadores emocionales orientativos mediante IA local.
+EmoVest es un diario de trading de escritorio para quien quiere operar con más reflexión. Registra cada operación, conserva su contexto y transforma las notas personales en indicadores emocionales orientativos mediante IA local.
 
 | En vez de… | Con EmoVest puedes… |
 |---|---|
@@ -74,71 +74,55 @@ El análisis emocional es una interpretación orientativa de tus notas; no susti
 |---|---|
 | Interfaz | React, Vite, Tailwind CSS y Recharts |
 | API | FastAPI y SQLAlchemy |
-| Datos | MySQL |
-| Procesamiento asíncrono | Redis y RQ |
+| Escritorio | Tauri 2 y WebView2 |
+| Datos | SQLite local |
+| Procesamiento asíncrono | Cola persistente SQLite |
 | IA emocional | Ollama y modelos locales |
 | Autenticación | JWT |
-| Entorno local | Docker Compose |
+| Instalador | NSIS (`EmoVest-Setup.exe`) |
 
 ## ⚙️ Empieza en minutos
 
-### Opción recomendada: Docker
+### Aplicación de escritorio
 
-Necesitas Docker Desktop o Docker Engine. Para usar el análisis emocional, instala y ejecuta Ollama en tu máquina anfitriona.
+EmoVest se instala en Windows con `EmoVest-Setup.exe`. El usuario no necesita
+Python, Docker, MySQL ni Redis. La base de datos, las imágenes y las copias de
+seguridad se guardan fuera de la carpeta de instalación y se conservan al
+actualizar o reinstalar.
 
-```bash
-cp .env.local-server.example .env.local-server
-docker compose --env-file .env.local-server -f docker-compose.local-server.yml up --build
-```
+Ollama es opcional: si no está instalado, el diario y las estadísticas siguen
+funcionando. EmoVest informa si falta el servicio o el modelo antes de intentar
+un análisis.
 
-Abre [http://localhost:5173](http://localhost:5173). La API y su documentación interactiva estarán disponibles en [http://localhost:8000](http://localhost:8000) y [http://localhost:8000/docs](http://localhost:8000/docs).
+### Desarrollo en Windows
 
-### Tus datos se conservan
-
-MySQL guarda sus datos en el volumen Docker `mysql-data`: puedes detener el entorno y retomarlo después sin perder usuarios, operaciones ni análisis.
-
-```bash
-docker compose --env-file .env.local-server -f docker-compose.local-server.yml down
-```
-
-No ejecutes `down -v` salvo que quieras reiniciar el proyecto desde cero: ese comando elimina también el volumen y la base de datos local.
-
-### Desarrollo manual
-
-```bash
-# Terminal 1: API
+```powershell
 cd backend
 python -m venv venv
-source venv/bin/activate
+venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
-python create_tables.py
-uvicorn app:app --reload
+cd ..
+.\scripts\build-windows-sidecar.ps1
 
-# Terminal 2: worker de análisis emocional
-cd backend
-source venv/bin/activate
-python worker.py
-
-# Terminal 3: interfaz
 cd frontend
 pnpm install
-pnpm dev
+pnpm desktop:dev
 ```
 
-En Windows, activa el entorno con `venv\Scripts\activate`.
-
-Si Ollama o el worker no están disponibles, la operación se guarda igualmente. El análisis emocional quedará pendiente o usará el comportamiento de respaldo configurado.
+El instalador reproducible se genera con `pnpm desktop:build`. Consulta
+[la guía de escritorio](docs/escritorio-windows.md) para rutas, migraciones,
+backups, diagnóstico, updater y validación Windows.
 
 ## 🏗️ Arquitectura
 
 ```mermaid
 flowchart TB
-    UI["React · Interfaz web"] --> API["FastAPI · API"]
-    API --> DB[("MySQL")]
-    API --> Q["Redis · Cola RQ"]
-    Q --> W["Worker emocional"]
-    W --> AI["Ollama · IA local"]
+    T["Tauri 2"] --> UI["React · Interfaz"]
+    T --> API["FastAPI · Sidecar"]
+    API --> DB[("SQLite local")]
+    API --> Q["Cola SQLite"]
+    Q --> W["Runner emocional"]
+    W --> AI["Ollama · Opcional"]
     W --> DB
 ```
 
@@ -148,10 +132,8 @@ El procesamiento emocional es asíncrono: recibir un `201` al crear una operaci�
 
 | Recurso | Contenido |
 |---|---|
-| [Guía de entorno local](LOCAL_SERVER.md) | Docker, variables y verificación local |
-| [Redis y workers](docs/redis-workers.md) | Cola, worker y resolución de problemas |
+| [Edición de escritorio](docs/escritorio-windows.md) | Arquitectura, datos, backups, updater y validación |
 | [Vídeo de presentación](docs/Video_presentacion.mp4) | Vista general del proyecto |
-| [API interactiva](http://localhost:8000/docs) | OpenAPI/Swagger cuando el backend está en ejecución manual |
 
 ## 🤝 Contribuir
 
@@ -160,7 +142,7 @@ EmoVest mejora con personas que quieren hacer el trading más consciente y priva
 1. Revisa las [issues](../../issues) abiertas o plantea la idea en una nueva.
 2. Mantén los cambios pequeños, documentados y centrados en un problema.
 3. Ejecuta `pnpm lint` y `pnpm build` dentro de `frontend/` si modificas la interfaz.
-4. Si tocas el flujo emocional, verifica también el worker y la cola RQ.
+4. Si tocas el flujo emocional, verifica la cola local, sus reintentos y la recuperación tras reinicio.
 
 Las aportaciones que mejor encajan son mejoras de experiencia, accesibilidad, documentación, pruebas, privacidad y análisis responsable de patrones.
 

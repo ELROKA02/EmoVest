@@ -148,12 +148,13 @@ async def enviar_mensaje(
             if not terminal_sent:
                 yield _sse("done", {})
         except ChatUnavailableError:
-            logger.exception("El servicio de chat fallo durante el stream SSE.")
+            # Provider exceptions can contain request context. Keep logs free of
+            # private messages and attachments.
+            logger.warning("El servicio de chat falló durante el stream SSE.")
             if not error_sent:
                 yield _safe_error()
         except Exception:
-            # Tracebacks and provider/database details must never cross the API boundary.
-            logger.exception("Error inesperado durante el stream SSE del chat.")
+            logger.error("Error inesperado durante el stream SSE del chat.")
             if not error_sent:
                 yield _safe_error()
 

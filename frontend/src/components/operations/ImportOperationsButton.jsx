@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { API_BASE_URL } from '../../config';
+import { apiFetch } from '../../config';
 
 const SUCCESS_MESSAGE_DURATION_MS = 4500;
 const ERROR_MESSAGE_DURATION_MS = 8000;
@@ -138,7 +138,7 @@ const ImportOperationsButton = ({ cuentaId, disabled = false, onImported }) => {
     setSuccessMessage('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/operaciones/import.csv`, {
+      const response = await apiFetch('/operaciones/import.csv', {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,

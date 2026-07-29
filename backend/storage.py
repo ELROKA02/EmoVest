@@ -16,10 +16,12 @@ CONTENT_TYPE_EXTENSION_MAP = {
 
 
 class LocalImageStorage:
-    def __init__(self, base_dir: str, max_image_size_mb: int) -> None:
-        resolved_base_dir = Path(base_dir)
+    def __init__(self, base_dir: str | Path, max_image_size_mb: int) -> None:
+        resolved_base_dir = Path(base_dir).expanduser()
         if not resolved_base_dir.is_absolute():
-            resolved_base_dir = Path(__file__).resolve().parent / resolved_base_dir
+            raise RuntimeError(
+                "El almacenamiento de imágenes de escritorio requiere una ruta absoluta."
+            )
         self.base_dir = resolved_base_dir.resolve()
         self.max_bytes = max_image_size_mb * 1024 * 1024
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -56,7 +58,7 @@ class LocalImageStorage:
                     if total_size > self.max_bytes:
                         raise HTTPException(
                             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                            detail=f"La imagen no debe superar {MAX_IMAGE_SIZE_MB}MB",
+                            detail=f"La imagen no debe superar {self.max_bytes // (1024 * 1024)}MB",
                         )
                     output_file.write(chunk)
         except HTTPException:

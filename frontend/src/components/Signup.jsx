@@ -1,7 +1,7 @@
 import React, { useState } from 'react'; 
 import logo from '../assets/logoEmoVest.png'; 
 import { Link, useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../config';
 
 const Signup = () => {
     const navigate = useNavigate();
@@ -59,7 +59,7 @@ const Signup = () => {
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/signup`, {
+            const response = await apiFetch('/signup', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

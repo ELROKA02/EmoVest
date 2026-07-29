@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
 import { formatCurrency } from '../utils/currency';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../config';
 import { Spinner, LoadingState, ErrorState, EmptyState } from './ui';
 
 const PerfilUsuario = () => {
@@ -49,7 +49,7 @@ const PerfilUsuario = () => {
           navigate('/login');
           return;
         }
-        const response = await fetch(`${API_BASE_URL}/me`, {
+        const response = await apiFetch('/me', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -80,7 +80,7 @@ const PerfilUsuario = () => {
         navigate('/login');
         return;
       }
-      const response = await fetch(`${API_BASE_URL}/cuentas/vercuentas`, {
+      const response = await apiFetch('/cuentas/vercuentas', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -111,8 +111,8 @@ const PerfilUsuario = () => {
     const token = sessionStorage.getItem('token');
     const isEditing = !!editingAccount;
     const url = isEditing
-      ? `${API_BASE_URL}/cuentas/actualizarcuenta/${editingAccount.id}`
-      : `${API_BASE_URL}/cuentas/crearcuenta`;
+      ? `/cuentas/actualizarcuenta/${editingAccount.id}`
+      : '/cuentas/crearcuenta';
     const method = isEditing ? 'PUT' : 'POST';
 
     const payload = isEditing ? {
@@ -127,7 +127,7 @@ const PerfilUsuario = () => {
     setSubmitting(true);
     setActionError(null);
     try {
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -159,7 +159,7 @@ const PerfilUsuario = () => {
     setActionError(null);
     try {
       const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/cuentas/eliminarcuenta/${id}`, {
+      const response = await apiFetch(`/cuentas/eliminarcuenta/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -225,7 +225,7 @@ const PerfilUsuario = () => {
     setActionError(null);
     try {
       const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/cuentas/actualizarcuenta/${selectedAccountForFunds.id}`, {
+      const response = await apiFetch(`/cuentas/actualizarcuenta/${selectedAccountForFunds.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

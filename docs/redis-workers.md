@@ -1,4 +1,8 @@
-# Sistema de colas: Redis + RQ + Workers
+# Sistema de colas servidor legado: Redis + RQ
+
+> **No soportado:** la edición actual usa una cola persistente SQLite integrada
+> en la aplicación de escritorio. Este documento se conserva como referencia
+> histórica. Consulta [escritorio-windows.md](escritorio-windows.md).
 
 Documento técnico que explica cómo funciona el procesamiento en segundo plano del análisis emocional en EmoVest, qué procesos hace falta tener vivos y cómo arrancarlos en Linux y macOS.
 

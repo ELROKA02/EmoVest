@@ -7,6 +7,7 @@ from collections.abc import Generator
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+import config
 from ai.chat_sessions import ChatSession
 from ai.chat_sessions import ChatSessionForbidden, ChatSessionStore, ChatSessionUnavailable
 from ai.chat_tools import ChatExecutionContext, list_accounts, make_langchain_tools
@@ -358,6 +359,14 @@ class ChatAgentService:
                 yield {"event": "evidence", "data": {"items": [{"tool": "cuentas", "accounts": accounts["accounts"]}]}}
                 yield {"event": "done", "data": {"session_id": session.id}}
                 return
+
+            enabled = getattr(config, "AI_CHAT_ENABLED", True)
+            if isinstance(enabled, str):
+                enabled = enabled.strip().lower() not in {
+                    "0", "false", "no", "off"
+                }
+            if not enabled:
+                raise ChatModelUnavailable()
 
             from ai.manager import AI_USE_CASE_CHAT, get_effective_ai_settings, get_langchain_chat_model
             model = get_langchain_chat_model(get_effective_ai_settings(AI_USE_CASE_CHAT, self.db))

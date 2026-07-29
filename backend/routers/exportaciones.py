@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Cuenta_Trading, Operacion, Usuario
 from routers.auth import get_current_user
-from rq_queue import enqueue_emociones_job
+from rq_queue import dispatch_emociones_job, stage_emociones_job
 
 router = APIRouter(tags=["operaciones"])
 
@@ -385,8 +385,25 @@ async def import_operaciones_csv(
 
     operaciones = parse_csv_operaciones(csv_text, cuenta.id)
 
+    queued_jobs = []
+    warnings = []
     db.add_all(operaciones)
     try:
+        db.flush()
+        for operacion in operaciones:
+            if not operacion.notas:
+                continue
+            try:
+                queued_jobs.append(
+                    stage_emociones_job(db, operacion.id, operacion.notas)
+                )
+            except Exception:
+                warnings.append(
+                    {
+                        "operacion_id": operacion.id,
+                        "warning": "No se pudo preparar el análisis emocional.",
+                    }
+                )
         db.commit()
         for operacion in operaciones:
             db.refresh(operacion)
@@ -394,17 +411,14 @@ async def import_operaciones_csv(
         db.rollback()
         raise
 
-    warnings = []
-    for operacion in operaciones:
-        if not operacion.notas:
-            continue
+    for queued_job in queued_jobs:
         try:
-            enqueue_emociones_job(operacion.id, operacion.notas)
-        except Exception as error:
+            dispatch_emociones_job(queued_job)
+        except Exception:
             warnings.append(
                 {
-                    "operacion_id": operacion.id,
-                    "warning": f"No se pudo encolar analisis emocional: {error}",
+                    "operacion_id": queued_job.operation_id,
+                    "warning": "No se pudo notificar la cola de análisis emocional.",
                 }
             )
 

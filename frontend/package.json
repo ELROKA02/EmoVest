@@ -1,19 +1,24 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "desktop:prepare-sidecar": "node src-tauri/scripts/prepare-sidecar.mjs",
+    "desktop:dev": "pnpm desktop:prepare-sidecar && tauri dev",
+    "desktop:build": "pnpm desktop:prepare-sidecar && tauri build --bundles nsis"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.20",
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/react": "^6.1.20",
     "@fullcalendar/timegrid": "^6.1.20",
+    "@tauri-apps/api": "^2.11.1",
     "axios": "^1.14.0",
     "border-beam": "^1.3.0",
     "react": "^19.2.4",
@@ -26,6 +31,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@tailwindcss/postcss": "^4.2.1",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.0",

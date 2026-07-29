@@ -1,13 +1,14 @@
 # AGENTS.md
 
-Guia breve para que agentes de codigo sean productivos en EmoVest desde el primer turno.
+Guía breve para que agentes de código sean productivos en EmoVest desde el primer turno.
 
 ## Alcance del proyecto
 
-- Monorepo con 2 apps principales:
-- `backend/`: API FastAPI + SQLAlchemy + MySQL + RQ/Redis + integracion con Ollama.
-- `frontend/`: SPA React con Vite.
-- Documentacion operativa: `docs/despliegue.md`, `docs/redis-workers.md` y `docs/gestion-semanal-emovest.md`.
+- Aplicación de escritorio Windows:
+- `backend/`: sidecar FastAPI + SQLAlchemy + SQLite + cola local persistente + Ollama opcional.
+- `frontend/`: React/Vite dentro de Tauri 2.
+- Fuente de verdad: `docs/escritorio-windows.md`.
+- Los archivos Docker/MySQL/Redis históricos son legado no soportado y no forman parte del producto.
 
 ## Comandos de trabajo (desarrollo)
 
@@ -18,6 +19,8 @@ Ejecuta los comandos en la carpeta correcta:
 - `pnpm dev`
 - `pnpm build`
 - `pnpm lint`
+- `pnpm desktop:dev`
+- `pnpm desktop:build`
 
 - Backend (`backend/`):
 - `python -m venv venv`
@@ -26,30 +29,32 @@ Ejecuta los comandos en la carpeta correcta:
 - `python create_tables.py`
 - `uvicorn app:app --reload`
 
-- Worker RQ (`backend/`, en otra terminal):
-- `python worker.py`
+- Sidecar Windows (raíz, PowerShell):
+- `.\scripts\build-windows-sidecar.ps1`
 
 ## Arquitectura y limites
 
 - No mezclar responsabilidades:
 - Endpoints y orquestacion HTTP en `backend/routers/`.
 - Modelo de datos y ORM en `backend/models.py`.
-- Cola en `backend/rq_queue.py` y jobs en `backend/jobs/`.
+- Cola en `backend/queueing/` y jobs en `backend/jobs/`.
 - Clasificacion emocional con Ollama en `backend/routers/ia.py`.
+- Ciclo de vida del sidecar en `frontend/src-tauri/src/lib.rs`.
 
 - Flujo de operaciones con notas:
 - Crear operacion en `backend/routers/operaciones.py`.
-- Encolar job emocional en Redis.
-- Procesar job en `backend/worker.py`.
-- Guardar `Registro_emocional` en MySQL.
+- Guardar operación y job en la misma transacción SQLite.
+- Procesar el job con el runner local persistente.
+- Guardar `Registro_emocional` en SQLite; un fallo de IA nunca revierte la operación.
 
 ## Convenciones para agentes
 
 - Haz cambios pequenos y enfocados; evita refactors amplios no pedidos.
-- Si tocas endpoints de operaciones o IA, valida impacto en cola/worker (no solo en el request HTTP).
+- Si tocas endpoints de operaciones o IA, valida impacto en la cola local (no solo en el request HTTP).
 - Si agregas configuracion nueva, centralizala en `backend/config.py` y documenta variable de entorno.
 - En frontend, usa scripts de `frontend/package.json`; no introduzcas tooling alternativo sin peticion.
-- Antes de proponer despliegue o systemd/nginx, enlaza la documentacion oficial del repo en lugar de duplicarla.
+- No reactives el modo servidor ni dependencias MySQL/Redis/RQ salvo una decisión explícita del propietario.
+- No guardes binarios de sidecar, certificados, claves privadas ni modelos en Git.
 - Para repartir trabajo o hablar con el equipo de EmoVest, usa Discord como canal de coordinacion.
 
 ## Equipo y reparto por Discord
@@ -62,18 +67,21 @@ Ejecuta los comandos en la carpeta correcta:
 
 ## Pitfalls importantes
 
-- El analisis emocional es asincrono (RQ): una respuesta `201` en operaciones no implica que el registro emocional ya exista.
-- `backend/worker.py` usa `SimpleWorker` por compatibilidad local; evita cambiarlo sin revisar consecuencias en macOS/Linux.
-- Si Redis o worker caen, la operacion puede guardarse sin analisis emocional. Esto es comportamiento esperado.
+- El análisis emocional es asíncrono: una respuesta `201` no implica que el registro emocional ya exista.
+- La cola usa leases e idempotencia; valida recuperación tras cierre y reinicio.
+- Ollama es opcional. Ausencia del servicio o del modelo no debe impedir guardar operaciones.
+- SQLite, imágenes, logs y backups deben permanecer fuera de la carpeta de instalación.
+- Tauri debe fijar rutas absolutas, usar loopback y proteger la API con el token efímero.
 
 ## Fuente de verdad (enlazar, no duplicar)
 
-- Despliegue y servicios: [docs/despliegue.md](docs/despliegue.md)
-- Cola Redis + workers + troubleshooting: [docs/redis-workers.md](docs/redis-workers.md)
-- Gestion semanal y soporte operativo: [docs/gestion-semanal-emovest.md](docs/gestion-semanal-emovest.md)
+- Escritorio, instalador, updater, datos y soporte: [docs/escritorio-windows.md](docs/escritorio-windows.md)
+- `docs/despliegue.md` y `docs/redis-workers.md` solo describen el sistema legado.
 
 ## Checklist rapido al terminar cambios
 
-- Backend: app levanta sin errores (`uvicorn app:app --reload`).
+- Backend: tests pasan (`python -m unittest discover -s tests -v`).
 - Frontend: build/lint pasan (`pnpm build`, `pnpm lint`).
-- Si tocaste flujo emocional: worker activo y procesamiento de cola verificado.
+- Rust: `cargo check --locked` en `frontend/src-tauri/`.
+- Si tocaste flujo emocional: cola local, reintentos y recuperación verificados.
+- Si tocaste empaquetado: ejecutar CI Windows y no afirmar que NSIS funciona sin esa validación.

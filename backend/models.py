@@ -1,4 +1,16 @@
-from sqlalchemy import Column, Integer, String, DECIMAL, DateTime ,ForeignKey, Boolean, Enum
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    DECIMAL,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -25,7 +37,18 @@ class Suscripcion(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     id_usuario = Column(Integer, ForeignKey("usuarios.id"),unique=True, nullable=False)
-    tipo_plan = Column(Enum("FREE", "PRO", "PARTNER"), nullable=False)
+    tipo_plan = Column(
+        Enum(
+            "FREE",
+            "PRO",
+            "PARTNER",
+            name="subscription_plan",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     fecha_inicio = Column(DateTime, server_default=func.now(), nullable=False)
     fecha_expiracion = Column(DateTime, nullable=False)
     activa = Column(Boolean, nullable=False)
@@ -77,7 +100,17 @@ class Cuenta_Trading(Base):
     fecha_creacion = Column(DateTime, server_default=func.now())
     saldo_inicial = Column(DECIMAL(20,6))
     saldo_actual = Column(DECIMAL(20,6))
-    divisa = Column(Enum("EUR","USD"), nullable=False)
+    divisa = Column(
+        Enum(
+            "EUR",
+            "USD",
+            name="trading_currency",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     
     # relaciones
     usuario = relationship("Usuario", back_populates="cuentas_trading")
@@ -122,7 +155,17 @@ class Operacion(Base):
     id = Column(Integer, primary_key=True, index=True)
     id_cuenta = Column(Integer, ForeignKey("cuenta_trading.id"))
     fecha_hora = Column(DateTime)
-    tipo_operacion = Column(Enum("LONG", "SHORT"), nullable=False)
+    tipo_operacion = Column(
+        Enum(
+            "LONG",
+            "SHORT",
+            name="operation_side",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     cantidad = Column(DECIMAL(20,6), nullable=False)
     activo = Column(String(10), nullable=False)
     precio_entrada = Column(DECIMAL(20,6), nullable=False)
@@ -171,3 +214,81 @@ class AiSetting(Base):
     base_url = Column(String(255), nullable=False)
     install_mode = Column(String(50), nullable=False, default="manual")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class BackgroundJob(Base):
+    __tablename__ = "background_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'running', 'completed', 'failed')",
+            name="ck_background_jobs_status",
+        ),
+        Index(
+            "ix_background_jobs_due",
+            "status",
+            "available_at",
+            "created_at",
+        ),
+        Index(
+            "ix_background_jobs_lease",
+            "status",
+            "lease_expires_at",
+        ),
+    )
+
+    id = Column(String(36), primary_key=True)
+    kind = Column(String(50), nullable=False)
+    operation_id = Column(
+        Integer,
+        ForeignKey("operacion.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    idempotency_key = Column(String(160), nullable=False, unique=True)
+    payload_json = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="pending", server_default="pending")
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    max_attempts = Column(Integer, nullable=False, default=4, server_default="4")
+    available_at = Column(DateTime, nullable=False)
+    lease_token = Column(String(36), nullable=True)
+    lease_expires_at = Column(DateTime, nullable=True)
+    last_error_code = Column(String(80), nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class ChatSessionRecord(Base):
+    __tablename__ = "chat_sessions"
+    __table_args__ = (
+        Index("ix_chat_sessions_user_expires", "user_id", "expires_at"),
+        Index("ix_chat_sessions_expires_at", "expires_at"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    account_id = Column(
+        Integer,
+        ForeignKey("cuenta_trading.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    history_json = Column(Text, nullable=False, default="[]", server_default="[]")
+    tool_summaries_json = Column(Text, nullable=False, default="[]", server_default="[]")
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    version = Column(Integer, nullable=False, default=1, server_default="1")

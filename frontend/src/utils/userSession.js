@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../config';
 
 export const fetchAndStoreUserName = async () => {
   const token = sessionStorage.getItem('token');
@@ -7,7 +7,7 @@ export const fetchAndStoreUserName = async () => {
     return null;
   }
 
-  const response = await fetch(`${API_BASE_URL}/me`, {
+  const response = await apiFetch('/me', {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,

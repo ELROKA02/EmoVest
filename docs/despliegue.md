@@ -1,4 +1,8 @@
-# Despliegue de EmoVest
+# Despliegue servidor legado de EmoVest
+
+> **No soportado:** EmoVest se distribuye ahora mediante el instalador de
+> escritorio para Windows. Esta guía se conserva como referencia histórica.
+> Consulta [escritorio-windows.md](escritorio-windows.md).
 
 Guía general para llevar EmoVest a producción en un VPS de Hostinger del plan **"Despliega tu IA"** (que ya trae **Ollama** preinstalado de forma nativa). El objetivo es tener todo el stack corriendo en una única máquina, con `systemd` orquestando cada pieza y `nginx` como puerta de entrada.
 

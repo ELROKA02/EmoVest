@@ -1,23 +1,39 @@
+from ai.providers.base import AIJobObsolete
 from database import SessionLocal
+from models import Operacion
 from routers.ia import guardar_registro_emocional
 
 
-def process_emociones_job(id_operacion: int, texto: str) -> dict:
-    # Cada job abre su propia sesion de BD (independiente del request HTTP).
-    db = SessionLocal()
+def process_emociones_job(
+    id_operacion: int,
+    texto: str,
+    *,
+    db=None,
+    commit: bool = True,
+) -> dict:
+    # El runner SQLite inyecta una sesión para confirmar el registro emocional
+    # y el estado `completed` en la misma transacción.
+    owns_session = db is None
+    db = db or SessionLocal()
 
     try:
-        # Ejecuta la clasificacion y guarda/actualiza el registro emocional.
+        operation_exists = db.query(Operacion.id).filter(
+            Operacion.id == id_operacion
+        ).first()
+        if operation_exists is None:
+            raise AIJobObsolete(
+                "La operación ya no existe; el trabajo no se procesará."
+            )
         guardar_registro_emocional(texto, id_operacion, db)
-        db.commit()
+        if commit:
+            db.commit()
         return {
             "status": "ok",
             "operacion_id": id_operacion,
         }
     except Exception:
-        # Si algo falla, revierte cambios de este job y propaga el error a RQ.
         db.rollback()
         raise
     finally:
-        # Libera siempre la conexion de BD para evitar fugas.
-        db.close()
+        if owns_session:
+            db.close()

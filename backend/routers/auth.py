@@ -3,27 +3,20 @@ from sqlalchemy.orm import Session
 from schemas import SignUp, login
 from database import get_db
 from models import Usuario, Suscripcion
-from passlib.context import CryptContext
+import bcrypt
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.security import OAuth2PasswordRequestForm
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
+from config import SECRET_KEY
 
 #Configuración de JWT
-SECRET_KEY = os.getenv("SECRET_KEY")
-
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 router = APIRouter(tags=["usuarios"])
-
-pwd_context = CryptContext(schemes=["bcrypt"])
 
 #funciones auxiliares
 def create_access_token(data: dict, expires_delta: timedelta = None):
@@ -41,10 +34,19 @@ def obtener_correo_usuario(db: Session, correo: str):
 
 
 def hash_password(password: str):
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt(),
+    ).decode("ascii")
 
 def verify_password(password: str, hashed: str):
-    return pwd_context.verify(password, hashed)
+    try:
+        return bcrypt.checkpw(
+            password.encode("utf-8"),
+            hashed.encode("ascii"),
+        )
+    except (TypeError, ValueError, UnicodeError):
+        return False
 
 def crear_usuario(db: Session, nombre: str, correo_electronico: str, contrasena: str):
     password_hash = hash_password(contrasena)

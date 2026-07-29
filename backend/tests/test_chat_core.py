@@ -2,22 +2,41 @@ import unittest
 from unittest.mock import patch
 
 from ai.chat_agent import ChatAgentService, MAX_TOOL_ROUNDS, run_chat_agent
-from ai.chat_sessions import ChatSessionForbidden, ChatSessionStore
+from ai.chat_sessions import ChatSession, ChatSessionForbidden
 from ai.chat_tools import ChatExecutionContext
 
 
-class FakeRedis:
+class MemoryChatSessionStore:
     def __init__(self):
-        self.values = {}
+        self.sessions = {}
 
-    def setex(self, key, _ttl, value):
-        self.values[key] = value
+    def create(self, user_id, account_id=None):
+        session = ChatSession(
+            id=f"session-{len(self.sessions) + 1}",
+            user_id=user_id,
+            account_id=account_id,
+        )
+        self.sessions[session.id] = session
+        return session
 
-    def get(self, key):
-        return self.values.get(key)
+    def get(self, session_id, user_id):
+        session = self.sessions.get(session_id)
+        if session and session.user_id != user_id:
+            raise ChatSessionForbidden()
+        return session
 
-    def delete(self, key):
-        return int(self.values.pop(key, None) is not None)
+    def save(self, session, user_id):
+        if session.user_id != user_id:
+            raise ChatSessionForbidden()
+        self.sessions[session.id] = session
+        return session
+
+    def delete_owned(self, session_id, user_id):
+        session = self.get(session_id, user_id)
+        if session is None:
+            return False
+        del self.sessions[session_id]
+        return True
 
 
 class FakeResponse:
@@ -106,7 +125,7 @@ class EmptyDb:
 
 class ChatSessionStoreTests(unittest.TestCase):
     def test_only_owner_can_read_or_delete_a_session(self):
-        store = ChatSessionStore(redis_client=FakeRedis())
+        store = MemoryChatSessionStore()
         session = store.create(user_id=7)
 
         with self.assertRaises(ChatSessionForbidden):
@@ -121,7 +140,7 @@ class ChatAgentLoopTests(unittest.TestCase):
     def test_first_message_accepts_authenticated_user_name(self):
         service = ChatAgentService(
             db=EmptyDb(),
-            session_store=ChatSessionStore(redis_client=FakeRedis()),
+            session_store=MemoryChatSessionStore(),
         )
 
         events = list(service.stream(

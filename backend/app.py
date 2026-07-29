@@ -1,8 +1,35 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from config import CORS_ALLOWED_ORIGINS
-from routers import auth, chat, exportaciones, ia, operaciones, cuentaTrading, estadisticas
+from database import SessionLocal, engine
+from desktop_security import DesktopApiSecurityMiddleware
+from backup_manager import current_schema_revision
+from migration_manager import get_head_revision
+from queueing.lifecycle import get_background_services_health
+from routers import auth, chat, desktop, exportaciones, ia, operaciones, cuentaTrading, estadisticas
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    from queueing.lifecycle import start_background_services, stop_background_services
+    from routers.estadisticas import start_stats_scheduler, stop_stats_scheduler
+
+    start_background_services()
+    start_stats_scheduler()
+    application.state.background_services_ready = True
+    try:
+        yield
+    finally:
+        application.state.background_services_ready = False
+        # Libera primero los leases emocionales; si el cálculo mensual está
+        # ocupado, Tauri aún conserva margen para aplicar su kill de seguridad.
+        stop_background_services()
+        stop_stats_scheduler()
+        engine.dispose()
 
 app = FastAPI(
     title="EMOVEST API",
@@ -13,7 +40,8 @@ app = FastAPI(
         "define directamente en FastAPI para que Swagger UI refleje con precision los "
         "endpoints disponibles y sus respuestas."
     ),
-    version="0.3.1",
+    version="0.4.0",
+    lifespan=lifespan,
     contact={
         "name": "Equipo EMOVEST"
     },
@@ -60,6 +88,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(DesktopApiSecurityMiddleware)
 
 # Routers
 app.include_router(auth.router)
@@ -69,6 +98,46 @@ app.include_router(cuentaTrading.router)
 app.include_router(estadisticas.router)
 app.include_router(ia.router)
 app.include_router(chat.router)
+app.include_router(desktop.router)
+
+
+@app.get(
+    "/health/ready",
+    tags=["desktop"],
+    summary="Comprobar que la edición de escritorio está preparada",
+)
+def ready():
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La base de datos local no está preparada.",
+        ) from error
+
+    revision = current_schema_revision()
+    if revision is None or revision != get_head_revision():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El esquema local no coincide con esta versión.",
+        )
+    if not getattr(app.state, "background_services_ready", False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Los servicios locales todavía no están preparados.",
+        )
+    if not get_background_services_health()["healthy"]:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La cola local no está disponible.",
+        )
+
+    return {
+        "ready": True,
+        "version": app.version,
+        "schema_revision": revision,
+    }
 
 @app.get(
     "/",

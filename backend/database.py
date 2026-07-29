@@ -1,29 +1,61 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from dotenv import load_dotenv
-import os
+from pathlib import Path
 
-# Cargar .env
-load_dotenv()
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine, URL
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("dataBase_url")
+from config import DATABASE_PATH, SQLITE_BUSY_TIMEOUT_MS
 
-if not DATABASE_URL:
-    raise RuntimeError(
-        "Falta configurar DATABASE_URL o dataBase_url para conectar con la base de datos."
+
+def sqlite_url(database_path: str | Path) -> URL:
+    path = Path(database_path).expanduser()
+    if not path.is_absolute():
+        raise RuntimeError("La base de datos de escritorio requiere una ruta absoluta.")
+    return URL.create("sqlite+pysqlite", database=str(path.resolve()))
+
+
+def create_desktop_engine(
+    database_path: str | Path = DATABASE_PATH,
+    *,
+    busy_timeout_ms: int = SQLITE_BUSY_TIMEOUT_MS,
+) -> Engine:
+    path = Path(database_path).expanduser()
+    if not path.is_absolute():
+        raise RuntimeError("La base de datos de escritorio requiere una ruta absoluta.")
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    desktop_engine = create_engine(
+        sqlite_url(path),
+        connect_args={
+            "check_same_thread": False,
+            "timeout": busy_timeout_ms / 1000,
+        },
+        pool_pre_ping=True,
     )
 
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=1800,
-    pool_size=10,
-    max_overflow=20,
+    @event.listens_for(desktop_engine, "connect")
+    def configure_sqlite(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        finally:
+            cursor.close()
+
+    return desktop_engine
+
+
+DATABASE_URL = sqlite_url(DATABASE_PATH)
+engine = create_desktop_engine()
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    expire_on_commit=False,
 )
-
-SessionLocal = sessionmaker(bind=engine)
-
 Base = declarative_base()
+
 
 def get_db():
     db = SessionLocal()

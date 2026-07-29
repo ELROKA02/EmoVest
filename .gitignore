@@ -5,6 +5,7 @@ venv
 backend/__pycache__
 # Dependencias
 node_modules/
+.pnpm-store/
 
 # Logs
 *.log
@@ -21,8 +22,10 @@ Thumbs.db
 .vscode/
 
 # Configuracion local 
-.github/
-.github/ISSUE_TEMPLATE
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/desktop-windows.yml
 
 skills-lock.json
 .agents/
@@ -31,4 +34,19 @@ emovest-video/
 docs/EmoVest_Finanzas.xlsx
 backend/images/
 automation_assets
-docs
+docs/*
+!docs/escritorio-windows.md
+
+# Artefactos locales de la edición de escritorio.
+frontend/src-tauri/target/
+frontend/src-tauri/binaries/*
+frontend/src-tauri/gen/
+frontend/src-tauri/icons/android/
+frontend/src-tauri/icons/ios/
+frontend/src-tauri/icons/64x64.png
+frontend/src-tauri/icons/Square*.png
+frontend/src-tauri/icons/StoreLogo.png
+frontend/src-tauri/icons/icon.icns
+backend/build/
+backend/dist/
+backend/*.spec.local

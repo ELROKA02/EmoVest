@@ -1,45 +1,36 @@
-from redis import Redis
-from rq import Queue, Retry
+"""Fachada estable para la cola emocional SQLite de la edición de escritorio."""
+from __future__ import annotations
 
-from config import (
-    REDIS_URL,
-    RQ_DEFAULT_TIMEOUT,
-    RQ_FAILURE_TTL,
-    RQ_QUEUE_NAME,
-    RQ_RESULT_TTL,
-    RQ_RETRY_INTERVALS,
-    RQ_RETRY_MAX,
-)
-from jobs.emociones import process_emociones_job
+from sqlalchemy.orm import Session
+
+from database import SessionLocal
+from queueing import EmotionJobReceipt, get_emotion_queue
 
 
-def get_redis_connection() -> Redis:
-    # Crea la conexion a Redis que usara RQ como backend de cola.
-    return Redis.from_url(REDIS_URL)
+def stage_emociones_job(
+    db: Session, id_operacion: int, texto: str
+) -> EmotionJobReceipt:
+    return get_emotion_queue().stage(db, id_operacion, texto)
 
 
-def get_emociones_queue() -> Queue:
-    # Construye la cola de trabajos de emociones con timeout por defecto.
-    return Queue(
-        name=RQ_QUEUE_NAME,
-        connection=get_redis_connection(),
-        default_timeout=RQ_DEFAULT_TIMEOUT,
-    )
+def dispatch_emociones_job(receipt: EmotionJobReceipt) -> None:
+    get_emotion_queue().dispatch(receipt)
 
 
-def enqueue_emociones_job(id_operacion: int, texto: str):
-    # Encola el trabajo de IA para ejecutarlo en background sin bloquear el endpoint.
-    queue = get_emociones_queue()
+def enqueue_emociones_job(id_operacion: int, texto: str) -> EmotionJobReceipt:
+    """Enqueue outside a request transaction.
 
-    return queue.enqueue(
-        # Funcion que ejecutara el worker en otro proceso.
-        process_emociones_job,
-        id_operacion=id_operacion,
-        texto=texto,
-        # Politica de reintento ante fallos transitorios (ej: Ollama no disponible).
-        retry=Retry(max=RQ_RETRY_MAX, interval=RQ_RETRY_INTERVALS),
-        # Tiempo de retencion de jobs exitosos para inspeccion.
-        result_ttl=RQ_RESULT_TTL,
-        # Tiempo de retencion de jobs fallidos para diagnostico.
-        failure_ttl=RQ_FAILURE_TTL,
-    )
+    HTTP flows should prefer stage+dispatch so SQLite can commit the operation
+    and its outbox job atomically.
+    """
+    db = SessionLocal()
+    try:
+        receipt = stage_emociones_job(db, id_operacion, texto)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+    dispatch_emociones_job(receipt)
+    return receipt

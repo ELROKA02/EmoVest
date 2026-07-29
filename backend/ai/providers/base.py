@@ -4,6 +4,36 @@ from dataclasses import dataclass
 from ai.emotions import Emociones
 
 
+class AIProviderError(RuntimeError):
+    code = "provider_error"
+    retryable = False
+
+
+class AIProviderNotInstalled(AIProviderError):
+    code = "not_installed"
+
+
+class AIServiceUnavailable(AIProviderError):
+    code = "service_unavailable"
+    retryable = True
+
+
+class AIModelMissing(AIProviderError):
+    code = "model_missing"
+
+
+class AIInvalidResponse(AIProviderError):
+    code = "invalid_response"
+
+
+class AIDisabled(AIProviderError):
+    code = "disabled"
+
+
+class AIJobObsolete(AIProviderError):
+    code = "operation_missing"
+
+
 @dataclass(frozen=True)
 class AiRuntimeSettings:
     use_case: str

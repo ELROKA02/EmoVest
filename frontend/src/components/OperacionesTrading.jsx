@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
-import { API_BASE_URL } from '../config';
+import { apiFetch, createAuthenticatedObjectUrl } from '../config';
 import { LoadingState, ErrorState, EmptyState } from './ui';
 import ImportOperationsButton from './operations/ImportOperationsButton';
 import ExportOperationsButton from './operations/ExportOperationsButton';
@@ -20,22 +20,6 @@ const getAuthHeaders = ({ isJson = true } = {}) => {
   }
 
   return headers;
-};
-
-const withScreenshotToken = (screenshotUrl) => {
-  if (!screenshotUrl) return null;
-  if (
-    screenshotUrl.startsWith('data:') ||
-    screenshotUrl.startsWith('blob:') ||
-    screenshotUrl.startsWith('http://') ||
-    screenshotUrl.startsWith('https://')
-  ) {
-    return screenshotUrl;
-  }
-
-  const token = sessionStorage.getItem('token');
-  const separator = screenshotUrl.includes('?') ? '&' : '?';
-  return `${API_BASE_URL}${screenshotUrl}${token ? `${separator}token=${encodeURIComponent(token)}` : ''}`;
 };
 
 const revokeBlobUrl = (url) => {
@@ -129,6 +113,8 @@ const OperacionesTrading = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const isMutatingRef = useRef(false);
+  const operationImageUrlsRef = useRef(new Set());
+  const [operaciones, setOperaciones] = useState([]);
 
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
   const selectedAccount = cuentas.find(cuenta => cuenta.id === cuentaSeleccionada);
@@ -155,9 +141,9 @@ const OperacionesTrading = () => {
     };
   }, []);
 
-  // Cargar cuentas al montar
-  useEffect(() => {
-    cargarCuentas();
+  useEffect(() => () => {
+    operationImageUrlsRef.current.forEach(revokeBlobUrl);
+    operationImageUrlsRef.current.clear();
   }, []);
 
   // Guardar cuenta seleccionada en localStorage cuando cambia
@@ -167,19 +153,11 @@ const OperacionesTrading = () => {
     }
   }, [cuentaSeleccionada]);
 
-  // Cargar operaciones cuando cambia la cuenta
-  useEffect(() => {
-    if (cuentaSeleccionada) {
-      cargarOperacionesDeCuenta();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cuentaSeleccionada]);
-
-  const cargarCuentas = async () => {
+  async function cargarCuentas() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/cuentas/vercuentas`, {
+      const response = await apiFetch('/cuentas/vercuentas', {
         method: 'GET',
         headers: getAuthHeaders()
       });
@@ -203,14 +181,14 @@ const OperacionesTrading = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const cargarOperacionesDeCuenta = async () => {
+  async function cargarOperacionesDeCuenta() {
     if (!cuentaSeleccionada) return;
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/`, {
+      const response = await apiFetch(`/cuentas/${cuentaSeleccionada}/operaciones/`, {
         method: 'GET',
         headers: getAuthHeaders()
       });
@@ -218,9 +196,20 @@ const OperacionesTrading = () => {
         throw new Error('Error al cargar operaciones');
       }
       const data = await response.json();
-      const operacionesConImagen = data.map(op => ({
-        ...op,
-        screenshot: withScreenshotToken(op.screenshot)
+      operationImageUrlsRef.current.forEach(revokeBlobUrl);
+      operationImageUrlsRef.current.clear();
+      const operacionesConImagen = await Promise.all(data.map(async (op) => {
+        if (!op.screenshot) return op;
+        try {
+          const screenshot = await createAuthenticatedObjectUrl(op.screenshot);
+          if (screenshot?.startsWith('blob:')) {
+            operationImageUrlsRef.current.add(screenshot);
+          }
+          return { ...op, screenshot };
+        } catch (imageError) {
+          console.error(`No se pudo cargar la imagen de la operación ${op.id}:`, imageError);
+          return { ...op, screenshot: null };
+        }
       }));
       setOperaciones(operacionesConImagen);
     } catch (err) {
@@ -229,7 +218,22 @@ const OperacionesTrading = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  // Cargar cuentas al montar
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    cargarCuentas();
+  }, []);
+
+  // Cargar operaciones cuando cambia la cuenta
+  useEffect(() => {
+    if (cuentaSeleccionada) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      cargarOperacionesDeCuenta();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuentaSeleccionada]);
 
   const bgGradient = {
     background: 'radial-gradient(circle at center, #1a364d 0%, #10202d 50%, #101422 100%)',
@@ -242,7 +246,6 @@ const OperacionesTrading = () => {
     navigate('/login');
   };
 
-  const [operaciones, setOperaciones] = useState([]);
   const [previewImage, setPreviewImage] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filterType, setFilterType] = useState('TODOS');
@@ -326,6 +329,7 @@ const OperacionesTrading = () => {
         }
         const resStr = res.toFixed(2);
         if (formData.resultado !== resStr) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setFormData(prev => ({ ...prev, resultado: resStr }));
         }
       }
@@ -478,11 +482,13 @@ const OperacionesTrading = () => {
 
   useEffect(() => {
     if (currentPage > totalPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentPage(1);
     }
   }, [currentPage, totalPages]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
   }, [filterType, filterActivo, sortBy, sortDirection, cuentaSeleccionada, operaciones.length]);
 
@@ -540,7 +546,7 @@ const OperacionesTrading = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/${id}`, {
+      const response = await apiFetch(`/cuentas/${cuentaSeleccionada}/operaciones/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
@@ -594,7 +600,7 @@ const OperacionesTrading = () => {
     setError(null);
     try {
       if (editing) {
-        const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/${editing}`, {
+        const response = await apiFetch(`/cuentas/${cuentaSeleccionada}/operaciones/${editing}`, {
           method: 'PUT',
           headers: getAuthHeaders({ isJson: false }),
           body: data
@@ -604,7 +610,7 @@ const OperacionesTrading = () => {
         }
         await cargarOperacionesDeCuenta();
       } else {
-        const response = await fetch(`${API_BASE_URL}/cuentas/${cuentaSeleccionada}/operaciones/`, {
+        const response = await apiFetch(`/cuentas/${cuentaSeleccionada}/operaciones/`, {
           method: 'POST',
           headers: getAuthHeaders({ isJson: false }),
           body: data

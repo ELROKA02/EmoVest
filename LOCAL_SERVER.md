@@ -1,4 +1,9 @@
-# Entorno local con Docker
+# Entorno Docker legado
+
+> **No soportado:** EmoVest se distribuye ahora como aplicación de escritorio
+> para Windows. Este documento y los archivos Docker se conservan únicamente
+> como referencia histórica. Consulta
+> [docs/escritorio-windows.md](docs/escritorio-windows.md).
 
 Este entorno permite ejecutar EmoVest localmente: Docker levanta el frontend compilado, la API FastAPI, MySQL, Redis y el worker RQ. No requiere proxy inverso ni servidor. Ollama no se instala en Docker; se usa el servicio local de tu maquina en `localhost:11434`.
 

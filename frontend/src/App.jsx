@@ -10,6 +10,7 @@ import PerfilUsuario from './components/PerfilUsuario';
 import EstadisticasEmocionales from './components/EstadisticasEmocionales';
 import Calendar from './components/calendar';
 import ChatIA from './components/ChatIA';
+import DesktopControls from './components/DesktopControls';
 import { ChatMemoryProvider } from './context/ChatMemoryContext';
 
 function AppContent() {
@@ -34,6 +35,7 @@ function AppContent() {
         </Routes>
       </main>
       {isHomePage && <Footer />}
+      <DesktopControls />
     </div>
   );
 }

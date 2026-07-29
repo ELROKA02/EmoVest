@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BorderBeam } from 'border-beam';
 import Sidebar from './Sidebar';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../config';
 import useChatMemory from '../context/useChatMemory';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import evaAvatar from '../assets/eva-avatar.png';
@@ -463,7 +463,7 @@ const ChatIA = () => {
       if (effectiveSessionId) payload.session_id = effectiveSessionId;
       if (effectiveAccountId) payload.account_id = effectiveAccountId;
 
-      const response = await fetch(`${API_BASE_URL}/ia/chat/mensajes`, {
+      const response = await apiFetch('/ia/chat/mensajes', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -787,7 +787,7 @@ const ChatIA = () => {
 
     try {
       if (previousSessionId && token) {
-        const response = await fetch(`${API_BASE_URL}/ia/chat/sesiones/${encodeURIComponent(previousSessionId)}`, {
+        const response = await apiFetch(`/ia/chat/sesiones/${encodeURIComponent(previousSessionId)}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         });

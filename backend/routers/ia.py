@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+import config
 from ai.emotions import Emociones
 from ai.manager import (
     AI_USE_CASE_CHAT,
@@ -17,7 +18,7 @@ from ai.manager import (
     list_use_cases,
     normalize_use_case,
 )
-from ai.providers.base import AiRuntimeSettings
+from ai.providers.base import AIDisabled, AiRuntimeSettings
 from database import get_db
 from models import AiSetting, Registro_emocional, Usuario
 from routers.auth import get_current_user
@@ -52,7 +53,48 @@ def _settings_to_response(settings: AiRuntimeSettings) -> dict:
     }
 
 
+def _enabled(use_case: str) -> bool:
+    name = (
+        "AI_CHAT_ENABLED"
+        if use_case == AI_USE_CASE_CHAT
+        else "AI_EMOTION_ENABLED"
+    )
+    value = getattr(config, name, True)
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    return bool(value)
+
+
+def _disabled_status() -> dict:
+    return {
+        "state": "disabled",
+        "available": False,
+        "installed": None,
+        "running": None,
+        "model_available": None,
+        "message": "La IA está desactivada. EmoVest puede utilizarse sin ella.",
+    }
+
+
+def _provider_status(settings: AiRuntimeSettings) -> dict:
+    if not _enabled(settings.use_case):
+        return _disabled_status()
+    try:
+        return get_provider(settings).status()
+    except Exception:
+        return {
+            "state": "unreachable",
+            "available": False,
+            "installed": None,
+            "running": None,
+            "model_available": None,
+            "message": "No se pudo comprobar el estado del proveedor de IA.",
+        }
+
+
 def clasificar_emociones(texto: str, db: Session | None = None) -> Emociones:
+    if not _enabled(AI_USE_CASE_EMOTION):
+        raise AIDisabled("La clasificación emocional está desactivada.")
     settings = get_effective_ai_settings(AI_USE_CASE_EMOTION, db)
     provider = get_provider(settings)
     return provider.clasificar_emociones(texto)
@@ -73,7 +115,7 @@ def guardar_registro_emocional(texto: str, id_operacion: int, db: Session) -> Re
     # Clasifica antes de crear o modificar el registro. La resolucion de la
     # configuracion puede necesitar hacer rollback si una instalacion antigua
     # aun no tiene la tabla ai_settings; no debe descartar un registro pendiente.
-    # Los errores del proveedor se propagan para que RQ aplique sus reintentos.
+    # Los errores del proveedor se propagan para que la cola local aplique sus reintentos.
     emociones = clasificar_emociones(texto, db)
 
     registro = db.query(Registro_emocional).filter(
@@ -209,7 +251,7 @@ def consultar_estado_ia(
         "statuses": {
             AI_USE_CASE_EMOTION: {
                 "config": _settings_to_response(emotion_settings),
-                "status": get_provider(emotion_settings).status(),
+                "status": _provider_status(emotion_settings),
                 "recommended_models": list_recommended_models(
                     emotion_settings.provider,
                     AI_USE_CASE_EMOTION,
@@ -217,7 +259,7 @@ def consultar_estado_ia(
             },
             AI_USE_CASE_CHAT: {
                 "config": _settings_to_response(chat_settings),
-                "status": get_provider(chat_settings).status(),
+                "status": _provider_status(chat_settings),
                 "recommended_models": list_recommended_models(
                     chat_settings.provider,
                     AI_USE_CASE_CHAT,
@@ -240,7 +282,10 @@ def probar_ia(
     try:
         emociones = clasificar_emociones(payload.texto, db)
     except Exception as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(
+            status_code=503,
+            detail="La clasificación emocional no está disponible.",
+        ) from error
 
     return {"emociones": emociones.model_dump()}
 
@@ -257,12 +302,20 @@ def probar_chat_ia(
     _current_user: Usuario = Depends(get_current_user),
 ):
     settings = get_effective_ai_settings(AI_USE_CASE_CHAT, db)
+    if not _enabled(AI_USE_CASE_CHAT):
+        raise HTTPException(
+            status_code=503,
+            detail="El chat de IA está desactivado.",
+        )
     provider = get_provider(settings)
 
     try:
         respuesta = provider.generar_respuesta_chat(payload.mensaje)
     except Exception as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(
+            status_code=503,
+            detail="El chat de IA no está disponible.",
+        ) from error
 
     return {
         "config": _settings_to_response(settings),

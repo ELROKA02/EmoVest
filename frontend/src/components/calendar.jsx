@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
-import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../config';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -17,7 +16,7 @@ const Calendar = () => {
   });
   const navigate = useNavigate();
 
-  const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
+  const userName = localStorage.getItem('userName') || 'Usuario';
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(() => {
     const saved = localStorage.getItem('selectedAccountId');
     return saved ? saved : '';
@@ -60,7 +59,7 @@ const Calendar = () => {
       const token = sessionStorage.getItem('token');
       if (!token) return;
       try {
-        const response = await fetch(`${API_BASE_URL}/cuentas/vercuentas`, {
+        const response = await apiFetch('/cuentas/vercuentas', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
@@ -75,6 +74,8 @@ const Calendar = () => {
       }
     };
     cargarCuentas();
+    // La cuenta inicial se resuelve dentro de este arranque único.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -88,8 +89,8 @@ const Calendar = () => {
           setError('No hay sesión activa');
           return;
         }
-        const statsResponse = await fetch(
-          `${API_BASE_URL}/cuentas/${cuentaSeleccionada}/estadisticas/calendario?year=${year}&month=${month}`,
+        const statsResponse = await apiFetch(
+          `/cuentas/${cuentaSeleccionada}/estadisticas/calendario?year=${year}&month=${month}`,
           { headers: { 'Authorization': `Bearer ${token}` } }
         );
         if (statsResponse.ok) {

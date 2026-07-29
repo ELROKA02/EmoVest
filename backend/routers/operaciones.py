@@ -1,8 +1,9 @@
 from datetime import datetime
 from decimal import Decimal
+import logging
 from typing import Annotated, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -12,10 +13,11 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Cuenta_Trading, Operacion, Usuario
 from routers.auth import get_current_user
-from rq_queue import enqueue_emociones_job
+from rq_queue import dispatch_emociones_job, stage_emociones_job
 from storage import image_storage
 
 router = APIRouter(prefix="/cuentas/{cuenta_id_trading}/operaciones", tags=["operaciones"])
+logger = logging.getLogger(__name__)
 
 
 def get_cuenta_usuario(db: Session, cuenta_id_trading: int, user_id: int) -> Cuenta_Trading:
@@ -42,8 +44,8 @@ def actualizar_saldo_cuenta(db: Session, cuenta_id: int, diferencia: Decimal) ->
     )
 
 
-def autenticar_usuario_desde_request(request: Request, db: Session, token: str | None = None) -> Usuario:
-    jwt_token = token
+def autenticar_usuario_desde_request(request: Request, db: Session) -> Usuario:
+    jwt_token = None
     authorization_header = request.headers.get("Authorization")
     if authorization_header and authorization_header.lower().startswith("bearer "):
         jwt_token = authorization_header.split(" ", 1)[1].strip()
@@ -154,7 +156,27 @@ def create_operacion(
     )
 
     db.add(nueva_operacion)
+    queued_job = None
     try:
+        db.flush()
+
+        if resultado is not None:
+            actualizar_saldo_cuenta(db, cuenta.id, Decimal(str(resultado)))
+
+        if notas:
+            try:
+                queued_job = stage_emociones_job(
+                    db, nueva_operacion.id, notas
+                )
+            except Exception:
+                # El análisis es opcional. No incluir detalles de infraestructura
+                # ni notas privadas en los logs.
+                logger.warning(
+                    "No se pudo preparar el análisis emocional; "
+                    "la operación se guardará igualmente."
+                )
+
+        # En escritorio la operación y el trabajo SQLite quedan durables juntos.
         db.commit()
         db.refresh(nueva_operacion)
     except SQLAlchemyError:
@@ -163,17 +185,16 @@ def create_operacion(
             image_storage.delete_image(screenshot_path)
         raise
 
-    if resultado is not None:
-        actualizar_saldo_cuenta(db, cuenta.id, Decimal(str(resultado)))
-        db.commit()
-
-    if notas:
+    if queued_job is not None:
         try:
-            # Encola el analisis emocional en segundo plano para responder rapido.
-            enqueue_emociones_job(nueva_operacion.id, notas)
-        except Exception as error:
-            # Si Redis/RQ falla, no se rompe el endpoint: la operacion ya esta guardada.
-            print(f"Advertencia: fallo al encolar registro emocional, la operacion ya fue guardada. Error: {error}")
+            dispatch_emociones_job(queued_job)
+        except Exception:
+            # En SQLite el job ya es persistente y el polling lo recuperará. En
+            # servidor se mantiene el contrato histórico: la operación no falla.
+            logger.warning(
+                "No se pudo notificar la cola emocional; "
+                "la operación ya fue guardada."
+            )
 
     return {
         "message": "Operacion creada exitosamente",
@@ -343,10 +364,9 @@ def get_operacion_screenshot(
     request: Request,
     cuenta_id_trading: Annotated[int, Path(description="Identificador de la cuenta de trading.", examples=[1])],
     id: Annotated[int, Path(description="Identificador de la operación.", examples=[10])],
-    token: Annotated[str | None, Query(description="Token JWT opcional para uso en etiquetas de imagen.")] = None,
     db: Session = Depends(get_db),
 ):
-    current_user = autenticar_usuario_desde_request(request, db, token)
+    current_user = autenticar_usuario_desde_request(request, db)
     cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
 
     op = db.query(Operacion).filter(Operacion.id == id, Operacion.id_cuenta == cuenta.id).first()

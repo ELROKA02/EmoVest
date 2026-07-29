@@ -5,7 +5,7 @@ import CustomSelect from './CustomSelect';
 import Sidebar from './Sidebar';
 import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../config';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 const InfoIcon = ({ text }) => (
@@ -92,11 +92,9 @@ const Dashboard = () => {
   // Estados para el selector de fecha y ganancias
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [gananciasNetas, setGananciasNetas] = useState(null);
-  const [loadingGanancias, setLoadingGanancias] = useState(false);
+  const [, setGananciasNetas] = useState(null);
   const [estadisticasCompletas, setEstadisticasCompletas] = useState(null);
   const [loadingEstadisticas, setLoadingEstadisticas] = useState(false);
-  const [operaciones, setOperaciones] = useState([]);
 
   // Guardar cuenta seleccionada en localStorage cuando cambia
   useEffect(() => {
@@ -106,7 +104,7 @@ const Dashboard = () => {
   }, [selectedAccount]);
 
   // Función para calcular estadísticas desde operaciones
-  const calcularEstadisticasDesdeOperaciones = (ops) => {
+  const _calcularEstadisticasDesdeOperaciones = (ops) => {
     if (!ops || ops.length === 0) return null;
 
     const operacionesGanadoras = ops.filter(op => op.resultado > 0);
@@ -250,9 +248,9 @@ const Dashboard = () => {
     try {
       const token = sessionStorage.getItem('token');
       const url = selectedAccount === 'all'
-        ? `${API_BASE_URL}/cuentas/0/estadisticas/resumen-cuentas?year=${selectedYear}&month=${selectedMonth}`
-        : `${API_BASE_URL}/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`;
-      const response = await fetch(url, {
+        ? `/cuentas/0/estadisticas/resumen-cuentas?year=${selectedYear}&month=${selectedMonth}`
+        : `/cuentas/${selectedAccount}/estadisticas/mensual?year=${selectedYear}&month=${selectedMonth}`;
+      const response = await apiFetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -353,7 +351,7 @@ const Dashboard = () => {
 
     try {
       const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/cuentas/crearcuenta`, {
+      const response = await apiFetch('/cuentas/crearcuenta', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -409,7 +407,7 @@ const Dashboard = () => {
   const fetchTradingAccounts = async () => {
     try {
       const token = sessionStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/cuentas/vercuentas`, {
+      const response = await apiFetch('/cuentas/vercuentas', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -447,7 +445,10 @@ const Dashboard = () => {
   
   // Efecto para cargar estadísticas cuando cambia la cuenta, mes o año
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchEstadisticasCompletas();
+    // Mantiene el refresco ligado exclusivamente a los filtros de la pantalla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount, selectedMonth, selectedYear]);
 
   // Efecto para cargar cuentas al montar el componente
@@ -463,7 +464,7 @@ const Dashboard = () => {
 
   const años = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
-  const menuItems = [
+  const _menuItems = [
     {
       id: 'dashboard',
       name: 'Tablero',

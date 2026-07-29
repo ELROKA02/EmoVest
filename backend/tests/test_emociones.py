@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from ai.emotions import Emociones
-from ai.providers.base import AiRuntimeSettings
+from ai.providers.base import AIServiceUnavailable, AiRuntimeSettings
 from ai.providers.ollama import OllamaProvider, ResponseError
 from database import Base
 from models import Registro_emocional
@@ -69,24 +69,6 @@ class GuardarRegistroEmocionalTests(unittest.TestCase):
         )
 
 
-class WorkerConfigurationTests(unittest.TestCase):
-    def test_worker_starts_scheduler_for_delayed_retries(self):
-        redis_connection = MagicMock()
-        worker_instance = MagicMock()
-        connection_context = MagicMock()
-
-        with (
-            patch("worker.Redis.from_url", return_value=redis_connection),
-            patch("worker.Connection", return_value=connection_context),
-            patch("worker.SimpleWorker", return_value=worker_instance),
-        ):
-            from worker import main
-
-            main()
-
-        worker_instance.work.assert_called_once_with(with_scheduler=True)
-
-
 class OllamaProviderTests(unittest.TestCase):
     def setUp(self):
         self.provider = OllamaProvider(AiRuntimeSettings(
@@ -116,12 +98,12 @@ class OllamaProviderTests(unittest.TestCase):
         self.assertEqual(client.chat.call_count, 2)
         self.assertEqual(client.chat.call_args_list[1].kwargs["format"], "json")
 
-    def test_other_ollama_errors_are_propagated_to_rq(self):
+    def test_other_ollama_errors_are_classified_for_queue_retry(self):
         client = MagicMock()
         client.chat.side_effect = ResponseError("Ollama no disponible", 503)
 
         with patch("ai.providers.ollama.Client", return_value=client):
-            with self.assertRaises(ResponseError):
+            with self.assertRaises(AIServiceUnavailable):
                 self.provider.clasificar_emociones("Entrada con miedo")
 
         client.chat.assert_called_once()
