@@ -250,7 +250,7 @@ jobs:
           "path=$output" >> $env:GITHUB_OUTPUT
 
       - name: Subir instalador como artefacto de CI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: EmoVest-Windows-${{ inputs.version || github.sha }}
           path: ${{ steps.artifacts.outputs.path }}
@@ -267,7 +267,7 @@ jobs:
 
     steps:
       - name: Descargar artefactos firmados
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: EmoVest-Windows-${{ inputs.version }}
           path: artifacts
