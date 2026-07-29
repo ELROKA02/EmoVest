@@ -39,17 +39,21 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 45
     env:
-      EMOVEST_DATA_DIR: ${{ runner.temp }}\EmoVest CI\data
-      EMOVEST_CONFIG_DIR: ${{ runner.temp }}\EmoVest CI\config
-      EMOVEST_LOG_DIR: ${{ runner.temp }}\EmoVest CI\logs
-      EMOVEST_BACKUP_DIR: ${{ runner.temp }}\EmoVest CI\backups
-      IMAGE_STORAGE_DIR: ${{ runner.temp }}\EmoVest CI\data\images
-      EMOVEST_MODEL_DIR: ${{ runner.temp }}\EmoVest CI\data\models
       EMOVEST_DESKTOP_TOKEN: ci-only-token-000000000000000000000000000000000000000000000000
 
     steps:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
+
+      - name: Configurar rutas temporales de EmoVest
+        shell: pwsh
+        run: |
+          "EMOVEST_DATA_DIR=$env:RUNNER_TEMP\EmoVest CI\data" >> $env:GITHUB_ENV
+          "EMOVEST_CONFIG_DIR=$env:RUNNER_TEMP\EmoVest CI\config" >> $env:GITHUB_ENV
+          "EMOVEST_LOG_DIR=$env:RUNNER_TEMP\EmoVest CI\logs" >> $env:GITHUB_ENV
+          "EMOVEST_BACKUP_DIR=$env:RUNNER_TEMP\EmoVest CI\backups" >> $env:GITHUB_ENV
+          "IMAGE_STORAGE_DIR=$env:RUNNER_TEMP\EmoVest CI\data\images" >> $env:GITHUB_ENV
+          "EMOVEST_MODEL_DIR=$env:RUNNER_TEMP\EmoVest CI\data\models" >> $env:GITHUB_ENV
 
       - name: Preparar pnpm
         uses: pnpm/action-setup@v4
