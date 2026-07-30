@@ -2,10 +2,13 @@ name: EmoVest Desktop Windows
 
 on:
   pull_request:
+    branches:
+      - develop
+      - main
   push:
     branches:
+      - develop
       - main
-      - "codex/**"
   workflow_dispatch:
     inputs:
       publish_release:
@@ -154,6 +157,9 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
         run: |
+          if ($env:GITHUB_REF -ne "refs/heads/main") {
+            throw "Las releases de escritorio solo pueden publicarse desde main."
+          }
           if ($env:CONFIRM_RELEASE -ne "PUBLICAR") {
             throw "La publicación requiere confirm_release=PUBLICAR."
           }
@@ -264,7 +270,10 @@ jobs:
 
   publish:
     name: Publicar release firmada
-    if: ${{ inputs.publish_release == true }}
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+          inputs.publish_release == true &&
+          github.ref == 'refs/heads/main' }}
     needs: build
     runs-on: ubuntu-latest
     permissions:

@@ -138,6 +138,26 @@ real, firma de artefactos y una política probada de compatibilidad y backup del
 esquema. Las claves privadas y los certificados nunca se guardarán en el
 repositorio.
 
+## Estrategia de ramas y entregas
+
+`develop` es la rama de integración interna. Las funcionalidades se desarrollan
+en ramas de trabajo, se validan mediante pull request hacia `develop` y se
+integran allí cuando están listas para pruebas conjuntas. Cada push a `develop`
+ejecuta las pruebas de Windows, construye el sidecar y genera un instalador de
+desarrollo como artefacto temporal de GitHub Actions. Ese artefacto no es una
+release pública y no actualiza instalaciones existentes.
+
+`main` representa la versión estable y visible para los usuarios. Solo deben
+integrarse en ella cambios consolidados desde `develop`. Los pushes y pull
+requests hacia `main` vuelven a ejecutar toda la validación, pero no publican
+automáticamente. Una release pública requiere una ejecución manual de
+`workflow_dispatch` desde `main`, confirmación explícita, versión SemVer y las
+credenciales reales de firma.
+
+El workflow rechaza una publicación solicitada desde cualquier rama distinta de
+`main`. Mientras el updater permanezca desactivado, incluso una release publicada
+se instala manualmente mediante `EmoVest-Setup.exe`.
+
 ## Desarrollo
 
 Requisitos de desarrollo:
