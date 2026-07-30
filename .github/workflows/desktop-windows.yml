@@ -97,6 +97,10 @@ jobs:
           pnpm lint
           pnpm build
 
+      - name: Construir sidecar Windows
+        shell: pwsh
+        run: .\scripts\build-windows-sidecar.ps1
+
       - name: Validar Rust de escritorio
         working-directory: frontend/src-tauri
         shell: pwsh
@@ -104,10 +108,6 @@ jobs:
           cargo fmt --all -- --check
           cargo check --locked
           cargo test --locked
-
-      - name: Construir sidecar Windows
-        shell: pwsh
-        run: .\scripts\build-windows-sidecar.ps1
 
       - name: Validar sidecar Windows empaquetado
         shell: pwsh
