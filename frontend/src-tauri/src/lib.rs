@@ -21,6 +21,7 @@ const DESKTOP_TOKEN_HEADER: &str = "X-Emovest-Desktop-Token";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const LONG_HTTP_TIMEOUT: Duration = Duration::from_secs(120);
+#[cfg(windows)]
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Clone)]
@@ -31,6 +32,7 @@ struct BackendConnection {
 struct RuntimeState {
     backend: Option<BackendConnection>,
     child: Option<CommandChild>,
+    cancel_file: Option<PathBuf>,
     startup_error: Option<String>,
     shutting_down: bool,
     generation: u64,
@@ -121,6 +123,53 @@ impl Drop for WindowsJob {
 }
 
 #[cfg(windows)]
+impl WindowsJob {
+    fn terminate_and_wait(&self, timeout: Duration) -> Result<(), String> {
+        use std::mem::size_of;
+        use windows_sys::Win32::System::JobObjects::{
+            JobObjectBasicAccountingInformation, QueryInformationJobObject, TerminateJobObject,
+            JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
+        };
+
+        unsafe {
+            if TerminateJobObject(self.0, 1) == 0 {
+                return Err(format!(
+                    "No se pudo terminar el supervisor de procesos de Windows: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+
+            let deadline = Instant::now() + timeout;
+            loop {
+                let mut accounting = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION::default();
+                if QueryInformationJobObject(
+                    self.0,
+                    JobObjectBasicAccountingInformation,
+                    &mut accounting as *mut _ as *mut _,
+                    size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
+                    std::ptr::null_mut(),
+                ) == 0
+                {
+                    return Err(format!(
+                        "No se pudo consultar el supervisor de procesos de Windows: {}",
+                        std::io::Error::last_os_error()
+                    ));
+                }
+                if accounting.ActiveProcesses == 0 {
+                    return Ok(());
+                }
+                if Instant::now() >= deadline {
+                    return Err(
+                        "El supervisor de procesos de Windows no terminó dentro del plazo.".into(),
+                    );
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
 fn assign_kill_on_close_job(pid: u32) -> Result<WindowsJob, String> {
     use std::{mem::size_of, ptr};
     use windows_sys::Win32::{
@@ -177,25 +226,105 @@ fn assign_kill_on_close_job(_pid: u32) -> Result<(), String> {
 }
 
 #[cfg(windows)]
-fn wait_for_process_exit(pid: u32, timeout: Duration) {
+fn wait_for_process_exit(pid: u32, timeout: Duration) -> bool {
     use windows_sys::Win32::{
-        Foundation::CloseHandle,
+        Foundation::{CloseHandle, WAIT_OBJECT_0},
         System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE},
     };
 
     unsafe {
         let process = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
-        if !process.is_null() {
-            let timeout_ms = timeout.as_millis().min(u32::MAX as u128) as u32;
-            WaitForSingleObject(process, timeout_ms);
-            CloseHandle(process);
+        if process.is_null() {
+            return true;
         }
+        let timeout_ms = timeout.as_millis().min(u32::MAX as u128) as u32;
+        let exited = WaitForSingleObject(process, timeout_ms) == WAIT_OBJECT_0;
+        CloseHandle(process);
+        exited
     }
 }
 
 #[cfg(not(windows))]
-fn wait_for_process_exit(_pid: u32, _timeout: Duration) {
+fn wait_for_process_exit(_pid: u32, _timeout: Duration) -> bool {
     std::thread::sleep(Duration::from_millis(150));
+    false
+}
+
+#[cfg(windows)]
+fn terminate_sidecar_process(
+    child: Option<CommandChild>,
+    job: Option<WindowsJob>,
+    cancel_file: Option<PathBuf>,
+    graceful_wait: bool,
+) {
+    if graceful_wait {
+        if let Some(child) = child.as_ref() {
+            if wait_for_process_exit(child.pid(), SHUTDOWN_TIMEOUT) {
+                drop(job);
+                return;
+            }
+        }
+        eprintln!(
+            "EmoVest agotó el cierre normal del sidecar; se forzará solo el proceso asociado."
+        );
+    }
+
+    request_sidecar_cancel(cancel_file.as_ref());
+    if let Some(child) = child.as_ref() {
+        if wait_for_process_exit(child.pid(), Duration::from_secs(6)) {
+            drop(job);
+            return;
+        }
+    }
+
+    let job_finished = job
+        .as_ref()
+        .map(|job| match job.terminate_and_wait(Duration::from_secs(5)) {
+            Ok(()) => true,
+            Err(error) => {
+                eprintln!("EmoVest no pudo cerrar completamente el sidecar: {error}");
+                false
+            }
+        })
+        .unwrap_or(false);
+
+    if let Some(child) = child {
+        let pid = child.pid();
+        if job_finished {
+            drop(child);
+        } else if let Err(error) = child.kill() {
+            eprintln!("EmoVest no pudo terminar el proceso local {pid}: {error}");
+        }
+        if !wait_for_process_exit(pid, Duration::from_secs(5)) {
+            eprintln!("El proceso local {pid} no terminó dentro del plazo.");
+        }
+    }
+    drop(job);
+}
+
+#[cfg(not(windows))]
+fn terminate_sidecar_process(
+    child: Option<CommandChild>,
+    cancel_file: Option<PathBuf>,
+    _graceful_wait: bool,
+) {
+    request_sidecar_cancel(cancel_file.as_ref());
+    if let Some(child) = child {
+        let pid = child.pid();
+        if let Err(error) = child.kill() {
+            eprintln!("EmoVest no pudo terminar el proceso local {pid}: {error}");
+        }
+        let _ = wait_for_process_exit(pid, Duration::from_secs(2));
+    }
+}
+
+fn request_sidecar_cancel(cancel_file: Option<&PathBuf>) {
+    let Some(cancel_file) = cancel_file else {
+        return;
+    };
+    if let Err(error) = fs::write(cancel_file, b"stop") {
+        eprintln!("No se pudo señalar el cierre del servicio local: {error}");
+    }
 }
 
 fn generate_token() -> Result<String, String> {
@@ -310,9 +439,10 @@ fn wait_until_healthy(port: u16, token: &str) -> Result<(), String> {
     Err("El servicio local agotó el tiempo de arranque.".into())
 }
 
+#[cfg(not(windows))]
 fn wait_until_closed(port: u16) {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
-    let deadline = Instant::now() + SHUTDOWN_TIMEOUT;
+    let deadline = Instant::now() + Duration::from_secs(15);
     while Instant::now() < deadline {
         if TcpStream::connect_timeout(&address, Duration::from_millis(100)).is_err() {
             return;
@@ -402,24 +532,58 @@ fn start_startup_watchdog(app: AppHandle, generation: u64) {
         let Some(state) = app.try_state::<DesktopState>() else {
             return;
         };
-        let child = state.runtime.lock().ok().and_then(|mut runtime| {
-            if runtime.generation != generation
-                || runtime.backend.is_some()
-                || runtime.startup_error.is_some()
-                || runtime.shutting_down
-            {
-                return None;
-            }
-            runtime.startup_error =
-                Some("El servicio local agotó el tiempo de arranque. Puedes reintentarlo.".into());
-            #[cfg(windows)]
-            {
-                runtime.job = None;
-            }
-            runtime.child.take()
-        });
-        if let Some(child) = child {
-            let _ = child.kill();
+        #[cfg(windows)]
+        let (child, job, cancel_file) = state
+            .runtime
+            .lock()
+            .ok()
+            .map(|mut runtime| {
+                if runtime.generation != generation
+                    || runtime.backend.is_some()
+                    || runtime.startup_error.is_some()
+                    || runtime.shutting_down
+                {
+                    return (None, None, None);
+                }
+                runtime.startup_error = Some(
+                    "El servicio local agotó el tiempo de arranque. Puedes reintentarlo.".into(),
+                );
+                (
+                    runtime.child.take(),
+                    runtime.job.take(),
+                    runtime.cancel_file.take(),
+                )
+            })
+            .unwrap_or((None, None, None));
+        #[cfg(not(windows))]
+        let (child, cancel_file) = state
+            .runtime
+            .lock()
+            .ok()
+            .map(|mut runtime| {
+                if runtime.generation != generation
+                    || runtime.backend.is_some()
+                    || runtime.startup_error.is_some()
+                    || runtime.shutting_down
+                {
+                    return (None, None);
+                }
+                runtime.startup_error = Some(
+                    "El servicio local agotó el tiempo de arranque. Puedes reintentarlo.".into(),
+                );
+                (runtime.child.take(), runtime.cancel_file.take())
+            })
+            .unwrap_or((None, None));
+        #[cfg(windows)]
+        terminate_sidecar_process(child, job, cancel_file, false);
+        #[cfg(not(windows))]
+        terminate_sidecar_process(child, cancel_file, false);
+        if state
+            .runtime
+            .lock()
+            .map(|runtime| runtime.startup_error.is_some())
+            .unwrap_or(false)
+        {
             show_main_window(&app);
         }
     });
@@ -430,12 +594,28 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         .try_state::<DesktopState>()
         .ok_or_else(|| "No se inicializó el estado de escritorio.".to_string())?;
     let parent_pid = std::process::id().to_string();
+    let generation = {
+        let mut runtime = state
+            .runtime
+            .lock()
+            .map_err(|_| "El estado del servicio local no está disponible.".to_string())?;
+        runtime.generation = runtime.generation.wrapping_add(1);
+        runtime.generation
+    };
+    let cancel_file = state
+        .config_dir
+        .join(format!(".sidecar-{parent_pid}-{generation}.stop"));
+    let _ = fs::remove_file(&cancel_file);
     let envs = [
         ("APP_MODE", "desktop".to_string()),
         ("EMOVEST_DESKTOP_TOKEN", state.token.clone()),
         ("EMOVEST_DESKTOP_HOST", "127.0.0.1".to_string()),
         ("EMOVEST_DESKTOP_PORT", "0".to_string()),
         ("EMOVEST_DESKTOP_PARENT_PID", parent_pid),
+        (
+            "EMOVEST_DESKTOP_CANCEL_FILE",
+            cancel_file.to_string_lossy().into_owned(),
+        ),
         (
             "EMOVEST_DATA_DIR",
             state.data_dir.to_string_lossy().into_owned(),
@@ -487,20 +667,20 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     let job = match assign_kill_on_close_job(pid) {
         Ok(job) => job,
         Err(error) => {
-            let _ = child.kill();
+            terminate_sidecar_process(Some(child), None, Some(cancel_file), false);
             return Err(error);
         }
     };
     #[cfg(not(windows))]
     assign_kill_on_close_job(pid)?;
 
-    let generation = {
+    {
         let mut runtime = state
             .runtime
             .lock()
             .map_err(|_| "El estado del servicio local no está disponible.".to_string())?;
-        runtime.generation = runtime.generation.wrapping_add(1);
         runtime.child = Some(child);
+        runtime.cancel_file = Some(cancel_file);
         runtime.backend = None;
         runtime.startup_error = None;
         runtime.shutting_down = false;
@@ -508,8 +688,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
         {
             runtime.job = Some(job);
         }
-        runtime.generation
-    };
+    }
     start_startup_watchdog(app.clone(), generation);
 
     let handle = app.clone();
@@ -538,30 +717,41 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
                                     return None;
                                 }
                                 let was_ready = runtime.backend.take().is_some();
+                                runtime.child = None;
+                                #[cfg(windows)]
+                                {
+                                    runtime.job = None;
+                                }
                                 Some((
                                     was_ready,
                                     runtime.shutting_down,
                                     runtime.startup_error.is_some(),
+                                    runtime.cancel_file.take(),
                                 ))
                             })
                         })
                         .flatten();
-                    if let Some((was_ready, false, false)) = termination {
-                        set_generation_error(
-                            &handle,
-                            generation,
-                            if was_ready {
-                                format!(
-                                    "El servicio local se detuvo inesperadamente (código {}).",
-                                    payload.code.unwrap_or(-1)
-                                )
-                            } else {
-                                format!(
-                                    "El servicio local terminó antes de estar listo (código {}).",
-                                    payload.code.unwrap_or(-1)
-                                )
-                            },
-                        );
+                    if let Some((was_ready, shutting_down, had_error, cancel_file)) = termination {
+                        if !shutting_down {
+                            request_sidecar_cancel(cancel_file.as_ref());
+                            if !had_error {
+                                set_generation_error(
+                                    &handle,
+                                    generation,
+                                    if was_ready {
+                                        format!(
+                                            "El servicio local se detuvo inesperadamente (código {}).",
+                                            payload.code.unwrap_or(-1)
+                                        )
+                                    } else {
+                                        format!(
+                                            "El servicio local terminó antes de estar listo (código {}).",
+                                            payload.code.unwrap_or(-1)
+                                        )
+                                    },
+                                );
+                            }
+                        }
                     }
                 }
                 _ => {}
@@ -580,33 +770,59 @@ fn stop_sidecar(app: &AppHandle, graceful: bool) {
         runtime.backend.clone()
     });
 
+    let mut graceful_requested = false;
     if graceful {
         if let Some(connection) = backend {
-            let _ = local_http_request(
+            match local_http_request(
                 connection.port,
                 &state.token,
                 "POST",
                 "/desktop/shutdown",
                 Some("{}"),
-            );
-            wait_until_closed(connection.port);
+            ) {
+                Ok((202, _)) => {
+                    graceful_requested = true;
+                    #[cfg(not(windows))]
+                    wait_until_closed(connection.port);
+                }
+                Ok((status, _)) => {
+                    eprintln!("El sidecar rechazó el cierre normal con HTTP {status}.");
+                }
+                Err(error) => {
+                    eprintln!("No se pudo solicitar el cierre normal del sidecar: {error}");
+                }
+            }
         }
     }
 
-    let child = state.runtime.lock().ok().and_then(|mut runtime| {
-        let child = runtime.child.take();
-        runtime.backend = None;
-        #[cfg(windows)]
-        {
-            runtime.job = None;
-        }
-        child
-    });
-    if let Some(child) = child {
-        let pid = child.pid();
-        let _ = child.kill();
-        wait_for_process_exit(pid, Duration::from_secs(2));
-    }
+    #[cfg(windows)]
+    let (child, job, cancel_file) = state
+        .runtime
+        .lock()
+        .ok()
+        .map(|mut runtime| {
+            runtime.backend = None;
+            (
+                runtime.child.take(),
+                runtime.job.take(),
+                runtime.cancel_file.take(),
+            )
+        })
+        .unwrap_or((None, None, None));
+    #[cfg(not(windows))]
+    let (child, cancel_file) = state
+        .runtime
+        .lock()
+        .ok()
+        .map(|mut runtime| {
+            runtime.backend = None;
+            (runtime.child.take(), runtime.cancel_file.take())
+        })
+        .unwrap_or((None, None));
+    #[cfg(windows)]
+    terminate_sidecar_process(child, job, cancel_file, graceful_requested);
+    #[cfg(not(windows))]
+    terminate_sidecar_process(child, cancel_file, graceful_requested);
 }
 
 #[tauri::command]
@@ -719,6 +935,7 @@ pub fn run() -> tauri::Result<()> {
                 runtime: Mutex::new(RuntimeState {
                     backend: None,
                     child: None,
+                    cancel_file: None,
                     startup_error: None,
                     shutting_down: false,
                     generation: 0,

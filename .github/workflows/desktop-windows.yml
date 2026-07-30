@@ -34,8 +34,49 @@ env:
   PYTHONUTF8: "1"
 
 jobs:
+  rust-quality:
+    name: Formato, check, clippy y tests Rust
+    runs-on: windows-2022
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v6
+
+      - name: Preparar Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # cargo fmt no ejecuta build.rs y, por tanto, no necesita externalBin.
+      - name: Comprobar formato Rust
+        working-directory: frontend/src-tauri
+        run: cargo fmt --all -- --check
+
+      # tauri_build valida externalBin durante check/clippy/test. Este job no
+      # empaqueta artefactos: el instalador se construye en otro workspace con
+      # el sidecar PyInstaller real.
+      - name: Crear placeholder de sidecar solo para análisis Rust
+        shell: pwsh
+        run: |
+          $placeholder = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            "frontend\src-tauri\binaries\emovest-backend-x86_64-pc-windows-msvc.exe"
+          New-Item -ItemType Directory -Force -Path (Split-Path $placeholder) |
+            Out-Null
+          [IO.File]::WriteAllText($placeholder, "CI placeholder; never bundle")
+
+      - name: Comprobar Rust
+        working-directory: frontend/src-tauri
+        shell: pwsh
+        run: |
+          cargo check --locked
+          cargo clippy --locked -- -D warnings
+          cargo test --locked
+
   build:
     name: Tests, sidecar e instalador
+    needs: rust-quality
     runs-on: windows-2022
     timeout-minutes: 45
     env:
@@ -77,8 +118,6 @@ jobs:
 
       - name: Preparar Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
 
       - name: Instalar dependencias
         shell: pwsh
@@ -100,14 +139,6 @@ jobs:
       - name: Construir sidecar Windows
         shell: pwsh
         run: .\scripts\build-windows-sidecar.ps1
-
-      - name: Validar Rust de escritorio
-        working-directory: frontend/src-tauri
-        shell: pwsh
-        run: |
-          cargo fmt --all -- --check
-          cargo check --locked
-          cargo test --locked
 
       - name: Validar sidecar Windows empaquetado
         shell: pwsh
@@ -196,9 +227,16 @@ jobs:
           pnpm desktop:prepare-sidecar
           pnpm tauri build --bundles nsis --config $env:RUNNER_TEMP\tauri-release.json
 
-      - name: Validar aplicación instalada y ciclo de vida del sidecar
+      - name: Validar tres ciclos instalados sin procesos huérfanos
         shell: pwsh
-        run: .\scripts\test-windows-desktop.ps1
+        run: |
+          foreach ($iteration in 1..3) {
+            Write-Host "=== Ciclo Windows instalado $iteration/3 ==="
+            & pwsh -NoProfile -File .\scripts\test-windows-desktop.ps1
+            if ($LASTEXITCODE -ne 0) {
+              throw "El ciclo Windows $iteration falló con código $LASTEXITCODE."
+            }
+          }
 
       - name: Preparar artefactos
         id: artifacts

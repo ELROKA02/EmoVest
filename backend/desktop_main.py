@@ -6,14 +6,129 @@ import logging
 import os
 import socket
 import sys
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Callable
 
 import uvicorn
 
 
 _instance_lock_file = None
 _ERROR_PREFIX = "EMOVEST_ERROR "
+_parent_watchdog_lock = threading.Lock()
+_watchdog_requested_shutdown = False
+_parent_shutdown_callback: Callable[[], None] | None = None
+_parent_shutdown_finished = threading.Event()
+
+
+def _request_watchdog_shutdown() -> None:
+    global _watchdog_requested_shutdown
+    with _parent_watchdog_lock:
+        _watchdog_requested_shutdown = True
+        callback = _parent_shutdown_callback
+    if callback is not None:
+        try:
+            callback()
+        except RuntimeError:
+            logging.getLogger(__name__).exception(
+                "El loop local ya no aceptó la solicitud de cierre del watchdog."
+            )
+
+    # Durante migraciones todavía no existe el evento asyncio de apagado. El
+    # límite evita que un hijo PyInstaller escapado permanezca huérfano.
+    if not _parent_shutdown_finished.wait(5):
+        os._exit(0)
+
+
+def _wait_for_windows_parent(parent_handle: int) -> None:
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    try:
+        wait_result = kernel32.WaitForSingleObject(parent_handle, 0xFFFFFFFF)
+    finally:
+        kernel32.CloseHandle(parent_handle)
+
+    if wait_result != 0:
+        logging.getLogger(__name__).error(
+            "El watchdog no pudo esperar al proceso de escritorio (resultado %s).",
+            wait_result,
+        )
+        return
+    _request_watchdog_shutdown()
+
+
+def _wait_for_cancel_file(cancel_file: Path) -> None:
+    while not _parent_shutdown_finished.wait(0.1):
+        if not cancel_file.exists():
+            continue
+        try:
+            cancel_file.unlink()
+        except FileNotFoundError:
+            continue
+        _request_watchdog_shutdown()
+        return
+
+
+def _start_windows_parent_watchdog() -> None:
+    if os.name != "nt":
+        return
+
+    raw_parent_pid = os.getenv("EMOVEST_DESKTOP_PARENT_PID")
+    if raw_parent_pid is None:
+        return
+    try:
+        parent_pid = int(raw_parent_pid)
+    except ValueError as error:
+        raise RuntimeError("EMOVEST_DESKTOP_PARENT_PID no es válido.") from error
+    if parent_pid <= 0:
+        raise RuntimeError("EMOVEST_DESKTOP_PARENT_PID no es válido.")
+
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    parent_handle = kernel32.OpenProcess(0x00100000, False, parent_pid)
+    if not parent_handle:
+        raise RuntimeError("El proceso de escritorio terminó antes que el servicio local.")
+
+    threading.Thread(
+        target=_wait_for_windows_parent,
+        args=(parent_handle,),
+        name="emovest-parent-watchdog",
+        daemon=True,
+    ).start()
+
+
+def _start_cancel_watchdog() -> None:
+    raw_cancel_file = os.getenv("EMOVEST_DESKTOP_CANCEL_FILE")
+    if raw_cancel_file is None:
+        return
+    cancel_file = Path(raw_cancel_file).expanduser().resolve()
+    threading.Thread(
+        target=_wait_for_cancel_file,
+        args=(cancel_file,),
+        name="emovest-cancel-watchdog",
+        daemon=True,
+    ).start()
+
+
+def _register_parent_shutdown(callback: Callable[[], None]) -> None:
+    global _parent_shutdown_callback
+    with _parent_watchdog_lock:
+        _parent_shutdown_callback = callback
+        shutdown_already_requested = _watchdog_requested_shutdown
+    if shutdown_already_requested:
+        callback()
 
 
 def _required_path(env_name: str) -> Path:
@@ -100,6 +215,10 @@ async def _serve() -> int:
 
     shutdown_requested = asyncio.Event()
     app.state.shutdown_requested = shutdown_requested
+    loop = asyncio.get_running_loop()
+    _register_parent_shutdown(
+        lambda: loop.call_soon_threadsafe(shutdown_requested.set)
+    )
 
     config = uvicorn.Config(
         app,
@@ -137,6 +256,8 @@ async def _serve() -> int:
 
 def main() -> None:
     try:
+        _start_windows_parent_watchdog()
+        _start_cancel_watchdog()
         raise SystemExit(asyncio.run(_serve()))
     except KeyboardInterrupt:
         raise SystemExit(0) from None
@@ -166,6 +287,8 @@ def main() -> None:
         sys.stdout.write(_ERROR_PREFIX + json.dumps(payload, ensure_ascii=False) + "\n")
         sys.stdout.flush()
         raise SystemExit(1) from None
+    finally:
+        _parent_shutdown_finished.set()
 
 
 if __name__ == "__main__":

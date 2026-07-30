@@ -15,6 +15,7 @@ El proceso recibe estas variables:
 - `EMOVEST_DESKTOP_HOST=127.0.0.1`
 - `EMOVEST_DESKTOP_PORT=0`
 - `EMOVEST_DESKTOP_PARENT_PID`
+- `EMOVEST_DESKTOP_CANCEL_FILE`
 - `EMOVEST_DATA_DIR`
 - `EMOVEST_CONFIG_DIR`
 - `EMOVEST_LOG_DIR`
@@ -26,6 +27,11 @@ El proceso recibe estas variables:
 Tauri fija estas rutas en cada arranque y limpia `SECRET_KEY` del entorno
 heredado para que el backend utilice exclusivamente el secreto persistente en
 su directorio de configuración.
+
+`EMOVEST_DESKTOP_CANCEL_FILE` es una señal interna única por lanzamiento. El
+backend la vigila junto al PID padre para poder terminar incluso si el proceso
+secundario de PyInstaller queda fuera del Job Object durante una carrera de
+arranque. No es una variable que deba configurar el usuario.
 
 Cuando la API ya escucha debe escribir una única línea:
 
