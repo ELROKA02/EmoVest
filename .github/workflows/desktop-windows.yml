@@ -77,6 +77,8 @@ jobs:
 
       - name: Preparar Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
       - name: Instalar dependencias
         shell: pwsh
@@ -95,6 +97,14 @@ jobs:
           pnpm lint
           pnpm build
 
+      - name: Validar Rust de escritorio
+        working-directory: frontend/src-tauri
+        shell: pwsh
+        run: |
+          cargo fmt --all -- --check
+          cargo check --locked
+          cargo test --locked
+
       - name: Construir sidecar Windows
         shell: pwsh
         run: .\scripts\build-windows-sidecar.ps1
@@ -109,8 +119,6 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           CONFIRM_RELEASE: ${{ inputs.confirm_release }}
-          UPDATER_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          UPDATER_PUBLIC_KEY: ${{ secrets.EMOVEST_UPDATER_PUBLIC_KEY }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
@@ -122,8 +130,6 @@ jobs:
             throw "El canal estable requiere una versión MAJOR.MINOR.PATCH."
           }
           foreach ($required in @(
-            "UPDATER_PRIVATE_KEY",
-            "UPDATER_PUBLIC_KEY",
             "WINDOWS_CERTIFICATE",
             "WINDOWS_CERTIFICATE_PASSWORD",
             "WINDOWS_TIMESTAMP_URL"
@@ -160,26 +166,16 @@ jobs:
         shell: pwsh
         env:
           VERSION: ${{ inputs.version }}
-          UPDATER_PUBLIC_KEY: ${{ secrets.EMOVEST_UPDATER_PUBLIC_KEY }}
           CERTIFICATE_THUMBPRINT: ${{ steps.windows_certificate.outputs.thumbprint }}
           WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
         run: |
           $releaseConfig = @{
             version = $env:VERSION
             bundle = @{
-              createUpdaterArtifacts = $true
               windows = @{
                 certificateThumbprint = $env:CERTIFICATE_THUMBPRINT
                 digestAlgorithm = "sha256"
                 timestampUrl = $env:WINDOWS_TIMESTAMP_URL
-              }
-            }
-            plugins = @{
-              updater = @{
-                pubkey = $env:UPDATER_PUBLIC_KEY
-                endpoints = @(
-                  "https://github.com/ELROKA02/EmoVest/releases/latest/download/latest.json"
-                )
               }
             }
           }
@@ -192,25 +188,21 @@ jobs:
         working-directory: frontend
         run: pnpm desktop:build
 
-      - name: Construir instalador firmado y artefacto updater
+      - name: Construir instalador firmado con Authenticode
         if: ${{ inputs.publish_release == true }}
         working-directory: frontend
         shell: pwsh
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          EMOVEST_UPDATER_PUBLIC_KEY: ${{ secrets.EMOVEST_UPDATER_PUBLIC_KEY }}
-          EMOVEST_UPDATER_ENDPOINT: https://github.com/ELROKA02/EmoVest/releases/latest/download/latest.json
         run: |
           pnpm desktop:prepare-sidecar
           pnpm tauri build --bundles nsis --config $env:RUNNER_TEMP\tauri-release.json
 
+      - name: Validar aplicación instalada y ciclo de vida del sidecar
+        shell: pwsh
+        run: .\scripts\test-windows-desktop.ps1
+
       - name: Preparar artefactos
         id: artifacts
         shell: pwsh
-        env:
-          VERSION: ${{ inputs.version }}
-          PUBLISH_RELEASE: ${{ inputs.publish_release }}
         run: |
           $output = Join-Path $env:RUNNER_TEMP "emovest-artifacts"
           New-Item -ItemType Directory -Force -Path $output | Out-Null
@@ -222,31 +214,6 @@ jobs:
           }
           $installerTarget = Join-Path $output "EmoVest-Setup.exe"
           Copy-Item $installer.FullName $installerTarget
-
-          if ($env:PUBLISH_RELEASE -eq "true") {
-            $signaturePath = "$($installer.FullName).sig"
-            if (-not (Test-Path $signaturePath)) {
-              throw "No se generó la firma requerida por el updater."
-            }
-            Copy-Item $signaturePath (Join-Path $output "EmoVest-Setup.exe.sig")
-            $signature = (Get-Content $signaturePath -Raw).Trim()
-            $manifest = @{
-              version = $env:VERSION
-              notes = "EmoVest $env:VERSION"
-              pub_date = (Get-Date).ToUniversalTime().ToString("o")
-              schema_revision = "0002_local_runtime"
-              minimum_schema_revision = "0001_desktop_core"
-              platforms = @{
-                "windows-x86_64" = @{
-                  signature = $signature
-                  url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/desktop-v$env:VERSION/EmoVest-Setup.exe"
-                }
-              }
-            }
-            $manifest |
-              ConvertTo-Json -Depth 8 |
-              Set-Content -Encoding utf8 (Join-Path $output "latest.json")
-          }
           "path=$output" >> $env:GITHUB_OUTPUT
 
       - name: Subir instalador como artefacto de CI
@@ -282,7 +249,5 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             artifacts/EmoVest-Setup.exe
-            artifacts/EmoVest-Setup.exe.sig
-            artifacts/latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

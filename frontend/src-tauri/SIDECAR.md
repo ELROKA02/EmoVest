@@ -35,18 +35,9 @@ La API debe exigir el header `X-Emovest-Desktop-Token`, incluido en
 `/health/ready`, `/desktop/update/prepare` y `/desktop/shutdown`. No debe escribir
 el token en logs, errores ni archivos.
 
-Las releases se construyen exclusivamente desde el workflow de CI, que genera
-una configuración Tauri temporal con `createUpdaterArtifacts: true`, el endpoint
-HTTPS y la clave pública reales. El repositorio no contiene una configuración
-de release utilizable con claves ficticias. El workflow requiere:
-
-- `EMOVEST_UPDATER_PUBLIC_KEY`
-- `EMOVEST_UPDATER_ENDPOINT` (HTTPS)
-- `TAURI_SIGNING_PRIVATE_KEY`
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, si aplica
-
-El `latest.json` debe incluir `schema_revision` y
-`minimum_schema_revision`; si falta cualquiera, la interfaz permite detectar la
-versión pero bloquea descarga e instalación.
-
-La clave privada nunca se guarda en el repositorio.
+El updater de Tauri está temporalmente desactivado: el binario no registra el
+plugin, la interfaz no invoca comandos de actualización y CI no genera
+`latest.json` ni firmas de updater. Las releases pueden seguir firmándose con
+Authenticode y publicando `EmoVest-Setup.exe`. El endpoint interno
+`/desktop/update/prepare` permanece reservado para una futura reactivación y no
+se invoca en el hotfix.

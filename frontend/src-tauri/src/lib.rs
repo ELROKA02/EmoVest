@@ -1,6 +1,5 @@
 use getrandom::fill as fill_random;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use std::{
     collections::BTreeMap,
     fs,
@@ -10,12 +9,11 @@ use std::{
     sync::Mutex,
     time::{Duration, Instant},
 };
-use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
+use tauri::{AppHandle, Manager, RunEvent, State};
 use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
     ShellExt,
 };
-use tauri_plugin_updater::{Update, UpdaterExt};
 
 const READY_PREFIX: &str = "EMOVEST_READY ";
 const ERROR_PREFIX: &str = "EMOVEST_ERROR ";
@@ -24,30 +22,15 @@ const STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const LONG_HTTP_TIMEOUT: Duration = Duration::from_secs(120);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
-const DEFAULT_UPDATER_ENDPOINT: &str =
-    "https://github.com/ELROKA02/EmoVest/releases/latest/download/latest.json";
 
 #[derive(Clone)]
 struct BackendConnection {
     port: u16,
 }
 
-#[derive(Clone)]
-struct UpdateSchemaMetadata {
-    target_schema_revision: String,
-    minimum_schema_revision: String,
-}
-
-struct PendingUpdate {
-    update: Update,
-    bytes: Option<Vec<u8>>,
-    schema: UpdateSchemaMetadata,
-}
-
 struct RuntimeState {
     backend: Option<BackendConnection>,
     child: Option<CommandChild>,
-    pending_update: Option<PendingUpdate>,
     startup_error: Option<String>,
     shutting_down: bool,
     generation: u64,
@@ -85,22 +68,6 @@ struct DesktopDiagnostics {
     config_dir: String,
     log_dir: String,
     backup_dir: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UpdateCheckResult {
-    available: bool,
-    can_download: bool,
-    version: Option<String>,
-    notes: Option<String>,
-    message: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DownloadResult {
-    version: String,
 }
 
 #[derive(Deserialize)]
@@ -213,9 +180,7 @@ fn assign_kill_on_close_job(_pid: u32) -> Result<(), String> {
 fn wait_for_process_exit(pid: u32, timeout: Duration) {
     use windows_sys::Win32::{
         Foundation::CloseHandle,
-        System::Threading::{
-            OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
-        },
+        System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE},
     };
 
     unsafe {
@@ -610,14 +575,10 @@ fn stop_sidecar(app: &AppHandle, graceful: bool) {
     let Some(state) = app.try_state::<DesktopState>() else {
         return;
     };
-    let backend = state
-        .runtime
-        .lock()
-        .ok()
-        .and_then(|mut runtime| {
-            runtime.shutting_down = true;
-            runtime.backend.clone()
-        });
+    let backend = state.runtime.lock().ok().and_then(|mut runtime| {
+        runtime.shutting_down = true;
+        runtime.backend.clone()
+    });
 
     if graceful {
         if let Some(connection) = backend {
@@ -733,214 +694,9 @@ fn create_desktop_backup(state: State<'_, DesktopState>) -> Result<String, Strin
     Ok(response.backup_path)
 }
 
-fn updater_configuration() -> Result<(&'static str, &'static str), String> {
-    if cfg!(debug_assertions) {
-        return Err("El actualizador está desactivado en desarrollo.".into());
-    }
-    let public_key = option_env!("EMOVEST_UPDATER_PUBLIC_KEY")
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| "El canal de actualizaciones aún no está configurado.".to_string())?;
-    let endpoint = option_env!("EMOVEST_UPDATER_ENDPOINT").unwrap_or(DEFAULT_UPDATER_ENDPOINT);
-    if !endpoint.starts_with("https://") {
-        return Err("El endpoint seguro de actualizaciones no está configurado.".into());
-    }
-    Ok((public_key, endpoint))
-}
-
-fn schema_metadata(raw: &Value) -> Option<UpdateSchemaMetadata> {
-    Some(UpdateSchemaMetadata {
-        target_schema_revision: raw.get("schema_revision")?.as_str()?.to_string(),
-        minimum_schema_revision: raw
-            .get("minimum_schema_revision")?
-            .as_str()?
-            .to_string(),
-    })
-}
-
-#[tauri::command]
-async fn check_for_update(
-    app: AppHandle,
-    state: State<'_, DesktopState>,
-) -> Result<UpdateCheckResult, String> {
-    let (public_key, endpoint) = match updater_configuration() {
-        Ok(configuration) => configuration,
-        Err(message) => {
-            return Ok(UpdateCheckResult {
-                available: false,
-                can_download: false,
-                version: None,
-                notes: None,
-                message,
-            })
-        }
-    };
-
-    let endpoint = endpoint
-        .parse()
-        .map_err(|_| "El endpoint de actualizaciones no es válido.".to_string())?;
-    let updater = app
-        .updater_builder()
-        .pubkey(public_key)
-        .endpoints(vec![endpoint])
-        .map_err(|error| error.to_string())?
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|error| error.to_string())?;
-    let Some(update) = updater.check().await.map_err(|error| error.to_string())? else {
-        return Ok(UpdateCheckResult {
-            available: false,
-            can_download: false,
-            version: None,
-            notes: None,
-            message: "EmoVest está actualizado.".into(),
-        });
-    };
-
-    let version = update.version.clone();
-    let notes = update.body.clone();
-    let Some(schema) = schema_metadata(&update.raw_json) else {
-        return Ok(UpdateCheckResult {
-            available: true,
-            can_download: false,
-            version: Some(version),
-            notes,
-            message: "La versión existe, pero el canal no declara compatibilidad de datos.".into(),
-        });
-    };
-
-    state
-        .runtime
-        .lock()
-        .map_err(|_| "El estado del actualizador no está disponible.".to_string())?
-        .pending_update = Some(PendingUpdate {
-            update,
-            bytes: None,
-            schema,
-        });
-
-    Ok(UpdateCheckResult {
-        available: true,
-        can_download: true,
-        version: Some(version),
-        notes,
-        message: String::new(),
-    })
-}
-
-#[tauri::command]
-async fn download_update(
-    app: AppHandle,
-    state: State<'_, DesktopState>,
-) -> Result<DownloadResult, String> {
-    let update = state
-        .runtime
-        .lock()
-        .map_err(|_| "El estado del actualizador no está disponible.".to_string())?
-        .pending_update
-        .as_ref()
-        .map(|pending| pending.update.clone())
-        .ok_or_else(|| "No hay una actualización compatible pendiente.".to_string())?;
-    let version = update.version.clone();
-    let progress_app = app.clone();
-    let mut downloaded = 0_u64;
-    let bytes = update
-        .download(
-            move |chunk_length, content_length| {
-                downloaded += chunk_length as u64;
-                let percentage = content_length
-                    .filter(|total| *total > 0)
-                    .map(|total| ((downloaded.saturating_mul(100)) / total).min(100));
-                let _ = progress_app.emit(
-                    "desktop-update-progress",
-                    json!({ "downloaded": downloaded, "total": content_length, "percentage": percentage }),
-                );
-            },
-            || {},
-        )
-        .await
-        .map_err(|error| error.to_string())?;
-
-    let mut runtime = state
-        .runtime
-        .lock()
-        .map_err(|_| "El estado del actualizador no está disponible.".to_string())?;
-    let pending = runtime
-        .pending_update
-        .as_mut()
-        .ok_or_else(|| "La actualización pendiente cambió durante la descarga.".to_string())?;
-    pending.bytes = Some(bytes);
-
-    Ok(DownloadResult { version })
-}
-
-#[tauri::command]
-fn install_downloaded_update(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), String> {
-    let (update, bytes, schema) = {
-        let runtime = state
-            .runtime
-            .lock()
-            .map_err(|_| "El estado del actualizador no está disponible.".to_string())?;
-        let pending = runtime
-            .pending_update
-            .as_ref()
-            .ok_or_else(|| "No hay una actualización pendiente.".to_string())?;
-        (
-            pending.update.clone(),
-            pending
-                .bytes
-                .clone()
-                .ok_or_else(|| "La actualización todavía no se ha descargado.".to_string())?,
-            pending.schema.clone(),
-        )
-    };
-
-    let connection = current_connection(&state)?;
-    let request = json!({
-        "target_version": update.version,
-        "target_schema_revision": schema.target_schema_revision,
-        "minimum_schema_revision": schema.minimum_schema_revision,
-    })
-    .to_string();
-    let (status, body) = local_http_request_with_timeout(
-        connection.port,
-        &state.token,
-        "POST",
-        "/desktop/update/prepare",
-        Some(&request),
-        LONG_HTTP_TIMEOUT,
-    )?;
-    if status != 200 {
-        return Err(format!(
-            "El backend rechazó la preparación de la actualización (HTTP {status})."
-        ));
-    }
-    let response: ReadyResponse = serde_json::from_str(&body)
-        .map_err(|_| "La comprobación previa de la actualización no es válida.".to_string())?;
-    if !response.ready {
-        return Err("La actualización no es compatible con los datos locales.".into());
-    }
-
-    stop_sidecar(&app, true);
-    if let Err(error) = update.install(&bytes) {
-        let restart_result = spawn_sidecar(&app);
-        return Err(match restart_result {
-            Ok(()) => format!("El instalador no pudo iniciarse: {error}"),
-            Err(restart_error) => format!(
-                "El instalador no pudo iniciarse ({error}) y el servicio local no se pudo recuperar ({restart_error})."
-            ),
-        });
-    }
-    app.restart()
-}
-
-pub fn run() {
+pub fn run() -> tauri::Result<()> {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(
-            tauri_plugin_updater::Builder::new()
-                .pubkey(option_env!("EMOVEST_UPDATER_PUBLIC_KEY").unwrap_or(""))
-                .build(),
-        )
         .setup(|app| {
             let data_dir = app.path().app_local_data_dir()?;
             let config_dir = app.path().app_config_dir()?;
@@ -963,7 +719,6 @@ pub fn run() {
                 runtime: Mutex::new(RuntimeState {
                     backend: None,
                     child: None,
-                    pending_update: None,
                     startup_error: None,
                     shutting_down: false,
                     generation: 0,
@@ -989,16 +744,13 @@ pub fn run() {
             restart_desktop_backend,
             desktop_diagnostics,
             create_desktop_backup,
-            check_for_update,
-            download_update,
-            install_downloaded_update,
         ])
-        .build(tauri::generate_context!())
-        .expect("No se pudo construir EmoVest Desktop.");
+        .build(tauri::generate_context!())?;
 
     app.run(|handle, event| {
         if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
             stop_sidecar(handle, true);
         }
     });
+    Ok(())
 }
