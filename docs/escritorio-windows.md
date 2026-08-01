@@ -144,6 +144,10 @@ Esto evita consultas de red y hace imposible una configuración efectiva
 se añaden mediante el overlay validado del job de release. Las claves privadas y
 los certificados nunca se guardan en el repositorio.
 
+Por tanto, las pruebas manuales con `pnpm desktop:dev`, Vite y el backend local
+no deben activar ni configurar el updater. Publicar un tag no modifica ese flujo:
+solo construye una instancia de release aislada en GitHub Actions.
+
 La firma Tauri protege los bytes del instalador. Además, la release firma un
 payload canónico que une versión, firma del instalador y revisiones Alembic; el
 binario verifica ese payload antes de confiar en la política de compatibilidad.

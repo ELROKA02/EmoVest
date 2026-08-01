@@ -150,6 +150,18 @@ jobs:
           python -m pip install --disable-pip-version-check -r backend/requirements.txt
           pnpm --dir frontend install --frozen-lockfile
 
+      - name: Proteger los builds normales frente al updater
+        shell: pwsh
+        run: |
+          $config = Get-Content -Raw "frontend\src-tauri\tauri.conf.json" |
+            ConvertFrom-Json
+          if ($config.bundle.createUpdaterArtifacts -ne $false) {
+            throw "El build normal no puede generar artefactos del updater."
+          }
+          if ($null -ne $config.plugins -and $null -ne $config.plugins.updater) {
+            throw "El updater solo puede configurarse en el overlay de release."
+          }
+
       - name: Validar backend de escritorio
         working-directory: backend
         run: python -m unittest discover -s tests -v
