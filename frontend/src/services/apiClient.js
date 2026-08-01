@@ -2,6 +2,10 @@ import { invoke } from '@tauri-apps/api/core';
 
 const DEFAULT_WEB_API_URL = 'http://localhost:8000';
 const DESKTOP_TOKEN_HEADER = 'X-Emovest-Desktop-Token';
+// Only browser development needs an explicit token to emulate the Tauri sidecar.
+const DEV_DESKTOP_TOKEN = import.meta.env.DEV
+  ? String(import.meta.env.VITE_DESKTOP_TOKEN || '').trim()
+  : '';
 
 const normalizeBaseUrl = (value) => String(value || '').trim().replace(/\/+$/, '');
 
@@ -10,10 +14,10 @@ export let API_BASE_URL = normalizeBaseUrl(
 );
 
 let runtimeInfo = {
-  mode: 'web-dev',
+  mode: DEV_DESKTOP_TOKEN ? 'desktop' : 'web-dev',
   apiBaseUrl: API_BASE_URL,
   appVersion: null,
-  desktopToken: null,
+  desktopToken: DEV_DESKTOP_TOKEN || null,
 };
 
 const hasTauriRuntime = () => (

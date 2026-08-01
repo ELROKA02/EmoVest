@@ -9,6 +9,8 @@ on:
     branches:
       - develop
       - main
+    tags:
+      - "desktop-v*"
   workflow_dispatch:
     inputs:
       publish_release:
@@ -44,10 +46,27 @@ jobs:
 
     steps:
       - name: Descargar el repositorio
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Rechazar credenciales privadas versionadas
+        shell: pwsh
+        run: |
+          $trackedSecrets = @(
+            git ls-files |
+              Where-Object {
+                $_ -match '(^|/)\.secrets/' -or
+                $_ -match '\.(key|p12|pfx)$'
+              }
+          )
+          if ($trackedSecrets.Count -gt 0) {
+            throw (
+              "Hay credenciales privadas rastreadas por Git: " +
+              ($trackedSecrets -join ", ")
+            )
+          }
 
       - name: Preparar Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           components: rustfmt, clippy
 
@@ -74,8 +93,11 @@ jobs:
         shell: pwsh
         run: |
           cargo check --locked
-          cargo clippy --locked -- -D warnings
-          cargo test --locked
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked --all-targets
+          cargo check --locked --features desktop-updater
+          cargo clippy --locked --all-targets --features desktop-updater -- -D warnings
+          cargo test --locked --all-targets --features desktop-updater
 
   build:
     name: Tests, sidecar e instalador
@@ -87,7 +109,7 @@ jobs:
 
     steps:
       - name: Descargar el repositorio
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Configurar rutas temporales de EmoVest
         shell: pwsh
@@ -100,27 +122,27 @@ jobs:
           "EMOVEST_MODEL_DIR=$env:RUNNER_TEMP\EmoVest CI\data\models" >> $env:GITHUB_ENV
 
       - name: Preparar pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
         with:
           version: 11.1.3
           run_install: false
 
       - name: Preparar Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Preparar Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
       - name: Preparar Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
 
       - name: Instalar dependencias
         shell: pwsh
@@ -147,91 +169,9 @@ jobs:
         shell: pwsh
         run: .\scripts\test-windows-sidecar.ps1
 
-      - name: Validar requisitos de publicación
-        if: ${{ inputs.publish_release == true }}
-        shell: pwsh
-        env:
-          VERSION: ${{ inputs.version }}
-          CONFIRM_RELEASE: ${{ inputs.confirm_release }}
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
-        run: |
-          if ($env:GITHUB_REF -ne "refs/heads/main") {
-            throw "Las releases de escritorio solo pueden publicarse desde main."
-          }
-          if ($env:CONFIRM_RELEASE -ne "PUBLICAR") {
-            throw "La publicación requiere confirm_release=PUBLICAR."
-          }
-          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') {
-            throw "El canal estable requiere una versión MAJOR.MINOR.PATCH."
-          }
-          foreach ($required in @(
-            "WINDOWS_CERTIFICATE",
-            "WINDOWS_CERTIFICATE_PASSWORD",
-            "WINDOWS_TIMESTAMP_URL"
-          )) {
-            $value = [Environment]::GetEnvironmentVariable($required)
-            if ([string]::IsNullOrWhiteSpace($value)) {
-              throw "Falta el requisito obligatorio $required para una release firmada."
-            }
-          }
-
-      - name: Importar certificado Windows temporal
-        if: ${{ inputs.publish_release == true }}
-        id: windows_certificate
-        shell: pwsh
-        env:
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: |
-          $pfxPath = Join-Path $env:RUNNER_TEMP "emovest-release.pfx"
-          [IO.File]::WriteAllBytes(
-            $pfxPath,
-            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
-          )
-          $securePassword = ConvertTo-SecureString `
-            $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-          $certificate = Import-PfxCertificate `
-            -FilePath $pfxPath `
-            -CertStoreLocation Cert:\CurrentUser\My `
-            -Password $securePassword
-          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
-
-      - name: Configurar release firmada
-        if: ${{ inputs.publish_release == true }}
-        shell: pwsh
-        env:
-          VERSION: ${{ inputs.version }}
-          CERTIFICATE_THUMBPRINT: ${{ steps.windows_certificate.outputs.thumbprint }}
-          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
-        run: |
-          $releaseConfig = @{
-            version = $env:VERSION
-            bundle = @{
-              windows = @{
-                certificateThumbprint = $env:CERTIFICATE_THUMBPRINT
-                digestAlgorithm = "sha256"
-                timestampUrl = $env:WINDOWS_TIMESTAMP_URL
-              }
-            }
-          }
-          $releaseConfig |
-            ConvertTo-Json -Depth 8 |
-            Set-Content -Encoding utf8 (Join-Path $env:RUNNER_TEMP "tauri-release.json")
-
       - name: Construir instalador de desarrollo
-        if: ${{ inputs.publish_release != true }}
         working-directory: frontend
         run: pnpm desktop:build
-
-      - name: Construir instalador firmado con Authenticode
-        if: ${{ inputs.publish_release == true }}
-        working-directory: frontend
-        shell: pwsh
-        run: |
-          pnpm desktop:prepare-sidecar
-          pnpm tauri build --bundles nsis --config $env:RUNNER_TEMP\tauri-release.json
 
       - name: Validar tres ciclos instalados sin procesos huérfanos
         shell: pwsh
@@ -261,40 +201,537 @@ jobs:
           "path=$output" >> $env:GITHUB_OUTPUT
 
       - name: Subir instalador como artefacto de CI
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: EmoVest-Windows-${{ inputs.version || github.sha }}
+          name: EmoVest-Windows-${{ github.sha }}
           path: ${{ steps.artifacts.outputs.path }}
           if-no-files-found: error
           retention-days: 14
 
-  publish:
-    name: Publicar release firmada
+  release-build:
+    name: Construir release firmada y actualizable
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' &&
+      ${{ (github.event_name == 'push' &&
+          startsWith(github.ref, 'refs/tags/desktop-v')) ||
+          (github.event_name == 'workflow_dispatch' &&
           inputs.publish_release == true &&
-          github.ref == 'refs/heads/main' }}
+          github.ref == 'refs/heads/main') }}
     needs: build
+    runs-on: windows-2022
+    timeout-minutes: 45
+    environment: desktop-production
+    outputs:
+      version: ${{ steps.release_version.outputs.version }}
+    env:
+      EMOVEST_DESKTOP_TOKEN: ci-only-token-000000000000000000000000000000000000000000000000
+      REQUESTED_VERSION: ${{ inputs.version }}
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # Un tag debe pertenecer a main antes de distribuirlo a usuarios.
+          fetch-depth: 0
+
+      - name: Resolver y validar la versión de publicación
+        id: release_version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq "push") {
+            if ($env:GITHUB_REF -notmatch '^refs/tags/desktop-v(\d+\.\d+\.\d+)$') {
+              throw "El tag de publicación debe tener el formato desktop-vMAJOR.MINOR.PATCH."
+            }
+            $version = $Matches[1]
+            $tagCommit = (git rev-list -n 1 $env:GITHUB_REF).Trim()
+            if ([string]::IsNullOrWhiteSpace($tagCommit)) {
+              throw "No se pudo resolver el commit del tag de publicación."
+            }
+            git merge-base --is-ancestor $tagCommit origin/main
+            if ($LASTEXITCODE -ne 0) {
+              throw "El tag desktop-v$version debe apuntar a un commit contenido en main."
+            }
+          } elseif ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
+            $version = $env:REQUESTED_VERSION
+          } else {
+            throw "Evento no permitido para publicar una release."
+          }
+          "VERSION=$version" >> $env:GITHUB_ENV
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Cargar clave pública versionada del updater
+        shell: pwsh
+        run: |
+          $publicKey = (
+            Get-Content -Raw "frontend\src-tauri\updater.pub"
+          ).Trim()
+          if ([string]::IsNullOrWhiteSpace($publicKey)) {
+            throw "La clave pública versionada del updater está vacía."
+          }
+          "TAURI_UPDATER_PUBLIC_KEY=$publicKey" >> $env:GITHUB_ENV
+          "EMOVEST_UPDATER_PUBLIC_KEY=$publicKey" >> $env:GITHUB_ENV
+
+      - name: Validar autorización y credenciales de release
+        shell: pwsh
+        env:
+          CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+        TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch" -and
+              $env:CONFIRM_RELEASE -ne "PUBLICAR") {
+            throw "La publicación requiere confirm_release=PUBLICAR."
+          }
+          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') {
+            throw "El canal estable requiere una versión MAJOR.MINOR.PATCH."
+          }
+          $baseVersion = (
+            Get-Content -Raw "frontend\src-tauri\tauri.conf.json" |
+              ConvertFrom-Json
+          ).version
+          if ([version]$env:VERSION -le [version]$baseVersion) {
+            throw "La release debe ser posterior a la versión base $baseVersion."
+          }
+          $remoteTags = @(
+            git ls-remote --tags origin "refs/tags/desktop-v*"
+          )
+          if ($LASTEXITCODE -ne 0) {
+            throw "No se pudo consultar el historial de versiones estables."
+          }
+          $stableVersions = @(
+            foreach ($line in $remoteTags) {
+              if ($line -match 'refs/tags/desktop-v(\d+\.\d+\.\d+)$') {
+                [version]$Matches[1]
+              }
+            }
+          )
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch" -and
+              $stableVersions -contains [version]$env:VERSION) {
+            throw "Ya existe el tag desktop-v$env:VERSION."
+          }
+          $previousStableVersions = @(
+            $stableVersions |
+              Where-Object { $_ -ne [version]$env:VERSION }
+          )
+          if ($previousStableVersions.Count -gt 0) {
+            $latestVersion = $previousStableVersions |
+              Sort-Object -Descending |
+              Select-Object -First 1
+            if ([version]$env:VERSION -le $latestVersion) {
+              throw "La release debe ser posterior a desktop-v$latestVersion."
+            }
+          }
+          foreach ($required in @(
+            "TAURI_SIGNING_PRIVATE_KEY",
+            "TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+            "TAURI_UPDATER_PUBLIC_KEY"
+          )) {
+            $value = [Environment]::GetEnvironmentVariable($required)
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              throw "Falta el requisito obligatorio $required para firmar el updater."
+            }
+          }
+          $authenticodeValues = @(
+            $env:WINDOWS_CERTIFICATE,
+            $env:WINDOWS_CERTIFICATE_PASSWORD,
+            $env:WINDOWS_TIMESTAMP_URL
+          )
+          $authenticodeCount = @(
+            $authenticodeValues |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          ).Count
+          if ($authenticodeCount -ne 0 -and $authenticodeCount -ne 3) {
+            throw (
+              "La firma Authenticode es opcional, pero requiere conjuntamente " +
+              "WINDOWS_CERTIFICATE, WINDOWS_CERTIFICATE_PASSWORD y WINDOWS_TIMESTAMP_URL."
+            )
+          }
+          if ($authenticodeCount -eq 3) {
+            "EMOVEST_AUTHENTICODE_ENABLED=true" >> $env:GITHUB_ENV
+          } else {
+            "EMOVEST_AUTHENTICODE_ENABLED=false" >> $env:GITHUB_ENV
+            Write-Warning (
+              "Se publicará sin Authenticode. La firma Tauri protege la actualización, " +
+              "pero Windows puede mostrar SmartScreen como editor desconocido."
+            )
+          }
+
+      - name: Configurar rutas temporales de EmoVest
+        shell: pwsh
+        run: |
+          "EMOVEST_DATA_DIR=$env:RUNNER_TEMP\EmoVest Release\data" >> $env:GITHUB_ENV
+          "EMOVEST_CONFIG_DIR=$env:RUNNER_TEMP\EmoVest Release\config" >> $env:GITHUB_ENV
+          "EMOVEST_LOG_DIR=$env:RUNNER_TEMP\EmoVest Release\logs" >> $env:GITHUB_ENV
+          "EMOVEST_BACKUP_DIR=$env:RUNNER_TEMP\EmoVest Release\backups" >> $env:GITHUB_ENV
+          "IMAGE_STORAGE_DIR=$env:RUNNER_TEMP\EmoVest Release\data\images" >> $env:GITHUB_ENV
+          "EMOVEST_MODEL_DIR=$env:RUNNER_TEMP\EmoVest Release\data\models" >> $env:GITHUB_ENV
+
+      - name: Preparar pnpm
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          version: 11.1.3
+          run_install: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Preparar Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Preparar Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+
+      - name: Instalar dependencias
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check -r backend/requirements.txt
+          pnpm --dir frontend install --frozen-lockfile
+
+      - name: Construir sidecar Windows real
+        shell: pwsh
+        run: .\scripts\build-windows-sidecar.ps1
+
+      - name: Importar certificado Windows temporal
+        id: windows_certificate
+        if: env.EMOVEST_AUTHENTICODE_ENABLED == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "emovest-release.pfx"
+          try {
+            [IO.File]::WriteAllBytes(
+              $pfxPath,
+              [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+            )
+            $securePassword = ConvertTo-SecureString `
+              $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+            $certificate = Import-PfxCertificate `
+              -FilePath $pfxPath `
+              -CertStoreLocation Cert:\CurrentUser\My `
+              -Password $securePassword
+            "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
+          } finally {
+            if (Test-Path -LiteralPath $pfxPath -PathType Leaf) {
+              Remove-Item -LiteralPath $pfxPath -Force
+            }
+          }
+
+      - name: Crear configuración efectiva del updater
+        shell: pwsh
+        env:
+          CERTIFICATE_THUMBPRINT: ${{ steps.windows_certificate.outputs.thumbprint }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+        run: |
+          $releaseConfig = @{
+            version = $env:VERSION
+            bundle = @{
+              createUpdaterArtifacts = $true
+            }
+            plugins = @{
+              updater = @{
+                pubkey = $env:TAURI_UPDATER_PUBLIC_KEY
+                endpoints = @(
+                  "https://github.com/ELROKA02/EmoVest/releases/latest/download/latest.json"
+                )
+                windows = @{
+                  installMode = "passive"
+                }
+              }
+            }
+          }
+          if ($env:EMOVEST_AUTHENTICODE_ENABLED -eq "true") {
+            $releaseConfig.bundle["windows"] = @{
+              certificateThumbprint = $env:CERTIFICATE_THUMBPRINT
+              digestAlgorithm = "sha256"
+              timestampUrl = $env:WINDOWS_TIMESTAMP_URL
+            }
+          }
+          $configPath = Join-Path $env:RUNNER_TEMP "tauri-release.json"
+          $releaseConfig | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $configPath
+          $effective = Get-Content -Raw $configPath | ConvertFrom-Json
+          if ($null -eq $effective.plugins.updater -or
+              [string]::IsNullOrWhiteSpace($effective.plugins.updater.pubkey) -or
+              $effective.plugins.updater.endpoints.Count -ne 1) {
+            throw "La configuración efectiva del updater es incompleta."
+          }
+
+      - name: Firmar el sidecar antes de empaquetarlo
+        if: env.EMOVEST_AUTHENTICODE_ENABLED == 'true'
+        shell: pwsh
+        env:
+          CERTIFICATE_THUMBPRINT: ${{ steps.windows_certificate.outputs.thumbprint }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+        run: |
+          $sidecar = "frontend\src-tauri\binaries\emovest-backend-x86_64-pc-windows-msvc.exe"
+          $signTool = (Get-Command signtool.exe -ErrorAction Stop).Source
+          & $signTool sign `
+            /sha1 $env:CERTIFICATE_THUMBPRINT `
+            /fd SHA256 `
+            /tr $env:WINDOWS_TIMESTAMP_URL `
+            /td SHA256 `
+            $sidecar
+          if ($LASTEXITCODE -ne 0) {
+            throw "signtool no pudo firmar el sidecar."
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $sidecar
+          if ($signature.Status -ne "Valid" -or
+              $signature.SignerCertificate.Thumbprint -ne $env:CERTIFICATE_THUMBPRINT -or
+              $null -eq $signature.TimeStamperCertificate) {
+            throw "La firma Authenticode del sidecar no es válida."
+          }
+
+      - name: Construir instalador y artefactos firmados del updater
+        working-directory: frontend
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          pnpm tauri build --bundles nsis --features desktop-updater `
+            --config $env:RUNNER_TEMP\tauri-release.json
+
+      - name: Validar firma Authenticode
+        if: env.EMOVEST_AUTHENTICODE_ENABLED == 'true'
+        shell: pwsh
+        env:
+          EXPECTED_THUMBPRINT: ${{ steps.windows_certificate.outputs.thumbprint }}
+        run: |
+          $installer = Get-ChildItem `
+            "frontend\src-tauri\target\release\bundle\nsis\*-setup.exe" |
+            Select-Object -First 1
+          if (-not $installer) {
+            throw "Tauri no generó un instalador NSIS."
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer.FullName
+          if ($signature.Status -ne "Valid") {
+            throw "La firma Authenticode no es válida: $($signature.StatusMessage)"
+          }
+          if ($signature.SignerCertificate.Thumbprint -ne $env:EXPECTED_THUMBPRINT) {
+            throw "El instalador no está firmado por el certificado importado."
+          }
+          if ($null -eq $signature.TimeStamperCertificate) {
+            throw "El instalador no contiene sello de tiempo."
+          }
+
+      - name: Validar ciclos de la release sin procesos huérfanos
+        shell: pwsh
+        env:
+          EMOVEST_EXPECTED_SIGNER_THUMBPRINT: ${{ steps.windows_certificate.outputs.thumbprint }}
+        run: |
+          foreach ($iteration in 1..3) {
+            Write-Host "=== Ciclo release Windows $iteration/3 ==="
+            & pwsh -NoProfile -File .\scripts\test-windows-desktop.ps1
+            if ($LASTEXITCODE -ne 0) {
+              throw "El ciclo release $iteration falló con código $LASTEXITCODE."
+            }
+          }
+
+      - name: Preparar instalador, firma y manifiesto atómico
+        id: release_artifacts
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP "emovest-release-artifacts"
+          New-Item -ItemType Directory -Force -Path $output | Out-Null
+          $installer = Get-ChildItem `
+            "frontend\src-tauri\target\release\bundle\nsis\*-setup.exe" |
+            Select-Object -First 1
+          $updaterSignature = Get-Item -LiteralPath "$($installer.FullName).sig"
+          if (-not $updaterSignature) {
+            throw "Tauri no generó la firma del updater."
+          }
+          Copy-Item $installer.FullName (Join-Path $output "EmoVest-Setup.exe")
+          Copy-Item $updaterSignature.FullName (Join-Path $output "EmoVest-Setup.exe.sig")
+
+          $installerPath = $installer.FullName
+          $signaturePath = $updaterSignature.FullName
+          Push-Location "frontend\src-tauri"
+          try {
+            cargo run --locked --features desktop-updater `
+              --example verify_updater_artifact -- `
+              $installerPath `
+              $signaturePath `
+              $env:TAURI_UPDATER_PUBLIC_KEY
+            if ($LASTEXITCODE -ne 0) {
+              throw "La firma Tauri no coincide con la clave pública configurada."
+            }
+          } finally {
+            Pop-Location
+          }
+
+          $policy = Get-Content -Raw "backend\update-policy.json" | ConvertFrom-Json
+          $env:MINIMUM_SCHEMA_REVISION = $policy.minimum_schema_revision
+          Push-Location backend
+          try {
+            $targetSchema = (python -c "from migration_manager import get_head_revision; print(get_head_revision())").Trim()
+            $env:TARGET_SCHEMA_REVISION = $targetSchema
+            python -c "import os; from routers.desktop import _revision_is_at_least; assert _revision_is_at_least(os.environ['TARGET_SCHEMA_REVISION'], os.environ['MINIMUM_SCHEMA_REVISION']), 'minimum_schema_revision no es ancestro del head'"
+            if ($LASTEXITCODE -ne 0) {
+              throw "La política de compatibilidad no pertenece al grafo Alembic."
+            }
+          } finally {
+            Pop-Location
+            if (Test-Path Env:MINIMUM_SCHEMA_REVISION) {
+              Remove-Item Env:MINIMUM_SCHEMA_REVISION
+            }
+            if (Test-Path Env:TARGET_SCHEMA_REVISION) {
+              Remove-Item Env:TARGET_SCHEMA_REVISION
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($targetSchema) -or
+              [string]::IsNullOrWhiteSpace($policy.minimum_schema_revision)) {
+            throw "La política de compatibilidad de datos es incompleta."
+          }
+          $artifactSignature = (
+            Get-Content -Raw $updaterSignature.FullName
+          ).Trim()
+          if ([string]::IsNullOrWhiteSpace($artifactSignature)) {
+            throw "La firma Tauri del instalador está vacía."
+          }
+          $schemaPayloadPath = Join-Path $env:RUNNER_TEMP "emovest-schema-policy.txt"
+          $schemaPayload = (
+            "$env:VERSION`n" +
+            "$artifactSignature`n" +
+            "$targetSchema`n" +
+            "$($policy.minimum_schema_revision)`n"
+          )
+          [IO.File]::WriteAllText(
+            $schemaPayloadPath,
+            $schemaPayload,
+            [Text.UTF8Encoding]::new($false)
+          )
+          Push-Location frontend
+          try {
+            pnpm tauri signer sign $schemaPayloadPath
+            if ($LASTEXITCODE -ne 0) {
+              throw "No se pudo firmar la política de compatibilidad."
+            }
+          } finally {
+            Pop-Location
+          }
+          $schemaSignaturePath = "$schemaPayloadPath.sig"
+          if (-not (Test-Path -LiteralPath $schemaSignaturePath -PathType Leaf)) {
+            throw "Tauri no generó la firma de compatibilidad."
+          }
+          $schemaSignature = (
+            Get-Content -Raw $schemaSignaturePath
+          ).Trim()
+          if ([string]::IsNullOrWhiteSpace($schemaSignature)) {
+            throw "La firma de compatibilidad está vacía."
+          }
+          $manifest = @{
+            version = $env:VERSION
+            notes = "EmoVest $env:VERSION"
+            pub_date = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+            schema_revision = $targetSchema
+            minimum_schema_revision = $policy.minimum_schema_revision
+            schema_signature = $schemaSignature
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $artifactSignature
+                url = "https://github.com/ELROKA02/EmoVest/releases/download/desktop-v$env:VERSION/EmoVest-Setup.exe"
+              }
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 8 |
+            Set-Content -Encoding utf8 (Join-Path $output "latest.json")
+          $parsedManifest = Get-Content -Raw (Join-Path $output "latest.json") |
+            ConvertFrom-Json
+          $platform = $parsedManifest.platforms."windows-x86_64"
+          $expectedUrl = "https://github.com/ELROKA02/EmoVest/releases/download/desktop-v$env:VERSION/EmoVest-Setup.exe"
+          if ($parsedManifest.version -ne $env:VERSION -or
+              $parsedManifest.schema_revision -ne $targetSchema -or
+              $parsedManifest.minimum_schema_revision -ne $policy.minimum_schema_revision -or
+              [string]::IsNullOrWhiteSpace($parsedManifest.schema_signature) -or
+              $platform.signature -ne $artifactSignature -or
+              $platform.url -ne $expectedUrl) {
+            throw "El manifiesto del updater no coincide con los artefactos generados."
+          }
+          Remove-Item -LiteralPath $schemaPayloadPath -Force
+          Remove-Item -LiteralPath $schemaSignaturePath -Force
+          "path=$output" >> $env:GITHUB_OUTPUT
+
+      - name: Subir artefactos firmados de la release
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: EmoVest-Release-${{ steps.release_version.outputs.version }}
+          path: ${{ steps.release_artifacts.outputs.path }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publicar release firmada de forma atómica
+    if: >-
+      ${{ (github.event_name == 'push' &&
+          startsWith(github.ref, 'refs/tags/desktop-v')) ||
+          (github.event_name == 'workflow_dispatch' &&
+          inputs.publish_release == true &&
+          github.ref == 'refs/heads/main') }}
+    needs: release-build
     runs-on: ubuntu-latest
+    environment: desktop-production
     permissions:
       contents: write
 
     steps:
       - name: Descargar artefactos firmados
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
-          name: EmoVest-Windows-${{ inputs.version }}
+          name: EmoVest-Release-${{ needs.release-build.outputs.version }}
           path: artifacts
 
-      - name: Publicar release explícita
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: desktop-v${{ inputs.version }}
-          name: EmoVest ${{ inputs.version }}
-          draft: false
-          prerelease: false
-          fail_on_unmatched_files: true
-          files: |
-            artifacts/EmoVest-Setup.exe
+      - name: Crear borrador con todos los artefactos
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PROMPT_DISABLED: "1"
+          VERSION: ${{ needs.release-build.outputs.version }}
+        run: |
+          gh release create "desktop-v${VERSION}" \
+            artifacts/EmoVest-Setup.exe \
+            artifacts/EmoVest-Setup.exe.sig \
+            artifacts/latest.json \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "EmoVest ${VERSION}" \
+            --notes "Actualización estable de EmoVest ${VERSION}." \
+            --draft
+
+      - name: Verificar activos y publicar el borrador
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.release-build.outputs.version }}
+        run: |
+          release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/desktop-v${VERSION}")"
+          release_id="$(jq -r '.id' <<<"$release")"
+          draft="$(jq -r '.draft' <<<"$release")"
+          mapfile -t assets < <(jq -r '.assets[].name' <<<"$release" | sort)
+          expected=("EmoVest-Setup.exe" "EmoVest-Setup.exe.sig" "latest.json")
+          if [[ "$draft" != "true" ]] || [[ "${assets[*]}" != "${expected[*]}" ]]; then
+            echo "La release no contiene exactamente los tres artefactos esperados."
+            exit 1
+          fi
+          if ! jq -e '
+            (.assets | length) == 3 and
+            all(.assets[]; .state == "uploaded" and .size > 0 and
+              (.browser_download_url | startswith("https://github.com/")))
+          ' <<<"$release" > /dev/null; then
+            echo "Algún artefacto no terminó de subirse correctamente."
+            exit 1
+          fi
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+            -F draft=false \
+            -f make_latest=true > /dev/null

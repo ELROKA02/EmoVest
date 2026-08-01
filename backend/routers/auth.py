@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from schemas import SignUp, login
+from schemas import SignUp, TradingProfileUpdate, login
 from database import get_db
 from models import Usuario, Suscripcion
 import bcrypt
@@ -105,7 +105,28 @@ def get_me(current_user: Usuario = Depends(get_current_user)):
     return {
         "id": current_user.id,
         "name": current_user.nombre,
-        "email": current_user.correo_electronico
+        "email": current_user.correo_electronico,
+        "trading_strategy": current_user.estrategia_trading or "",
+        "trading_plan": current_user.plan_trading or "",
+    }
+
+
+@router.put(
+    "/me/trading-profile",
+    summary="Guardar estrategia y plan de trading del usuario autenticado",
+)
+def actualizar_perfil_trading(
+    payload: TradingProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    current_user.estrategia_trading = payload.estrategia
+    current_user.plan_trading = payload.plan
+    db.commit()
+    db.refresh(current_user)
+    return {
+        "trading_strategy": current_user.estrategia_trading or "",
+        "trading_plan": current_user.plan_trading or "",
     }
 
 

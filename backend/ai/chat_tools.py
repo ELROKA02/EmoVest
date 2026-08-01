@@ -8,16 +8,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
+import re
 from typing import Any
 
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-from models import Cuenta_Trading, Operacion, Registro_emocional
+from models import Cuenta_Trading, Operacion, Registro_emocional, Usuario
 
 
 MAX_OPERATIONS = 20
 MAX_PERIOD_DAYS = 365
+EXTREME_EMOTION_THRESHOLD = Decimal("0.65")
+_MAX_RISK_PATTERN = re.compile(
+    r"(?:arriesgo|arriesgar|riesgo(?:\s+m[aá]ximo)?)\D{0,40}?(\d+(?:[.,]\d+)?)\s*%",
+    re.IGNORECASE,
+)
 
 
 class ChatToolAccessError(ValueError):
@@ -49,6 +55,22 @@ def _days(days: int | None) -> int:
     if not isinstance(days, int) or days < 1 or days > MAX_PERIOD_DAYS:
         raise ValueError(f"El periodo debe estar entre 1 y {MAX_PERIOD_DAYS} dias.")
     return days
+
+
+def _emotion_alerts(
+    averages: dict[str, float | int | None],
+    peaks: dict[str, float | int | None],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "emotion": field,
+            "average": averages[field],
+            "peak": peaks[field],
+            "message": f"{field.capitalize()} extrema detectada en el periodo analizado.",
+        }
+        for field in ("euforia", "miedo", "duda")
+        if peaks[field] is not None and Decimal(str(peaks[field])) >= EXTREME_EMOTION_THRESHOLD
+    ]
 
 
 def _owned_account(context: ChatExecutionContext) -> Cuenta_Trading:
@@ -108,6 +130,7 @@ def search_operations(
     return {"account_id": account.id, "period_days": days, "operations": [{
         "id": row.id, "date": _timestamp(row.fecha_hora), "asset": row.activo,
         "side": str(row.tipo_operacion), "result": _number(row.resultado), "rr": _number(row.ratio_rr),
+        "risk_percentage": _number(row.riesgo_porcentaje),
     } for row in rows]}
 
 
@@ -123,8 +146,50 @@ def get_operation_detail(context: ChatExecutionContext, operation_id: int) -> di
     return {"operation": {
         "id": row.id, "date": _timestamp(row.fecha_hora), "asset": row.activo,
         "side": str(row.tipo_operacion), "result": _number(row.resultado), "rr": _number(row.ratio_rr),
+        "risk_percentage": _number(row.riesgo_porcentaje),
+        "risk_amount": _number(row.riesgo_importe),
         "confidence": row.nivel_confianza, "notes": (row.notas or "")[:255],
     }}
+
+
+def audit_plan_discipline(context: ChatExecutionContext, days: int = 30) -> dict[str, Any]:
+    """Comprueba solo reglas de riesgo explícitas y medibles del plan del usuario."""
+    account = _owned_account(context)
+    days = _days(days)
+    user = context.db.query(Usuario).filter(Usuario.id == context.user_id).first()
+    plan = user.plan_trading if user else ""
+    match = _MAX_RISK_PATTERN.search(plan or "")
+    if match is None:
+        return {
+            "account_id": account.id,
+            "period_days": days,
+            "status": "rule_not_measurable",
+            "message": "El plan no contiene un límite de riesgo porcentual medible.",
+        }
+
+    max_risk = float(match.group(1).replace(",", "."))
+    rows = context.db.query(Operacion).filter(
+        Operacion.id_cuenta == account.id,
+        Operacion.fecha_hora >= datetime.utcnow() - timedelta(days=days),
+    ).order_by(Operacion.fecha_hora.desc()).limit(MAX_OPERATIONS).all()
+    missing_risk = [row for row in rows if row.riesgo_porcentaje is None]
+    violations = [
+        row for row in rows
+        if row.riesgo_porcentaje is not None and float(row.riesgo_porcentaje) > max_risk
+    ]
+    return {
+        "account_id": account.id,
+        "period_days": days,
+        "status": "checked",
+        "max_risk_percentage": max_risk,
+        "checked_operations": len(rows),
+        "missing_risk_operations": len(missing_risk),
+        "violations": [{
+            "date": _timestamp(row.fecha_hora),
+            "asset": row.activo,
+            "risk_percentage": _number(row.riesgo_porcentaje),
+        } for row in violations],
+    }
 
 
 def analyze_emotions(context: ChatExecutionContext, days: int = 30) -> dict[str, Any]:
@@ -137,7 +202,16 @@ def analyze_emotions(context: ChatExecutionContext, days: int = 30) -> dict[str,
     ).order_by(Registro_emocional.fecha_hora.desc()).limit(MAX_OPERATIONS).all()
     fields = ("confianza", "duda", "euforia", "miedo", "neutral")
     averages = {field: _number(sum((getattr(row, field) or 0) for row in rows) / len(rows)) if rows else None for field in fields}
-    return {"account_id": account.id, "period_days": days, "records": len(rows), "averages": averages}
+    peaks = {field: _number(max((getattr(row, field) or 0 for row in rows), default=None)) for field in fields}
+    alerts = _emotion_alerts(averages, peaks)
+    return {
+        "account_id": account.id,
+        "period_days": days,
+        "records": len(rows),
+        "averages": averages,
+        "peaks": peaks,
+        "alerts": alerts,
+    }
 
 
 def make_langchain_tools(context: ChatExecutionContext) -> list[Any]:
@@ -168,6 +242,10 @@ def make_langchain_tools(context: ChatExecutionContext) -> list[Any]:
         """Calcula medias emocionales de la cuenta confirmada."""
         return analyze_emotions(context, days)
 
+    def auditar_disciplina(days: int = 30) -> dict[str, Any]:
+        """Comprueba el límite de riesgo porcentual declarado en el plan de trading."""
+        return audit_plan_discipline(context, days)
+
     return [StructuredTool.from_function(fn) for fn in (
-        cuentas, resumen_resultados, buscar_operaciones, detalle_operacion, analizar_emociones
+        cuentas, resumen_resultados, buscar_operaciones, detalle_operacion, analizar_emociones, auditar_disciplina
     )]

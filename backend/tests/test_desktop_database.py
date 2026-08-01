@@ -58,6 +58,18 @@ class DesktopDatabaseTests(unittest.TestCase):
         self.assertIn("background_jobs", tables)
         self.assertIn("chat_sessions", tables)
         self.assertIn("operacion", tables)
+        user_columns = {
+            column["name"] for column in inspect(self.engine).get_columns("usuarios")
+        }
+        self.assertTrue({"estrategia_trading", "plan_trading"}.issubset(user_columns))
+        operation_columns = {
+            column["name"] for column in inspect(self.engine).get_columns("operacion")
+        }
+        self.assertTrue({
+            "saldo_referencia_riesgo",
+            "riesgo_importe",
+            "riesgo_porcentaje",
+        }.issubset(operation_columns))
         self.assertTrue(is_revision_at_least(RUNTIME_REVISION, CORE_REVISION))
 
         with self.engine.connect() as connection:

@@ -11,6 +11,7 @@ Para Windows x64, el destino es:
 El proceso recibe estas variables:
 
 - `APP_MODE=desktop`
+- `EMOVEST_APP_VERSION` (versión del paquete Tauri)
 - `EMOVEST_DESKTOP_TOKEN`
 - `EMOVEST_DESKTOP_HOST=127.0.0.1`
 - `EMOVEST_DESKTOP_PORT=0`
@@ -41,9 +42,8 @@ La API debe exigir el header `X-Emovest-Desktop-Token`, incluido en
 `/health/ready`, `/desktop/update/prepare` y `/desktop/shutdown`. No debe escribir
 el token en logs, errores ni archivos.
 
-El updater de Tauri está temporalmente desactivado: el binario no registra el
-plugin, la interfaz no invoca comandos de actualización y CI no genera
-`latest.json` ni firmas de updater. Las releases pueden seguir firmándose con
-Authenticode y publicando `EmoVest-Setup.exe`. El endpoint interno
-`/desktop/update/prepare` permanece reservado para una futura reactivación y no
-se invoca en el hotfix.
+El updater solo se habilita con la feature Cargo `desktop-updater` y un overlay
+de release que contenga un objeto `plugins.updater` completo. Los builds normales
+no registran el plugin. En producción la interfaz invoca comandos Rust propios:
+no tiene permiso directo para instalar y no puede saltarse
+`/desktop/update/prepare`, el backup ni el cierre supervisado del sidecar.

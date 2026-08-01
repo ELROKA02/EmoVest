@@ -1,5 +1,11 @@
+#[cfg(feature = "desktop-updater")]
+use base64::{engine::general_purpose::STANDARD, Engine};
 use getrandom::fill as fill_random;
+#[cfg(feature = "desktop-updater")]
+use minisign_verify::{PublicKey, Signature};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "desktop-updater")]
+use serde_json::{json, Value};
 use std::{
     collections::BTreeMap,
     fs,
@@ -9,11 +15,15 @@ use std::{
     sync::Mutex,
     time::{Duration, Instant},
 };
+#[cfg(feature = "desktop-updater")]
+use tauri::Emitter;
 use tauri::{AppHandle, Manager, RunEvent, State};
 use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
     ShellExt,
 };
+#[cfg(feature = "desktop-updater")]
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 const READY_PREFIX: &str = "EMOVEST_READY ";
 const ERROR_PREFIX: &str = "EMOVEST_ERROR ";
@@ -23,6 +33,27 @@ const HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const LONG_HTTP_TIMEOUT: Duration = Duration::from_secs(120);
 #[cfg(windows)]
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
+
+#[cfg(feature = "desktop-updater")]
+#[derive(Clone)]
+struct UpdateSchemaMetadata {
+    target_schema_revision: String,
+    minimum_schema_revision: String,
+}
+
+#[cfg(feature = "desktop-updater")]
+struct PendingUpdate {
+    update: Update,
+    bytes: Option<Vec<u8>>,
+    schema: UpdateSchemaMetadata,
+}
+
+#[cfg(feature = "desktop-updater")]
+#[derive(Default)]
+struct UpdaterRuntime {
+    pending: Option<PendingUpdate>,
+    busy: bool,
+}
 
 #[derive(Clone)]
 struct BackendConnection {
@@ -36,6 +67,8 @@ struct RuntimeState {
     startup_error: Option<String>,
     shutting_down: bool,
     generation: u64,
+    #[cfg(feature = "desktop-updater")]
+    updater: UpdaterRuntime,
     #[cfg(windows)]
     job: Option<WindowsJob>,
 }
@@ -70,6 +103,22 @@ struct DesktopDiagnostics {
     config_dir: String,
     log_dir: String,
     backup_dir: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateCheckResult {
+    available: bool,
+    can_download: bool,
+    version: Option<String>,
+    notes: Option<String>,
+    message: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadResult {
+    version: String,
 }
 
 #[derive(Deserialize)]
@@ -124,21 +173,14 @@ impl Drop for WindowsJob {
 
 #[cfg(windows)]
 impl WindowsJob {
-    fn terminate_and_wait(&self, timeout: Duration) -> Result<(), String> {
+    fn wait_until_empty(&self, timeout: Duration) -> Result<(), String> {
         use std::mem::size_of;
         use windows_sys::Win32::System::JobObjects::{
-            JobObjectBasicAccountingInformation, QueryInformationJobObject, TerminateJobObject,
+            JobObjectBasicAccountingInformation, QueryInformationJobObject,
             JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
         };
 
         unsafe {
-            if TerminateJobObject(self.0, 1) == 0 {
-                return Err(format!(
-                    "No se pudo terminar el supervisor de procesos de Windows: {}",
-                    std::io::Error::last_os_error()
-                ));
-            }
-
             let deadline = Instant::now() + timeout;
             loop {
                 let mut accounting = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION::default();
@@ -166,6 +208,20 @@ impl WindowsJob {
                 std::thread::sleep(Duration::from_millis(50));
             }
         }
+    }
+
+    fn terminate_and_wait(&self, timeout: Duration) -> Result<(), String> {
+        use windows_sys::Win32::System::JobObjects::TerminateJobObject;
+
+        unsafe {
+            if TerminateJobObject(self.0, 1) == 0 {
+                return Err(format!(
+                    "No se pudo terminar el supervisor de procesos de Windows: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+        }
+        self.wait_until_empty(timeout)
     }
 }
 
@@ -256,13 +312,21 @@ fn terminate_sidecar_process(
     job: Option<WindowsJob>,
     cancel_file: Option<PathBuf>,
     graceful_wait: bool,
-) {
+) -> Result<(), String> {
     if graceful_wait {
-        if let Some(child) = child.as_ref() {
+        let graceful_result = if let Some(job) = job.as_ref() {
+            job.wait_until_empty(SHUTDOWN_TIMEOUT)
+        } else if let Some(child) = child.as_ref() {
             if wait_for_process_exit(child.pid(), SHUTDOWN_TIMEOUT) {
-                drop(job);
-                return;
+                Ok(())
+            } else {
+                Err("El proceso local no terminó dentro del plazo.".into())
             }
+        } else {
+            Ok(())
+        };
+        if graceful_result.is_ok() {
+            return Ok(());
         }
         eprintln!(
             "EmoVest agotó el cierre normal del sidecar; se forzará solo el proceso asociado."
@@ -270,36 +334,48 @@ fn terminate_sidecar_process(
     }
 
     request_sidecar_cancel(cancel_file.as_ref());
-    if let Some(child) = child.as_ref() {
+    if let Some(job) = job.as_ref() {
+        if job.wait_until_empty(Duration::from_secs(6)).is_ok() {
+            return Ok(());
+        }
+    } else if let Some(child) = child.as_ref() {
         if wait_for_process_exit(child.pid(), Duration::from_secs(6)) {
-            drop(job);
-            return;
+            return Ok(());
         }
     }
 
-    let job_finished = job
-        .as_ref()
-        .map(|job| match job.terminate_and_wait(Duration::from_secs(5)) {
-            Ok(()) => true,
-            Err(error) => {
-                eprintln!("EmoVest no pudo cerrar completamente el sidecar: {error}");
-                false
-            }
-        })
-        .unwrap_or(false);
+    let job_error = if let Some(job) = job.as_ref() {
+        match job.terminate_and_wait(Duration::from_secs(5)) {
+            Ok(()) => return Ok(()),
+            Err(error) => Some(error),
+        }
+    } else {
+        None
+    };
 
     if let Some(child) = child {
         let pid = child.pid();
-        if job_finished {
-            drop(child);
-        } else if let Err(error) = child.kill() {
-            eprintln!("EmoVest no pudo terminar el proceso local {pid}: {error}");
+        if let Err(error) = child.kill() {
+            return Err(format!(
+                "No se pudo terminar el proceso local {pid}: {error}"
+            ));
         }
         if !wait_for_process_exit(pid, Duration::from_secs(5)) {
-            eprintln!("El proceso local {pid} no terminó dentro del plazo.");
+            return Err(format!(
+                "El proceso local {pid} no terminó dentro del plazo."
+            ));
         }
+        if let Some(job) = job.as_ref() {
+            job.wait_until_empty(Duration::from_secs(5))?;
+        }
+        return Ok(());
     }
-    drop(job);
+    if let Some(error) = job_error {
+        return Err(format!(
+            "No se pudo cerrar completamente el sidecar: {error}"
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(not(windows))]
@@ -307,15 +383,18 @@ fn terminate_sidecar_process(
     child: Option<CommandChild>,
     cancel_file: Option<PathBuf>,
     _graceful_wait: bool,
-) {
+) -> Result<(), String> {
     request_sidecar_cancel(cancel_file.as_ref());
     if let Some(child) = child {
         let pid = child.pid();
         if let Err(error) = child.kill() {
-            eprintln!("EmoVest no pudo terminar el proceso local {pid}: {error}");
+            return Err(format!(
+                "No se pudo terminar el proceso local {pid}: {error}"
+            ));
         }
         let _ = wait_for_process_exit(pid, Duration::from_secs(2));
     }
+    Ok(())
 }
 
 fn request_sidecar_cancel(cancel_file: Option<&PathBuf>) {
@@ -575,9 +654,12 @@ fn start_startup_watchdog(app: AppHandle, generation: u64) {
             })
             .unwrap_or((None, None));
         #[cfg(windows)]
-        terminate_sidecar_process(child, job, cancel_file, false);
+        let termination = terminate_sidecar_process(child, job, cancel_file, false);
         #[cfg(not(windows))]
-        terminate_sidecar_process(child, cancel_file, false);
+        let termination = terminate_sidecar_process(child, cancel_file, false);
+        if let Err(error) = termination {
+            eprintln!("No se pudo cerrar el sidecar tras agotar el arranque: {error}");
+        }
         if state
             .runtime
             .lock()
@@ -608,6 +690,10 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     let _ = fs::remove_file(&cancel_file);
     let envs = [
         ("APP_MODE", "desktop".to_string()),
+        (
+            "EMOVEST_APP_VERSION",
+            app.package_info().version.to_string(),
+        ),
         ("EMOVEST_DESKTOP_TOKEN", state.token.clone()),
         ("EMOVEST_DESKTOP_HOST", "127.0.0.1".to_string()),
         ("EMOVEST_DESKTOP_PORT", "0".to_string()),
@@ -667,7 +753,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     let job = match assign_kill_on_close_job(pid) {
         Ok(job) => job,
         Err(error) => {
-            terminate_sidecar_process(Some(child), None, Some(cancel_file), false);
+            let _ = terminate_sidecar_process(Some(child), None, Some(cancel_file), false);
             return Err(error);
         }
     };
@@ -761,14 +847,37 @@ fn spawn_sidecar(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn stop_sidecar(app: &AppHandle, graceful: bool) {
+fn stop_sidecar(app: &AppHandle, graceful: bool) -> Result<(), String> {
     let Some(state) = app.try_state::<DesktopState>() else {
-        return;
+        return Ok(());
     };
-    let backend = state.runtime.lock().ok().and_then(|mut runtime| {
+    #[cfg(windows)]
+    let (backend, child, job, cancel_file) = {
+        let mut runtime = state
+            .runtime
+            .lock()
+            .map_err(|_| "El estado del servicio local no está disponible.".to_string())?;
         runtime.shutting_down = true;
-        runtime.backend.clone()
-    });
+        (
+            runtime.backend.take(),
+            runtime.child.take(),
+            runtime.job.take(),
+            runtime.cancel_file.take(),
+        )
+    };
+    #[cfg(not(windows))]
+    let (backend, child, cancel_file) = {
+        let mut runtime = state
+            .runtime
+            .lock()
+            .map_err(|_| "El estado del servicio local no está disponible.".to_string())?;
+        runtime.shutting_down = true;
+        (
+            runtime.backend.take(),
+            runtime.child.take(),
+            runtime.cancel_file.take(),
+        )
+    };
 
     let mut graceful_requested = false;
     if graceful {
@@ -796,38 +905,18 @@ fn stop_sidecar(app: &AppHandle, graceful: bool) {
     }
 
     #[cfg(windows)]
-    let (child, job, cancel_file) = state
-        .runtime
-        .lock()
-        .ok()
-        .map(|mut runtime| {
-            runtime.backend = None;
-            (
-                runtime.child.take(),
-                runtime.job.take(),
-                runtime.cancel_file.take(),
-            )
-        })
-        .unwrap_or((None, None, None));
+    {
+        terminate_sidecar_process(child, job, cancel_file, graceful_requested)
+    }
     #[cfg(not(windows))]
-    let (child, cancel_file) = state
-        .runtime
-        .lock()
-        .ok()
-        .map(|mut runtime| {
-            runtime.backend = None;
-            (runtime.child.take(), runtime.cancel_file.take())
-        })
-        .unwrap_or((None, None));
-    #[cfg(windows)]
-    terminate_sidecar_process(child, job, cancel_file, graceful_requested);
-    #[cfg(not(windows))]
-    terminate_sidecar_process(child, cancel_file, graceful_requested);
+    {
+        terminate_sidecar_process(child, cancel_file, graceful_requested)
+    }
 }
 
 #[tauri::command]
 fn restart_desktop_backend(app: AppHandle) -> Result<(), String> {
-    stop_sidecar(&app, true);
+    stop_sidecar(&app, true)?;
     spawn_sidecar(&app)
 }
 
@@ -910,9 +999,338 @@ fn create_desktop_backup(state: State<'_, DesktopState>) -> Result<String, Strin
     Ok(response.backup_path)
 }
 
+#[cfg(feature = "desktop-updater")]
+fn schema_metadata(raw: &Value) -> Result<UpdateSchemaMetadata, String> {
+    let target_schema_revision = raw
+        .get("schema_revision")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let minimum_schema_revision = raw
+        .get("minimum_schema_revision")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if target_schema_revision.is_empty() || minimum_schema_revision.is_empty() {
+        return Err("El canal no declara compatibilidad con los datos locales.".into());
+    }
+    Ok(UpdateSchemaMetadata {
+        target_schema_revision,
+        minimum_schema_revision,
+    })
+}
+
+#[cfg(feature = "desktop-updater")]
+fn verified_schema_metadata(update: &Update) -> Result<UpdateSchemaMetadata, String> {
+    let schema = schema_metadata(&update.raw_json)?;
+    let schema_signature = update
+        .raw_json
+        .get("schema_signature")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim();
+    if schema_signature.is_empty() {
+        return Err("La política de datos de la actualización no está firmada.".into());
+    }
+    let encoded_public_key = option_env!("EMOVEST_UPDATER_PUBLIC_KEY")
+        .filter(|key| !key.trim().is_empty())
+        .ok_or_else(|| "La release no contiene el ancla de confianza del updater.".to_string())?;
+    let public_key_text = String::from_utf8(
+        STANDARD
+            .decode(encoded_public_key.trim())
+            .map_err(|_| "La clave pública del updater no es válida.".to_string())?,
+    )
+    .map_err(|_| "La clave pública del updater no es texto válido.".to_string())?;
+    let signature_text = String::from_utf8(
+        STANDARD
+            .decode(schema_signature)
+            .map_err(|_| "La firma de compatibilidad no es válida.".to_string())?,
+    )
+    .map_err(|_| "La firma de compatibilidad no es texto válido.".to_string())?;
+    let public_key = PublicKey::decode(&public_key_text)
+        .map_err(|error| format!("La clave pública del updater no se puede leer: {error}"))?;
+    let signature = Signature::decode(&signature_text)
+        .map_err(|error| format!("La firma de compatibilidad no se puede leer: {error}"))?;
+    let signed_payload = format!(
+        "{}\n{}\n{}\n{}\n",
+        update.version,
+        update.signature.trim(),
+        schema.target_schema_revision,
+        schema.minimum_schema_revision
+    );
+    public_key
+        .verify(signed_payload.as_bytes(), &signature, true)
+        .map_err(|_| {
+            "La política de compatibilidad no supera la verificación criptográfica.".to_string()
+        })?;
+
+    Ok(schema)
+}
+
+#[cfg(feature = "desktop-updater")]
+#[tauri::command]
+async fn check_for_update(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+) -> Result<UpdateCheckResult, String> {
+    {
+        let mut runtime = state
+            .runtime
+            .lock()
+            .map_err(|_| "El estado del actualizador no está disponible.".to_string())?;
+        if runtime.updater.busy {
+            return Err("Ya hay una operación de actualización en curso.".into());
+        }
+        runtime.updater.busy = true;
+        runtime.updater.pending = None;
+    }
+
+    let checked = async {
+        let updater = app
+            .updater_builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|error| format!("No se pudo configurar el actualizador: {error}"))?;
+        updater
+            .check()
+            .await
+            .map_err(|error| format!("No se pudo consultar el canal de actualizaciones: {error}"))
+    }
+    .await;
+
+    let mut runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| "El estado del actualizador no está disponible.".to_string())?;
+    runtime.updater.busy = false;
+    let Some(update) = checked? else {
+        return Ok(UpdateCheckResult {
+            available: false,
+            can_download: false,
+            version: None,
+            notes: None,
+            message: "EmoVest está actualizado.".into(),
+        });
+    };
+
+    let version = update.version.clone();
+    let notes = update.body.clone();
+    let schema = match verified_schema_metadata(&update) {
+        Ok(schema) => schema,
+        Err(message) => {
+            return Ok(UpdateCheckResult {
+                available: true,
+                can_download: false,
+                version: Some(version),
+                notes,
+                message,
+            });
+        }
+    };
+
+    runtime.updater.pending = Some(PendingUpdate {
+        update,
+        bytes: None,
+        schema,
+    });
+    Ok(UpdateCheckResult {
+        available: true,
+        can_download: true,
+        version: Some(version),
+        notes,
+        message: String::new(),
+    })
+}
+
+#[cfg(not(feature = "desktop-updater"))]
+#[tauri::command]
+async fn check_for_update() -> Result<UpdateCheckResult, String> {
+    Ok(UpdateCheckResult {
+        available: false,
+        can_download: false,
+        version: None,
+        notes: None,
+        message: "Las actualizaciones están desactivadas en esta compilación de desarrollo.".into(),
+    })
+}
+
+#[cfg(feature = "desktop-updater")]
+#[tauri::command]
+async fn download_update(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+) -> Result<DownloadResult, String> {
+    let (update, expected_version) = {
+        let mut runtime = state
+            .runtime
+            .lock()
+            .map_err(|_| "El estado del actualizador no está disponible.".to_string())?;
+        if runtime.updater.busy {
+            return Err("Ya hay una operación de actualización en curso.".into());
+        }
+        let pending = runtime
+            .updater
+            .pending
+            .as_ref()
+            .ok_or_else(|| "No hay una actualización compatible pendiente.".to_string())?;
+        let update = pending.update.clone();
+        let version = update.version.clone();
+        runtime.updater.busy = true;
+        (update, version)
+    };
+
+    let progress_app = app.clone();
+    let mut downloaded = 0_u64;
+    let download = update
+        .download(
+            move |chunk_length, content_length| {
+                downloaded += chunk_length as u64;
+                let percentage = content_length
+                    .filter(|total| *total > 0)
+                    .map(|total| ((downloaded.saturating_mul(100)) / total).min(100));
+                let _ = progress_app.emit(
+                    "desktop-update-progress",
+                    json!({
+                        "downloaded": downloaded,
+                        "total": content_length,
+                        "percentage": percentage
+                    }),
+                );
+            },
+            || {},
+        )
+        .await
+        .map_err(|error| format!("La descarga o su firma no son válidas: {error}"));
+
+    let mut runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| "El estado del actualizador no está disponible.".to_string())?;
+    runtime.updater.busy = false;
+    let bytes = download?;
+    let pending = runtime
+        .updater
+        .pending
+        .as_mut()
+        .ok_or_else(|| "La actualización pendiente cambió durante la descarga.".to_string())?;
+    if pending.update.version != expected_version {
+        return Err("La actualización pendiente cambió durante la descarga.".into());
+    }
+    pending.bytes = Some(bytes);
+    Ok(DownloadResult {
+        version: expected_version,
+    })
+}
+
+#[cfg(not(feature = "desktop-updater"))]
+#[tauri::command]
+async fn download_update() -> Result<DownloadResult, String> {
+    Err("Las actualizaciones están desactivadas en esta compilación de desarrollo.".into())
+}
+
+#[cfg(feature = "desktop-updater")]
+#[tauri::command]
+fn install_downloaded_update(app: AppHandle, state: State<'_, DesktopState>) -> Result<(), String> {
+    let (update, bytes, schema) = {
+        let mut runtime = state
+            .runtime
+            .lock()
+            .map_err(|_| "El estado del actualizador no está disponible.".to_string())?;
+        if runtime.updater.busy {
+            return Err("Ya hay una operación de actualización en curso.".into());
+        }
+        let pending = runtime
+            .updater
+            .pending
+            .as_mut()
+            .ok_or_else(|| "No hay una actualización pendiente.".to_string())?;
+        let values = (
+            pending.update.clone(),
+            pending
+                .bytes
+                .take()
+                .ok_or_else(|| "La actualización todavía no se ha descargado.".to_string())?,
+            pending.schema.clone(),
+        );
+        runtime.updater.busy = true;
+        values
+    };
+
+    let preparation = (|| {
+        let connection = current_connection(&state)?;
+        let request = json!({
+            "target_version": update.version,
+            "target_schema_revision": schema.target_schema_revision,
+            "minimum_schema_revision": schema.minimum_schema_revision,
+        })
+        .to_string();
+        let (status, body) = local_http_request_with_timeout(
+            connection.port,
+            &state.token,
+            "POST",
+            "/desktop/update/prepare",
+            Some(&request),
+            LONG_HTTP_TIMEOUT,
+        )?;
+        if status != 200 {
+            return Err(format!(
+                "El servicio local rechazó la preparación de la actualización (HTTP {status})."
+            ));
+        }
+        let response: ReadyResponse = serde_json::from_str(&body)
+            .map_err(|_| "La comprobación previa de la actualización no es válida.".to_string())?;
+        if !response.ready {
+            return Err("La actualización no es compatible con los datos locales.".into());
+        }
+        stop_sidecar(&app, true)
+    })();
+
+    if let Err(error) = preparation {
+        if let Ok(mut runtime) = state.runtime.lock() {
+            runtime.updater.busy = false;
+            if let Some(pending) = runtime.updater.pending.as_mut() {
+                if pending.update.version == update.version {
+                    pending.bytes = Some(bytes);
+                }
+            }
+        }
+        return Err(error);
+    }
+
+    if let Err(error) = update.install(&bytes) {
+        if let Ok(mut runtime) = state.runtime.lock() {
+            runtime.updater.busy = false;
+            if let Some(pending) = runtime.updater.pending.as_mut() {
+                if pending.update.version == update.version {
+                    pending.bytes = Some(bytes);
+                }
+            }
+        }
+        let restart_result = spawn_sidecar(&app);
+        return Err(match restart_result {
+            Ok(()) => format!("El instalador no pudo iniciarse: {error}"),
+            Err(restart_error) => format!(
+                "El instalador no pudo iniciarse ({error}) y el servicio local no se pudo recuperar ({restart_error})."
+            ),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(not(feature = "desktop-updater"))]
+#[tauri::command]
+fn install_downloaded_update() -> Result<(), String> {
+    Err("Las actualizaciones están desactivadas en esta compilación de desarrollo.".into())
+}
+
 pub fn run() -> tauri::Result<()> {
-    let app = tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_shell::init());
+    #[cfg(feature = "desktop-updater")]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    let app = builder
         .setup(|app| {
             let data_dir = app.path().app_local_data_dir()?;
             let config_dir = app.path().app_config_dir()?;
@@ -939,6 +1357,8 @@ pub fn run() -> tauri::Result<()> {
                     startup_error: None,
                     shutting_down: false,
                     generation: 0,
+                    #[cfg(feature = "desktop-updater")]
+                    updater: UpdaterRuntime::default(),
                     #[cfg(windows)]
                     job: None,
                 }),
@@ -961,13 +1381,45 @@ pub fn run() -> tauri::Result<()> {
             restart_desktop_backend,
             desktop_diagnostics,
             create_desktop_backup,
+            check_for_update,
+            download_update,
+            install_downloaded_update,
         ])
         .build(tauri::generate_context!())?;
 
     app.run(|handle, event| {
         if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
-            stop_sidecar(handle, true);
+            if let Err(error) = stop_sidecar(handle, true) {
+                eprintln!("EmoVest no pudo confirmar el cierre del servicio local: {error}");
+            }
         }
     });
     Ok(())
+}
+
+#[cfg(all(test, feature = "desktop-updater"))]
+mod updater_tests {
+    use super::schema_metadata;
+    use serde_json::json;
+
+    #[test]
+    fn schema_metadata_requires_both_non_empty_revisions() {
+        let valid = schema_metadata(&json!({
+            "schema_revision": "0003_next",
+            "minimum_schema_revision": "0001_desktop_core"
+        }))
+        .expect("valid metadata");
+        assert_eq!(valid.target_schema_revision, "0003_next");
+        assert_eq!(valid.minimum_schema_revision, "0001_desktop_core");
+
+        assert!(schema_metadata(&json!({
+            "schema_revision": "0003_next"
+        }))
+        .is_err());
+        assert!(schema_metadata(&json!({
+            "schema_revision": " ",
+            "minimum_schema_revision": "0001_desktop_core"
+        }))
+        .is_err());
+    }
 }

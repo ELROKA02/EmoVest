@@ -15,6 +15,7 @@ from models import Cuenta_Trading, Operacion, Usuario
 from routers.auth import get_current_user
 from rq_queue import dispatch_emociones_job, stage_emociones_job
 from storage import image_storage
+from trading_risk import calculate_operation_risk
 
 router = APIRouter(prefix="/cuentas/{cuenta_id_trading}/operaciones", tags=["operaciones"])
 logger = logging.getLogger(__name__)
@@ -42,6 +43,19 @@ def actualizar_saldo_cuenta(db: Session, cuenta_id: int, diferencia: Decimal) ->
         },
         synchronize_session=False,
     )
+
+
+def actualizar_riesgo_operacion(op: Operacion, saldo_referencia: Decimal) -> None:
+    riesgo_importe, riesgo_porcentaje = calculate_operation_risk(
+        balance=saldo_referencia,
+        quantity=op.cantidad,
+        entry_price=op.precio_entrada,
+        stop_loss=op.stop_loss,
+        side=op.tipo_operacion,
+    )
+    op.saldo_referencia_riesgo = saldo_referencia if riesgo_importe is not None else None
+    op.riesgo_importe = riesgo_importe
+    op.riesgo_porcentaje = riesgo_porcentaje
 
 
 def autenticar_usuario_desde_request(request: Request, db: Session) -> Usuario:
@@ -153,6 +167,10 @@ def create_operacion(
         ratio_rr=ratio_rr,
         nivel_confianza=nivel_confianza,
         screenshot=screenshot_path,
+    )
+    actualizar_riesgo_operacion(
+        nueva_operacion,
+        Decimal(str(cuenta.saldo_actual or Decimal("0"))),
     )
 
     db.add(nueva_operacion)
@@ -276,6 +294,13 @@ async def update_operacion(
 
     for key, value in datos_filtrados.items():
         setattr(op, key, value)
+
+    saldo_referencia = Decimal(str(
+        op.saldo_referencia_riesgo
+        if op.saldo_referencia_riesgo is not None
+        else cuenta.saldo_actual or Decimal("0")
+    ))
+    actualizar_riesgo_operacion(op, saldo_referencia)
 
     screenshot_path_anterior = op.screenshot if isinstance(op.screenshot, str) else None
     nueva_ruta_screenshot: str | None = None

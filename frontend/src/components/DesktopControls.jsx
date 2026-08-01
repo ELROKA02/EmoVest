@@ -1,6 +1,17 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { apiFetch, getRuntimeApiInfo, isDesktopRuntime } from '../config';
+import { listen } from '@tauri-apps/api/event';
+import { apiFetch, getRuntimeApiInfo } from '../config';
+
+const idleUpdate = {
+  phase: 'idle',
+  available: false,
+  canDownload: false,
+  version: null,
+  notes: null,
+  progress: null,
+  message: '',
+};
 
 const aiStateLabels = {
   available: 'Disponible',
@@ -11,11 +22,18 @@ const aiStateLabels = {
   unreachable: 'No accesible',
 };
 
+const hasTauriRuntime = () => (
+  typeof window !== 'undefined'
+  && typeof window.__TAURI_INTERNALS__ === 'object'
+);
+
 const DesktopControls = () => {
+  const canUseDesktopShell = hasTauriRuntime();
   const [open, setOpen] = useState(false);
   const [diagnostics, setDiagnostics] = useState(null);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [backup, setBackup] = useState({ phase: 'idle', message: '' });
+  const [update, setUpdate] = useState(idleUpdate);
   const [aiStatus, setAiStatus] = useState({
     phase: 'idle',
     statuses: null,
@@ -23,14 +41,14 @@ const DesktopControls = () => {
   });
 
   const refreshDiagnostics = useCallback(async () => {
-    if (!isDesktopRuntime()) return;
+    if (!canUseDesktopShell) return;
     setDiagnosticsError('');
     try {
       setDiagnostics(await invoke('desktop_diagnostics'));
     } catch (error) {
       setDiagnosticsError(String(error));
     }
-  }, []);
+  }, [canUseDesktopShell]);
 
   const refreshAiStatus = useCallback(async () => {
     const token = sessionStorage.getItem('token');
@@ -68,6 +86,59 @@ const DesktopControls = () => {
     }
   }, []);
 
+  const checkForUpdates = useCallback(async ({ silent = false } = {}) => {
+    if (!canUseDesktopShell) return;
+    setUpdate((current) => ({
+      ...current,
+      phase: 'checking',
+      message: silent ? '' : 'Buscando actualizaciones…',
+    }));
+    try {
+      const result = await invoke('check_for_update');
+      setUpdate({
+        ...idleUpdate,
+        ...result,
+        phase: result.available && result.canDownload
+          ? 'available'
+          : result.available
+            ? 'blocked'
+            : 'idle',
+        message: result.message || (result.available ? '' : 'EmoVest está actualizado.'),
+      });
+    } catch (error) {
+      setUpdate({
+        ...idleUpdate,
+        phase: 'error',
+        message: `No se pudo comprobar: ${String(error)}`,
+      });
+    }
+  }, [canUseDesktopShell]);
+
+  useEffect(() => {
+    if (!canUseDesktopShell) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      void checkForUpdates({ silent: true });
+    }, 2500);
+    return () => window.clearTimeout(timeoutId);
+  }, [canUseDesktopShell, checkForUpdates]);
+
+  useEffect(() => {
+    if (!canUseDesktopShell) return undefined;
+    let unlisten = null;
+    void listen('desktop-update-progress', ({ payload }) => {
+      setUpdate((current) => ({
+        ...current,
+        progress: payload?.percentage ?? current.progress,
+        message: payload?.percentage == null
+          ? 'Descargando actualización…'
+          : `Descargando… ${payload.percentage}%`,
+      }));
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    });
+    return () => unlisten?.();
+  }, [canUseDesktopShell]);
+
   const createBackup = async () => {
     setBackup({ phase: 'running', message: 'Creando copia de seguridad…' });
     try {
@@ -78,7 +149,49 @@ const DesktopControls = () => {
     }
   };
 
-  if (!isDesktopRuntime()) return null;
+  const downloadUpdate = async () => {
+    setUpdate((current) => ({
+      ...current,
+      phase: 'downloading',
+      progress: 0,
+      message: 'Descargando…',
+    }));
+    try {
+      const result = await invoke('download_update');
+      setUpdate((current) => ({
+        ...current,
+        ...result,
+        phase: 'downloaded',
+        progress: 100,
+        message: 'Actualización verificada y lista para instalar.',
+      }));
+    } catch (error) {
+      setUpdate((current) => ({
+        ...current,
+        phase: 'error',
+        message: `La descarga se interrumpió: ${String(error)}`,
+      }));
+    }
+  };
+
+  const installUpdate = async () => {
+    setUpdate((current) => ({
+      ...current,
+      phase: 'installing',
+      message: 'Protegiendo los datos y preparando el instalador…',
+    }));
+    try {
+      await invoke('install_downloaded_update');
+    } catch (error) {
+      setUpdate((current) => ({
+        ...current,
+        phase: 'error',
+        message: `No se pudo instalar: ${String(error)}`,
+      }));
+    }
+  };
+
+  if (!canUseDesktopShell) return null;
 
   const runtime = getRuntimeApiInfo();
 
@@ -92,12 +205,17 @@ const DesktopControls = () => {
           void refreshAiStatus();
         }}
         className="fixed bottom-4 right-4 z-[80] rounded-full border border-white/15 bg-[#111827]/95 p-3 text-slate-200 shadow-xl transition hover:border-blue-400/60 hover:text-white"
-        aria-label="Abrir diagnóstico de EmoVest"
-        title="Diagnóstico de escritorio"
+        aria-label={update.available
+          ? 'Abrir diagnóstico: hay una actualización disponible'
+          : 'Abrir diagnóstico de EmoVest'}
+        title="Diagnóstico y actualizaciones"
       >
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5ZM19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
         </svg>
+        {update.available && (
+          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[#111827] bg-emerald-400" />
+        )}
       </button>
 
       {open && (
@@ -135,6 +253,56 @@ const DesktopControls = () => {
                   <dt>Datos</dt><dd className="break-all">{diagnostics?.dataDir || '—'}</dd>
                   <dt>Logs</dt><dd className="break-all">{diagnostics?.logDir || '—'}</dd>
                 </dl>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium">Actualizaciones</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    EmoVest comprueba el canal estable al arrancar y nunca instala sin tu confirmación.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={['checking', 'downloading', 'installing'].includes(update.phase)}
+                  onClick={() => void checkForUpdates()}
+                  className="text-xs text-blue-300 hover:text-blue-200 disabled:opacity-50"
+                >
+                  Buscar
+                </button>
+              </div>
+              {update.available && (
+                <div className="mt-3">
+                  <p className="text-slate-200">Nueva versión: {update.version}</p>
+                  {update.notes && (
+                    <p className="mt-2 whitespace-pre-wrap text-xs text-slate-400">{update.notes}</p>
+                  )}
+                </div>
+              )}
+              {update.message && (
+                <p className={`mt-3 text-xs ${update.phase === 'error' || update.phase === 'blocked' ? 'text-amber-300' : 'text-slate-300'}`}>
+                  {update.message}
+                </p>
+              )}
+              {update.phase === 'available' && update.canDownload && (
+                <button
+                  type="button"
+                  onClick={() => void downloadUpdate()}
+                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold hover:bg-blue-500"
+                >
+                  Descargar en segundo plano
+                </button>
+              )}
+              {update.phase === 'downloaded' && (
+                <button
+                  type="button"
+                  onClick={() => void installUpdate()}
+                  className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold hover:bg-emerald-500"
+                >
+                  Reiniciar y actualizar
+                </button>
               )}
             </div>
 

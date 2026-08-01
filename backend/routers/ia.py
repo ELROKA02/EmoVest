@@ -12,6 +12,7 @@ from ai.manager import (
     AI_USE_CASE_EMOTION,
     default_base_url_for_provider,
     get_effective_ai_settings,
+    get_langchain_chat_model,
     get_provider,
     get_provider_catalog,
     list_recommended_models,
@@ -19,6 +20,7 @@ from ai.manager import (
     normalize_use_case,
 )
 from ai.providers.base import AIDisabled, AiRuntimeSettings
+from ai.chat_models import ChatModelConfigurationError, ChatModelUnavailable
 from database import get_db
 from models import AiSetting, Registro_emocional, Usuario
 from routers.auth import get_current_user
@@ -204,18 +206,26 @@ def actualizar_configuracion_ia(
     if not model:
         raise HTTPException(status_code=400, detail="El modelo de IA no puede estar vacio.")
 
+    candidate_settings = AiRuntimeSettings(
+        use_case=use_case,
+        provider=provider,
+        model=model,
+        base_url=base_url,
+        install_mode=install_mode,
+    )
     try:
-        get_provider(
-            AiRuntimeSettings(
-                use_case=use_case,
-                provider=provider,
-                model=model,
-                base_url=base_url,
-                install_mode=install_mode,
-            )
-        )
+        get_provider(candidate_settings)
+        if use_case == AI_USE_CASE_CHAT:
+            get_langchain_chat_model(candidate_settings)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    except ChatModelConfigurationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except ChatModelUnavailable as error:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo validar el modelo de chat. Inicia Ollama y vuelve a intentarlo.",
+        ) from error
 
     setting = db.query(AiSetting).filter(AiSetting.use_case == use_case).first()
     if setting is None:

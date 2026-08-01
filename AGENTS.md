@@ -55,6 +55,9 @@ Ejecuta los comandos en la carpeta correcta:
 - En frontend, usa scripts de `frontend/package.json`; no introduzcas tooling alternativo sin peticion.
 - No reactives el modo servidor ni dependencias MySQL/Redis/RQ salvo una decisión explícita del propietario.
 - No guardes binarios de sidecar, certificados, claves privadas ni modelos en Git.
+- Una release pública se dispara con un tag `desktop-vX.Y.Z` sobre un commit ya
+  integrado en `main`; un push ordinario a `main` solo valida y genera artefactos
+  de CI. Sigue `docs/escritorio-windows.md` antes de crear o publicar el tag.
 - Para repartir trabajo o hablar con el equipo de EmoVest, usa Discord como canal de coordinacion.
 
 ## Equipo y reparto por Discord

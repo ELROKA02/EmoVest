@@ -1,7 +1,7 @@
 from typing import Literal, Optional
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 class SignUp(BaseModel):
     nombre: str
@@ -11,6 +11,16 @@ class SignUp(BaseModel):
 class login(BaseModel):
     correo_electronico: EmailStr
     contrasena: str
+
+
+class TradingProfileUpdate(BaseModel):
+    estrategia: str = Field(default="", max_length=4000)
+    plan: str = Field(default="", max_length=4000)
+
+    @field_validator("estrategia", "plan")
+    @classmethod
+    def normalizar_texto(cls, value: str) -> str:
+        return value.strip()
 
 class OperacionCreate(BaseModel):
     fecha_hora: datetime

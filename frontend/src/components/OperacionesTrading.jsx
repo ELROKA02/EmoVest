@@ -848,6 +848,7 @@ const OperacionesTrading = () => {
                         <th className="p-4 text-center">Cantidad</th>
                         <th className="p-4 text-center">Precio Entrada</th>
                         <th className="p-4 text-center">Precio Salida</th>
+                        <th className="p-4 text-center">Riesgo</th>
                         <th className="p-4 text-center">Profit</th>
                         <th className="p-4 text-center">Imagen</th>
                         <th className="p-4 text-center">Acciones</th>
@@ -864,6 +865,11 @@ const OperacionesTrading = () => {
                           <td className="p-4 text-center text-white">{op.cantidad}</td>
                           <td className="p-4 text-center font-mono text-white">{formatCurrency(op.precio_entrada, currencyDivisa)}</td>
                           <td className="p-4 text-center font-mono text-white">{op.precio_salida !== null && op.precio_salida !== undefined ? formatCurrency(op.precio_salida, currencyDivisa) : '-'}</td>
+                          <td className={`p-4 text-center font-semibold ${op.riesgo_porcentaje === null || op.riesgo_porcentaje === undefined ? 'text-gray-500' : 'text-amber-300'}`}>
+                            {op.riesgo_porcentaje === null || op.riesgo_porcentaje === undefined
+                              ? 'Sin SL'
+                              : `${Number(op.riesgo_porcentaje).toFixed(2)}%`}
+                          </td>
                           <td className={`p-4 text-center font-semibold ${op.resultado > 0 ? 'text-green-400' : op.resultado < 0 ? 'text-red-400' : 'text-gray-300'}`}>
                             {op.resultado !== null && op.resultado !== undefined ? `${op.resultado > 0 ? '+' : ''}${formatCurrency(op.resultado, currencyDivisa)}` : '-'}
                           </td>

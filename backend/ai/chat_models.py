@@ -77,8 +77,8 @@ def create_langchain_chat_model(settings: AiRuntimeSettings) -> Any:
     raise ChatModelConfigurationError(f"Proveedor de chat no soportado: {settings.provider}")
 
 
-def _ollama_declares_tools(settings: AiRuntimeSettings) -> bool:
-    """Consulta la capacidad declarada por Ollama sin enviar un mensaje."""
+def _ollama_capabilities(settings: AiRuntimeSettings) -> set[str]:
+    """Consulta las capacidades declaradas por Ollama sin enviar un mensaje."""
     try:
         response = requests.post(
             f"{settings.base_url.rstrip('/')}/api/show",
@@ -86,10 +86,28 @@ def _ollama_declares_tools(settings: AiRuntimeSettings) -> bool:
             timeout=5,
         )
         response.raise_for_status()
-        capabilities = response.json().get("capabilities", [])
-    except (requests.RequestException, ValueError) as error:
-        raise ChatModelUnavailable("No se pudo verificar la capacidad de herramientas de Ollama.") from error
-    return "tools" in capabilities
+        payload = response.json()
+        capabilities = payload.get("capabilities", [])
+        if not isinstance(capabilities, list):
+            raise ValueError("invalid Ollama capabilities payload")
+    except (requests.RequestException, ValueError, TypeError, AttributeError) as error:
+        raise ChatModelUnavailable("No se pudo verificar la capacidad del modelo Ollama.") from error
+    return {capability for capability in capabilities if isinstance(capability, str)}
+
+
+def _validate_ollama_chat_capabilities(settings: AiRuntimeSettings) -> None:
+    """Exige un LLM que pueda redactar texto y usar herramientas internas."""
+    capabilities = _ollama_capabilities(settings)
+    if "completion" not in capabilities:
+        raise ChatModelConfigurationError(
+            f"El modelo {settings.model} no es un LLM agéntico: no declara generación de texto. "
+            "Selecciona un modelo con las capacidades completion y tools; los modelos de embeddings no sirven para EVA."
+        )
+    if "tools" not in capabilities:
+        raise ChatModelConfigurationError(
+            f"El modelo {settings.model} genera texto, pero no puede llamar herramientas. "
+            "EVA necesita un LLM agéntico con las capacidades completion y tools."
+        )
 
 
 def _configured_tool_models(provider: str) -> set[str]:
@@ -113,10 +131,7 @@ def validate_tool_calling_model(settings: AiRuntimeSettings) -> Any:
 
     provider = settings.provider.strip().lower()
     if provider == "ollama":
-        if not _ollama_declares_tools(settings):
-            raise ChatModelConfigurationError(
-                f"El modelo Ollama configurado no declara soporte de tools: {settings.model}"
-            )
+        _validate_ollama_chat_capabilities(settings)
     elif settings.model not in _configured_tool_models(provider):
         raise ChatModelConfigurationError(
             f"El modelo configurado no está autorizado para tool calling en {provider}."

@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from config import CORS_ALLOWED_ORIGINS
+from config import APP_VERSION, CORS_ALLOWED_ORIGINS
 from database import SessionLocal, engine
 from desktop_security import DesktopApiSecurityMiddleware
 from backup_manager import current_schema_revision
@@ -40,7 +40,7 @@ app = FastAPI(
         "define directamente en FastAPI para que Swagger UI refleje con precision los "
         "endpoints disponibles y sus respuestas."
     ),
-    version="0.4.0",
+    version=APP_VERSION,
     lifespan=lifespan,
     contact={
         "name": "Equipo EMOVEST"

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
+import AiSettings from './AiSettings';
 import { formatCurrency } from '../utils/currency';
 import { apiFetch } from '../config';
 import { Spinner, LoadingState, ErrorState, EmptyState } from './ui';
@@ -16,6 +17,10 @@ const PerfilUsuario = () => {
   const [userData, setUserData] = useState({ name: 'Cargando...', email: 'Cargando...' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [tradingProfile, setTradingProfile] = useState({ strategy: '', plan: '' });
+  const [savingTradingProfile, setSavingTradingProfile] = useState(false);
+  const [tradingProfileSaved, setTradingProfileSaved] = useState(false);
+  const [tradingProfileError, setTradingProfileError] = useState('');
 
   // Estados para Información de Cuentas
   const [currentView, setCurrentView] = useState('Información Personal');
@@ -57,6 +62,10 @@ const PerfilUsuario = () => {
         if (response.ok) {
           const data = await response.json();
           setUserData(data);
+          setTradingProfile({
+            strategy: data.trading_strategy || '',
+            plan: data.trading_plan || '',
+          });
           localStorage.setItem('userName', data.name);
         } else {
           setError('No se pudo cargar la información del perfil');
@@ -102,6 +111,42 @@ const PerfilUsuario = () => {
     setCurrentView(view);
     if (view === 'Información de Cuentas') {
       fetchCuentas();
+    }
+  };
+
+  const saveTradingProfile = async () => {
+    const token = sessionStorage.getItem('token');
+    if (!token || savingTradingProfile) return;
+
+    setSavingTradingProfile(true);
+    setTradingProfileSaved(false);
+    setTradingProfileError('');
+    try {
+      const response = await apiFetch('/me/trading-profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          estrategia: tradingProfile.strategy,
+          plan: tradingProfile.plan,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'No se pudo guardar el contexto para EVA.');
+      }
+      const data = await response.json();
+      setTradingProfile({
+        strategy: data.trading_strategy || '',
+        plan: data.trading_plan || '',
+      });
+      setTradingProfileSaved(true);
+    } catch (requestError) {
+      setTradingProfileError(requestError.message || 'No se pudo guardar el contexto para EVA.');
+    } finally {
+      setSavingTradingProfile(false);
     }
   };
 
@@ -431,6 +476,64 @@ const PerfilUsuario = () => {
                     </div>
                   </div>
 
+                  <section className="rounded-xl border border-blue-400/20 bg-blue-400/[0.05] p-5">
+                    <h5 className="text-base font-semibold text-white">Contexto para EVA</h5>
+                    <p className="mt-1 text-sm text-gray-300">
+                      EVA tendrá en cuenta estas reglas al analizar tus operaciones. Es opcional, pero será más precisa si son concretas y verificables.
+                    </p>
+                    <p className="mt-2 text-xs text-blue-100/70">
+                      Describe activos, temporalidad, condiciones de entrada, invalidación, salida y riesgo máximo. No incluyas contraseñas, claves API ni datos sensibles.
+                    </p>
+
+                    <div className="mt-5 space-y-5">
+                      <label className="block text-sm text-gray-200">
+                        Estrategia de trading
+                        <textarea
+                          value={tradingProfile.strategy}
+                          onChange={(event) => {
+                            setTradingProfile((current) => ({ ...current, strategy: event.target.value }));
+                            setTradingProfileSaved(false);
+                          }}
+                          maxLength={4000}
+                          rows={6}
+                          placeholder="Ejemplo: Opero pullbacks a favor de tendencia en EUR/USD y NASDAQ en 15 min. Entro tras rechazo de zona y confirmación de estructura."
+                          className="mt-2 w-full resize-y rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-blue-400"
+                        />
+                      </label>
+
+                      <label className="block text-sm text-gray-200">
+                        Plan de trading y gestión de riesgo
+                        <textarea
+                          value={tradingProfile.plan}
+                          onChange={(event) => {
+                            setTradingProfile((current) => ({ ...current, plan: event.target.value }));
+                            setTradingProfileSaved(false);
+                          }}
+                          maxLength={4000}
+                          rows={6}
+                          placeholder="Ejemplo: Arriesgo un 0,5 % por operación, máximo dos pérdidas al día. Cierro parcial en 1R y muevo el stop a break-even según mi regla."
+                          className="mt-2 w-full resize-y rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-blue-400"
+                        />
+                      </label>
+                    </div>
+
+                    {tradingProfileError && (
+                      <p role="alert" className="mt-4 text-sm text-red-300">{tradingProfileError}</p>
+                    )}
+                    {tradingProfileSaved && (
+                      <p className="mt-4 text-sm text-emerald-300">Contexto guardado. EVA lo tendrá en cuenta en el siguiente mensaje.</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void saveTradingProfile()}
+                      disabled={savingTradingProfile}
+                      className="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingTradingProfile && <Spinner size="sm" />}
+                      {savingTradingProfile ? 'Guardando…' : 'Guardar contexto para EVA'}
+                    </button>
+                  </section>
+
                 </div>
               ) : currentView === 'Información de Cuentas' ? (
                 <div className="space-y-6 animate-in fade-in duration-300">
@@ -533,6 +636,8 @@ const PerfilUsuario = () => {
                       <p className="mt-3 text-sm text-green-400">Preferencias guardadas.</p>
                     )}
                   </div>
+
+                  <AiSettings />
 
                   {/* Cuenta (requiere backend, no disponible) */}
                   <div className="pt-6 border-t border-white/10">

@@ -125,6 +125,8 @@ async def enviar_mensaje(
                 session_id=payload.session_id,
                 user_id=current_user.id,
                 user_name=current_user.nombre or "Usuario",
+                trading_strategy=current_user.estrategia_trading or "",
+                trading_plan=current_user.plan_trading or "",
                 account_id=payload.account_id,
                 attachment=payload.attachment.model_dump() if payload.attachment else None,
             )

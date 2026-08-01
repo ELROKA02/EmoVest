@@ -94,7 +94,7 @@ def create_backup(request: Request):
 def prepare_update(payload: UpdatePreparation):
     if not _SEMVER.fullmatch(payload.target_version):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="La versión de actualización no es SemVer válida.",
         )
 

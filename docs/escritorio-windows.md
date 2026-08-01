@@ -127,16 +127,27 @@ pantalla final crear el acceso directo del escritorio; el acceso del menú Inici
 se crea siempre. El borrado de datos en la desinstalación es una opción
 explícita y desmarcada por defecto.
 
-El actualizador automático está desactivado temporalmente. El hotfix elimina el
-plugin, sus comandos y su configuración tanto del binario como del workflow de
-release; EmoVest no consulta ni descarga actualizaciones. Para cambiar de
-versión hay que ejecutar manualmente un nuevo `EmoVest-Setup.exe`. Los datos
-persistentes viven fuera de la instalación y se conservan al reinstalar.
+El actualizador oficial de Tauri solo se compila en releases de producción. Al
+arrancar, EmoVest consulta en segundo plano el `latest.json` de la última release
+estable de GitHub. Si existe una versión posterior, el usuario puede descargarla
+y elegir «Reiniciar y actualizar». Antes de iniciar NSIS, EmoVest:
 
-No se debe reactivar el updater hasta disponer de un endpoint, una clave pública
-real, firma de artefactos y una política probada de compatibilidad y backup del
-esquema. Las claves privadas y los certificados nunca se guardarán en el
-repositorio.
+1. comprueba la política de compatibilidad del esquema;
+2. crea una copia SQLite `pre-update-*`;
+3. cierra únicamente el sidecar perteneciente a esa instancia;
+4. verifica la firma criptográfica del instalador;
+5. deja que NSIS sustituya la aplicación y la vuelva a abrir.
+
+Los builds de desarrollo registran comandos inertes y no registran el plugin.
+Esto evita consultas de red y hace imposible una configuración efectiva
+`"updater": null`. El endpoint, la clave pública y la generación de firmas solo
+se añaden mediante el overlay validado del job de release. Las claves privadas y
+los certificados nunca se guardan en el repositorio.
+
+La firma Tauri protege los bytes del instalador. Además, la release firma un
+payload canónico que une versión, firma del instalador y revisiones Alembic; el
+binario verifica ese payload antes de confiar en la política de compatibilidad.
+Por tanto, modificar solo `latest.json` no permite rebajar el esquema mínimo.
 
 ## Estrategia de ramas y entregas
 
@@ -150,13 +161,27 @@ release pública y no actualiza instalaciones existentes.
 `main` representa la versión estable y visible para los usuarios. Solo deben
 integrarse en ella cambios consolidados desde `develop`. Los pushes y pull
 requests hacia `main` vuelven a ejecutar toda la validación, pero no publican
-automáticamente. Una release pública requiere una ejecución manual de
-`workflow_dispatch` desde `main`, confirmación explícita, versión SemVer y las
-credenciales reales de firma.
+automáticamente.
 
-El workflow rechaza una publicación solicitada desde cualquier rama distinta de
-`main`. Mientras el updater permanezca desactivado, incluso una release publicada
-se instala manualmente mediante `EmoVest-Setup.exe`.
+Una release pública se publica al subir un tag exacto `desktop-vX.Y.Z` sobre un
+commit ya contenido en `main`. El workflow toma `X.Y.Z` como versión, valida las
+credenciales de firma y publica la release estable. No se deben crear tags sobre
+commits de trabajo ni antes de que el push a `main` haya terminado correctamente.
+El mecanismo manual `workflow_dispatch` se conserva para contingencias y exige
+`publish_release`, versión SemVer y la confirmación `PUBLICAR` desde `main`.
+
+Para publicar una versión validada, un agente debe ejecutar desde un checkout
+actualizado de `main`:
+
+```bash
+git tag desktop-vX.Y.Z
+git push origin desktop-vX.Y.Z
+```
+
+El tag no puede reutilizarse y la versión debe ser mayor que la última release
+estable. La primera versión que contiene el updater se instala manualmente con
+`EmoVest-Setup.exe`; desde esa versión, las releases estables posteriores pueden
+detectarse desde la propia aplicación.
 
 ## Desarrollo
 
@@ -238,26 +263,92 @@ pnpm build
 
 El workflow `.github/workflows/desktop-windows.yml` repite esas comprobaciones
 en Windows, crea y ejecuta el sidecar real `.exe`, valida `READY`, autenticación,
-SQLite y apagado, compila Tauri y sube el instalador como artefacto. Los eventos
-`push` y `pull_request` nunca publican una release.
+SQLite y apagado, compila Tauri y sube el instalador como artefacto. Los pushes y
+pull requests ordinarios nunca publican una release. Solo un push de tag con el
+formato exacto `desktop-vX.Y.Z` inicia la publicación automática, después de
+comprobar que su commit está contenido en `main`.
 
-La publicación requiere ejecutar manualmente `workflow_dispatch`, activar
-`publish_release`, indicar una versión SemVer y escribir `PUBLICAR`. La
-automatización falla antes de compilar si falta cualquiera de estos secretos:
+Como contingencia, la publicación manual requiere ejecutar `workflow_dispatch`,
+activar `publish_release`, indicar una versión SemVer y escribir `PUBLICAR`. La
+automatización usa el entorno protegido de GitHub `desktop-production` y falla
+antes de compilar si falta la clave privada del updater:
 
-- `WINDOWS_CERTIFICATE`: certificado Authenticode PFX codificado en base64;
-- `WINDOWS_CERTIFICATE_PASSWORD`: contraseña del PFX.
+- `TAURI_SIGNING_PRIVATE_KEY`: clave privada real del updater;
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: contraseña de la clave cifrada del
+  updater.
 
-También requiere la variable de repositorio `WINDOWS_TIMESTAMP_URL`, que debe
-apuntar al servicio de sellado de tiempo recomendado por la entidad que emitió
-el certificado.
+La clave pública correspondiente está versionada en
+`frontend/src-tauri/updater.pub`; es pública por diseño y actúa como ancla de
+confianza inmutable para las instalaciones existentes.
 
-El certificado se importa solo en el runner efímero. No se escribe en el
-repositorio. El propietario debe decidir la identidad legal y adquirir el
-certificado; EmoVest no inventa publisher, dominio ni credenciales.
+La firma Authenticode es opcional para poder iniciar el canal de actualizaciones
+antes de adquirir un certificado. Cuando exista, añade conjuntamente
+`WINDOWS_CERTIFICATE` (PFX en base64), `WINDOWS_CERTIFICATE_PASSWORD` y la
+variable `WINDOWS_TIMESTAMP_URL`. El certificado se importa solo en el runner
+efímero y nunca se escribe en el repositorio. Sin esos tres valores la firma
+Tauri sigue protegiendo criptográficamente cada actualización, pero Windows
+puede mostrar SmartScreen con «editor desconocido».
 
-El workflow publica únicamente versiones `MAJOR.MINOR.PATCH`. Mientras el
-updater siga desactivado, la release contiene solo el instalador firmado.
+El workflow publica únicamente versiones `MAJOR.MINOR.PATCH`. Construye con la
+feature Cargo `desktop-updater`, firma el sidecar y el instalador con
+Authenticode, genera la firma Tauri y publica juntos `EmoVest-Setup.exe`,
+`EmoVest-Setup.exe.sig` y `latest.json`. Primero crea un borrador, comprueba que
+estén exactamente esos tres artefactos y solo entonces lo convierte en la última
+release estable.
+
+La versión del tag debe ser posterior a la versión base de Tauri y a cualquier
+release estable previa. El tag `desktop-vX.Y.Z` no puede reutilizarse.
+
+La política mínima de datos vive en `backend/update-policy.json`; la revisión
+objetivo se obtiene de la cabecera Alembic durante la release. Cambiar la
+revisión mínima exige revisar desde qué versión instalada se permite actualizar.
+
+### Preparar las credenciales una sola vez
+
+En GitHub, crea el entorno `desktop-production`, permite la rama `main` para el
+procedimiento manual y los tags `desktop-v*` para las publicaciones automáticas,
+y añade un revisor obligatorio. Guarda en ese entorno los secretos descritos
+arriba; no los pongas en `.env`, commits, artifacts ni logs.
+
+La pareja de claves del updater se genera cifrada en el directorio local
+ignorado `.secrets/`:
+
+```powershell
+cd frontend
+pnpm tauri signer generate --write-keys ..\.secrets\updater\emovest-updater.key
+```
+
+La salida pública se copia una sola vez a `frontend/src-tauri/updater.pub`. El
+contenido de `emovest-updater.key` se guarda como
+`TAURI_SIGNING_PRIVATE_KEY` y su contraseña como
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. La copia local cifrada puede vivir en
+`.secrets/updater/`, que está ignorado por Git, pero nunca debe ser la única:
+conserva además una copia cifrada y offline. Si se pierde la clave privada, las
+instalaciones existentes no podrán verificar actualizaciones futuras.
+
+`frontend/src-tauri/updater.pub` se considera inmutable desde la primera release
+pública. No cambies a la vez la clave pública y la privada: los clientes ya
+instalados conservan la clave anterior y rechazarían las siguientes
+actualizaciones. Cualquier rotación futura necesita una versión puente y un
+procedimiento específico antes de sustituir esta ancla de confianza.
+
+La clave de Tauri no sustituye el certificado Authenticode. La primera protege
+el canal de actualización; el segundo permite que Windows identifique al
+publicador del `.exe`. Son credenciales distintas; la primera es obligatoria y
+la segunda queda preparada para activarse cuando el propietario obtenga un
+certificado válido.
+
+En el equipo macOS donde se generó inicialmente, la contraseña está almacenada
+en Keychain con el servicio `EmoVest Tauri updater signing key`. Si GitHub CLI
+está instalado y autenticado, los secretos pueden configurarse sin imprimirlos:
+
+```bash
+gh secret set --env desktop-production TAURI_SIGNING_PRIVATE_KEY \
+  < .secrets/updater/emovest-updater.key
+security find-generic-password \
+  -s "EmoVest Tauri updater signing key" -w \
+  | gh secret set --env desktop-production TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
 
 ## Datos, backups y diagnóstico
 
@@ -277,6 +368,7 @@ Variables de configuración admitidas para desarrollo o soporte:
 | Variable | Función | Valor por defecto |
 | --- | --- | --- |
 | `APP_MODE` | Modo de producto; solo acepta `desktop` | `desktop` |
+| `EMOVEST_APP_VERSION` | Versión inyectada por Tauri al sidecar | `0.4.0` |
 | `EMOVEST_DATA_DIR` | Datos persistentes | Directorio estándar por usuario |
 | `EMOVEST_CONFIG_DIR` | Configuración y secreto local | Directorio estándar por usuario |
 | `EMOVEST_LOG_DIR` | Logs rotados | `<data>/logs` |
@@ -306,8 +398,8 @@ limpia:
 7. desinstalar, reinstalar y confirmar conservación de datos;
 8. instalar WebView2 mediante el bootstrapper cuando no exista;
 9. verificar la firma Authenticode del instalador;
-10. cuando se reactive el updater, validar por separado firma, compatibilidad de
-    esquema, interrupciones y conservación de datos.
+10. instalar la primera versión con updater y actualizar a una segunda release
+    firmada, validando backup, compatibilidad, interrupciones y datos.
 
 ## Criterios de aceptación
 
@@ -321,7 +413,7 @@ limpia:
 - CI Windows construye el sidecar, Tauri y el instalador NSIS.
 - Los builds de desarrollo no necesitan secretos.
 - Una release firmada falla claramente si faltan credenciales.
-- El updater no está registrado ni configurado y no se ejecuta en segundo plano.
+- El updater solo está activo en releases con configuración y firmas reales.
 
 ## Documentación oficial de referencia
 

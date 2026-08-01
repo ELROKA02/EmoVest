@@ -72,6 +72,27 @@ function Test-ProcessExists {
   }
 }
 
+function Assert-ExpectedSignature {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  if ([string]::IsNullOrWhiteSpace($env:EMOVEST_EXPECTED_SIGNER_THUMBPRINT)) {
+    return
+  }
+  $Signature = Get-AuthenticodeSignature -LiteralPath $Path
+  if ($Signature.Status -ne "Valid") {
+    throw "La firma Authenticode instalada no es válida para $Path."
+  }
+  if (
+    $Signature.SignerCertificate.Thumbprint -ne
+    $env:EMOVEST_EXPECTED_SIGNER_THUMBPRINT
+  ) {
+    throw "El firmante instalado no coincide para $Path."
+  }
+  if ($null -eq $Signature.TimeStamperCertificate) {
+    throw "El ejecutable instalado no tiene sello de tiempo: $Path."
+  }
+}
+
 function Get-InstalledEmoVestProcesses {
   return @(
     Get-CimInstance -ClassName Win32_Process |
@@ -546,6 +567,11 @@ try {
   if (-not (Test-PathWithin -Candidate $MainExecutable -Parent $InstallDir)) {
     throw "El ejecutable instalado quedó fuera del directorio temporal."
   }
+  if (-not (Test-Path -LiteralPath $SidecarExecutablePath -PathType Leaf)) {
+    throw "La instalación no contiene emovest-backend.exe."
+  }
+  Assert-ExpectedSignature -Path $MainExecutable
+  Assert-ExpectedSignature -Path $SidecarExecutablePath
 
   $ApplicationStartInfo = [Diagnostics.ProcessStartInfo]::new()
   $ApplicationStartInfo.FileName = $MainExecutable

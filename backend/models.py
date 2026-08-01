@@ -24,6 +24,8 @@ class Usuario(Base):
     correo_electronico = Column(String(100),index=True, unique=True, nullable=False)
     fecha_registro = Column(DateTime(), server_default=func.now())
     telefono = Column(String(20))
+    estrategia_trading = Column(Text, nullable=True)
+    plan_trading = Column(Text, nullable=True)
 
     # relacion con tabla
     notificaciones = relationship("Notificacion", back_populates="usuario")
@@ -175,6 +177,9 @@ class Operacion(Base):
     # NUEVO
     stop_loss = Column(DECIMAL(20,6), nullable=True)
     take_profit = Column(DECIMAL(20,6), nullable=True)
+    saldo_referencia_riesgo = Column(DECIMAL(20,6), nullable=True)
+    riesgo_importe = Column(DECIMAL(20,6), nullable=True)
+    riesgo_porcentaje = Column(DECIMAL(10,4), nullable=True)
 
     resultado = Column(DECIMAL(20,6), nullable=True)
     ratio_rr = Column(DECIMAL(10,4), nullable=True)

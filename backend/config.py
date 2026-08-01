@@ -9,6 +9,10 @@ if APP_MODE != "desktop":
         "El despliegue servidor anterior se considera legado."
     )
 
+APP_VERSION = os.getenv("EMOVEST_APP_VERSION", "0.4.0").strip()
+if not APP_VERSION:
+    raise RuntimeError("EMOVEST_APP_VERSION no puede estar vacío.")
+
 
 def _positive_int(name: str, default: int) -> int:
     try:

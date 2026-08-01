@@ -3,7 +3,6 @@ import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 
-import requests
 from pydantic import ValidationError
 
 from ai.emotions import Emociones, construir_prompt_emociones
@@ -16,10 +15,11 @@ from ai.providers.base import (
 )
 
 try:
-    from ollama import Client, ResponseError
+    from ollama import Client, RequestError, ResponseError
     _OLLAMA_INSTALLED = True
 except ImportError:
     Client = None
+    RequestError = Exception
     ResponseError = Exception
     _OLLAMA_INSTALLED = False
 
@@ -52,22 +52,15 @@ class OllamaProvider(AIProvider):
         loopback = self._is_loopback()
         executable = self._local_executable() if loopback else None
         try:
-            response = requests.get(
-                f"{self.settings.base_url.rstrip('/')}/api/tags",
-                timeout=3,
-            )
-            response.raise_for_status()
-            payload = response.json()
-            if not isinstance(payload, dict):
-                raise ValueError("invalid Ollama status payload")
-            models = payload.get("models", [])
+            response = Client(host=self.settings.base_url, timeout=3).list()
+            models = response.models
             installed_models = {
-                name
-                for model in models if isinstance(model, dict)
-                for name in (model.get("name"), model.get("model"))
-                if isinstance(name, str)
+                model.model.strip()
+                for model in models
+                if isinstance(getattr(model, "model", None), str)
+                and model.model.strip()
             }
-        except (requests.RequestException, ValueError, TypeError):
+        except (ConnectionError, RequestError, ResponseError, ValueError, TypeError):
             if loopback and executable is None:
                 return {
                     "state": "not_installed",
@@ -76,6 +69,7 @@ class OllamaProvider(AIProvider):
                     "running": False,
                     "model_available": None,
                     "message": "Ollama no está instalado.",
+                    "models": [],
                 }
             return {
                 "state": "service_stopped" if loopback else "unreachable",
@@ -88,6 +82,7 @@ class OllamaProvider(AIProvider):
                     if loopback
                     else "No se puede conectar con el servicio Ollama configurado."
                 ),
+                "models": [],
             }
 
         model_available = self.settings.model in installed_models
@@ -99,6 +94,7 @@ class OllamaProvider(AIProvider):
                 "running": True,
                 "model_available": False,
                 "message": "Ollama está activo, pero falta el modelo configurado.",
+                "models": sorted(installed_models),
             }
         return {
             "state": "available",
@@ -107,6 +103,7 @@ class OllamaProvider(AIProvider):
             "running": True,
             "model_available": True,
             "message": "Ollama y el modelo configurado están disponibles.",
+            "models": sorted(installed_models),
         }
 
     def clasificar_emociones(self, texto: str) -> Emociones:
