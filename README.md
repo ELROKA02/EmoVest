@@ -17,7 +17,7 @@
 
 > EmoVest no da señales, no ejecuta operaciones y no ofrece asesoramiento financiero. Es un espacio para registrar, revisar y aprender de tu propia operativa.
 
-## Un diario para aprender de tus decisiones
+## 🎯 Un diario para aprender de tus decisiones
 
 Un historial de operaciones explica qué ocurrió con el precio; rara vez explica
 qué ocurrió contigo. El miedo, la duda, la euforia o el exceso de confianza
@@ -26,13 +26,13 @@ suelen quedarse fuera del análisis, aunque pueden cambiar una decisión.
 EmoVest une la operación y su contexto humano en un mismo diario. Así puedes
 detectar patrones operativos y emocionales con evidencia, no solo con memoria.
 
-## EmoVest en acción
+## 🎬 EmoVest en acción
 
 <video src="docs/Video_presentacion.mp4" controls preload="metadata">
   Tu navegador no puede reproducir este vídeo. Puedes verlo [aquí](docs/Video_presentacion.mp4).
 </video>
 
-## Lo que puedes revisar
+## ✨ Lo que puedes revisar
 
 | En vez de… | Con EmoVest puedes… |
 |---|---|
@@ -41,7 +41,7 @@ detectar patrones operativos y emocionales con evidencia, no solo con memoria.
 | Perder el contexto visual de una decisión | Conservar notas y capturas junto a cada operación |
 | Enviar notas personales a servicios externos | Usar análisis emocional local y opcional con Ollama |
 
-## Así encaja en tu rutina
+## 🧭 Así encaja en tu rutina
 
 1. **Registra tu operación**: activo, entrada, salida, riesgo, resultado y nivel de confianza.
 2. **Añade el contexto**: escribe qué ocurrió y guarda una captura si te ayuda a recordarlo.
@@ -56,7 +56,7 @@ criterio ni recomienda inversiones.
 - **Traders en formación** que quieren aprender de sus decisiones, no solo del beneficio o la pérdida.
 - **Personas que operan bajo presión** y quieren identificar cuándo la emoción está influyendo en su plan.
 
-## Privacidad y control
+## 🔒 Privacidad y control
 
 EmoVest se está construyendo como una aplicación de escritorio para Windows.
 Tus datos se guardan localmente y el diario, las cuentas y las estadísticas
@@ -65,7 +65,7 @@ modelos locales permiten mantener ese procesamiento en tu propio entorno.
 
 No necesitas instalar Python, Docker, MySQL ni Redis para usar la aplicación.
 
-## Estado del proyecto
+## 🚧 Estado del proyecto
 
 EmoVest está en desarrollo activo. La versión de Windows se valida de forma
 automática antes de cada integración para que probar la aplicación sea cada vez
