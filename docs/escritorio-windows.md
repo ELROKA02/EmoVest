@@ -272,6 +272,11 @@ pull requests ordinarios nunca publican una release. Solo un push de tag con el
 formato exacto `desktop-vX.Y.Z` inicia la publicación automática, después de
 comprobar que su commit está contenido en `main`.
 
+La validación del sidecar obtiene dinámicamente la revisión Alembic incluida en
+el backend y exige que el ejecutable empaquetado anuncie exactamente esa misma
+revisión. Por tanto, añadir una migración no requiere actualizar manualmente el
+smoke test de Windows.
+
 Como contingencia, la publicación manual requiere ejecutar `workflow_dispatch`,
 activar `publish_release`, indicar una versión SemVer y escribir `PUBLICAR`. La
 automatización usa el entorno protegido de GitHub `desktop-production` y falla

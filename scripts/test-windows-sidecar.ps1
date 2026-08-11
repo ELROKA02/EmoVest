@@ -1,11 +1,26 @@
 $ErrorActionPreference = "Stop"
 
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$BackendRoot = Join-Path $RepositoryRoot "backend"
 $Sidecar = Join-Path `
   $RepositoryRoot `
   "frontend\src-tauri\binaries\emovest-backend-x86_64-pc-windows-msvc.exe"
 if (-not (Test-Path $Sidecar)) {
   throw "No existe el sidecar Windows esperado: $Sidecar"
+}
+
+Push-Location $BackendRoot
+try {
+  $ExpectedSchemaRevision = (
+    python -c "from migration_manager import get_head_revision; print(get_head_revision())"
+  ).Trim()
+  if ($LASTEXITCODE -ne 0 -or
+      [string]::IsNullOrWhiteSpace($ExpectedSchemaRevision)) {
+    throw "No se pudo resolver la revisión Alembic incluida en el backend."
+  }
+}
+finally {
+  Pop-Location
 }
 
 $ProfileRoot = Join-Path $env:RUNNER_TEMP "EmoVest sidecar ñ con espacios"
@@ -81,8 +96,12 @@ try {
 
   $Headers = @{ "X-Emovest-Desktop-Token" = $Token }
   $Health = Invoke-RestMethod -Headers $Headers "$BaseUrl/health/ready"
-  if (-not $Health.ready -or $Health.schema_revision -ne "0002_local_runtime") {
-    throw "El health check autenticado no confirmó el esquema esperado."
+  if (-not $Health.ready -or
+      $Health.schema_revision -ne $ExpectedSchemaRevision) {
+    throw (
+      "El health check autenticado devolvió la revisión " +
+      "'$($Health.schema_revision)' y se esperaba '$ExpectedSchemaRevision'."
+    )
   }
 
   Invoke-RestMethod `
