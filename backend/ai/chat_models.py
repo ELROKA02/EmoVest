@@ -13,10 +13,10 @@ from typing import Any
 import requests
 
 from ai.providers.base import AiRuntimeSettings
+from ai.credentials import get_openrouter_api_key
 from config import (
     LLAMACPP_API_KEY,
     LLAMACPP_TOOL_CALLING_MODELS,
-    OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
     OPENROUTER_TOOL_CALLING_MODELS,
 )
@@ -63,10 +63,10 @@ def create_langchain_chat_model(settings: AiRuntimeSettings) -> Any:
             raise ChatModelUnavailable("Falta la integración langchain-openai.") from error
 
         if provider == "openrouter":
-            if not OPENROUTER_API_KEY:
-                raise ChatModelConfigurationError("OPENROUTER_API_KEY no está configurada.")
+            api_key = get_openrouter_api_key()
+            if not api_key:
+                raise ChatModelConfigurationError("Configura una API key de OpenRouter en Ajustes.")
             base_url = settings.base_url or OPENROUTER_BASE_URL
-            api_key = OPENROUTER_API_KEY
         else:
             base_url = settings.base_url
             # llama-server suele ignorar la clave, pero ChatOpenAI exige una.
@@ -132,7 +132,7 @@ def validate_tool_calling_model(settings: AiRuntimeSettings) -> Any:
     provider = settings.provider.strip().lower()
     if provider == "ollama":
         _validate_ollama_chat_capabilities(settings)
-    elif settings.model not in _configured_tool_models(provider):
+    elif provider == "llamacpp" and settings.model not in _configured_tool_models(provider):
         raise ChatModelConfigurationError(
             f"El modelo configurado no está autorizado para tool calling en {provider}."
         )

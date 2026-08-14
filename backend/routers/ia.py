@@ -7,6 +7,12 @@ from sqlalchemy.orm import Session
 
 import config
 from ai.emotions import Emociones
+from ai.credentials import (
+    delete_openrouter_api_key,
+    get_openrouter_api_key,
+    has_openrouter_api_key,
+    save_openrouter_api_key,
+)
 from ai.manager import (
     AI_USE_CASE_CHAT,
     AI_USE_CASE_EMOTION,
@@ -21,6 +27,7 @@ from ai.manager import (
 )
 from ai.providers.base import AIDisabled, AiRuntimeSettings
 from ai.chat_models import ChatModelConfigurationError, ChatModelUnavailable
+from ai.openrouter import OpenRouterUnavailable, list_tool_models, validate_tool_model
 from database import get_db
 from models import AiSetting, Registro_emocional, Usuario
 from routers.auth import get_current_user
@@ -34,6 +41,7 @@ class AiConfigUpdate(BaseModel):
     model: str
     base_url: str | None = None
     install_mode: str = "manual"
+    api_key: str | None = None
 
 
 class AiTestRequest(BaseModel):
@@ -45,7 +53,7 @@ class AiChatTestRequest(BaseModel):
 
 
 def _settings_to_response(settings: AiRuntimeSettings) -> dict:
-    return {
+    response = {
         "use_case": settings.use_case,
         "provider": settings.provider,
         "model": settings.model,
@@ -53,6 +61,9 @@ def _settings_to_response(settings: AiRuntimeSettings) -> dict:
         "install_mode": settings.install_mode,
         "source": settings.source,
     }
+    if settings.provider == "openrouter":
+        response["api_key_configured"] = has_openrouter_api_key()
+    return response
 
 
 def _enabled(use_case: str) -> bool:
@@ -205,6 +216,20 @@ def actualizar_configuracion_ia(
 
     if not model:
         raise HTTPException(status_code=400, detail="El modelo de IA no puede estar vacio.")
+    if provider == "openrouter" and use_case != AI_USE_CASE_CHAT:
+        raise HTTPException(status_code=400, detail="OpenRouter solo está disponible para el chat EVA.")
+
+    openrouter_api_key = (payload.api_key or get_openrouter_api_key()).strip()
+    if provider == "openrouter":
+        try:
+            validate_tool_model(base_url, openrouter_api_key, model)
+        except OpenRouterUnavailable as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        if payload.api_key is not None:
+            try:
+                save_openrouter_api_key(payload.api_key)
+            except (ValueError, RuntimeError) as error:
+                raise HTTPException(status_code=400, detail=str(error)) from error
 
     candidate_settings = AiRuntimeSettings(
         use_case=use_case,
@@ -224,7 +249,7 @@ def actualizar_configuracion_ia(
     except ChatModelUnavailable as error:
         raise HTTPException(
             status_code=400,
-            detail="No se pudo validar el modelo de chat. Inicia Ollama y vuelve a intentarlo.",
+            detail="No se pudo validar el modelo de chat. Revisa el proveedor y vuelve a intentarlo.",
         ) from error
 
     setting = db.query(AiSetting).filter(AiSetting.use_case == use_case).first()
@@ -243,6 +268,38 @@ def actualizar_configuracion_ia(
 
     settings = get_effective_ai_settings(use_case, db)
     return {"config": _settings_to_response(settings)}
+
+
+@router.get(
+    "/openrouter/models",
+    tags=["configuracion"],
+    summary="Listar modelos OpenRouter compatibles con EVA",
+)
+def listar_modelos_openrouter(
+    db: Session = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    try:
+        settings = get_effective_ai_settings(AI_USE_CASE_CHAT, db)
+        base_url = settings.base_url if settings.provider == "openrouter" else config.OPENROUTER_BASE_URL
+        return {"models": list_tool_models(base_url, get_openrouter_api_key())}
+    except OpenRouterUnavailable as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.delete(
+    "/openrouter/credentials",
+    tags=["configuracion"],
+    summary="Eliminar la API key local de OpenRouter",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def eliminar_credencial_openrouter(
+    _current_user: Usuario = Depends(get_current_user),
+):
+    try:
+        delete_openrouter_api_key()
+    except RuntimeError as error:
+        raise HTTPException(status_code=500, detail="No se pudo eliminar la credencial segura.") from error
 
 
 @router.get(

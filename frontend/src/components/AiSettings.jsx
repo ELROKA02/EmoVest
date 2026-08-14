@@ -45,6 +45,12 @@ const AiSettings = () => {
   const [error, setError] = useState('');
   const [savingUseCase, setSavingUseCase] = useState('');
   const [savedUseCase, setSavedUseCase] = useState('');
+  const [openRouterDraft, setOpenRouterDraft] = useState({
+    model: '', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '',
+  });
+  const [openRouterModels, setOpenRouterModels] = useState([]);
+  const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false);
+  const [removingOpenRouterKey, setRemovingOpenRouterKey] = useState(false);
 
   const loadSettings = useCallback(async () => {
     const token = sessionStorage.getItem('token');
@@ -66,6 +72,14 @@ const AiSettings = () => {
 
       const statuses = (await response.json()).statuses || {};
       setAiStatus(statuses);
+      const chatConfig = statuses.chat?.config || {};
+      setOpenRouterDraft((current) => ({
+        ...current,
+        model: chatConfig.provider === 'openrouter' ? (chatConfig.model || '') : current.model,
+        baseUrl: chatConfig.provider === 'openrouter'
+          ? (chatConfig.base_url || 'https://openrouter.ai/api/v1')
+          : current.baseUrl,
+      }));
       setDrafts(Object.fromEntries(USE_CASES.map(({ id, defaultModel }) => {
         const config = statuses[id]?.config || {};
         return [id, {
@@ -78,6 +92,26 @@ const AiSettings = () => {
     } catch (requestError) {
       setPhase('error');
       setError(requestError.message || 'No se pudo conectar con el servicio de IA.');
+    }
+  }, []);
+
+  const loadOpenRouterModels = useCallback(async () => {
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+    setLoadingOpenRouterModels(true);
+    setError('');
+    try {
+      const response = await apiFetch('/ia/openrouter/models', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, 'No se pudieron cargar los modelos de OpenRouter.'));
+      }
+      setOpenRouterModels((await response.json()).models || []);
+    } catch (requestError) {
+      setError(requestError.message || 'No se pudieron cargar los modelos de OpenRouter.');
+    } finally {
+      setLoadingOpenRouterModels(false);
     }
   }, []);
 
@@ -142,6 +176,61 @@ const AiSettings = () => {
     }
   };
 
+  const saveOpenRouterConfig = async () => {
+    if (!openRouterDraft.model.trim()) {
+      setError('Selecciona o indica un modelo de OpenRouter para EVA.');
+      return;
+    }
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+
+    setSavingUseCase('openrouter');
+    setError('');
+    try {
+      const response = await apiFetch('/ia/config/chat', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openrouter',
+          model: openRouterDraft.model.trim(),
+          base_url: openRouterDraft.baseUrl.trim() || 'https://openrouter.ai/api/v1',
+          install_mode: 'remote',
+          ...(openRouterDraft.apiKey.trim() ? { api_key: openRouterDraft.apiKey.trim() } : {}),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, 'No se pudo guardar la configuración de OpenRouter.'));
+      }
+      setOpenRouterDraft((current) => ({ ...current, apiKey: '' }));
+      setSavedUseCase('openrouter');
+      await loadSettings();
+      await loadOpenRouterModels();
+    } catch (requestError) {
+      setError(requestError.message || 'No se pudo guardar la configuración de OpenRouter.');
+    } finally {
+      setSavingUseCase('');
+    }
+  };
+
+  const removeOpenRouterKey = async () => {
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+    setRemovingOpenRouterKey(true);
+    setError('');
+    try {
+      const response = await apiFetch('/ia/openrouter/credentials', {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(await getErrorMessage(response, 'No se pudo eliminar la API key.'));
+      setOpenRouterModels([]);
+      await loadSettings();
+    } catch (requestError) {
+      setError(requestError.message || 'No se pudo eliminar la API key.');
+    } finally {
+      setRemovingOpenRouterKey(false);
+    }
+  };
+
   return (
     <section className="pt-6 border-t border-white/10">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -195,6 +284,92 @@ const AiSettings = () => {
       {error && (
         <p role="alert" className="mt-4 rounded-lg border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>
       )}
+
+      <div className="mt-5 rounded-xl border border-violet-400/25 bg-violet-400/[0.05] p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h5 className="font-semibold text-white">OpenRouter · EVA remoto</h5>
+            <p className="mt-1 text-xs text-violet-100/70">
+              EVA enviará las conversaciones al modelo remoto seleccionado. El análisis emocional seguirá siendo local.
+            </p>
+          </div>
+          <span className={`self-start rounded-full px-2.5 py-1 text-xs font-medium ${aiStatus?.chat?.config?.api_key_configured ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-400/15 text-amber-200'}`}>
+            {aiStatus?.chat?.config?.api_key_configured ? 'API key configurada' : 'API key pendiente'}
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="block text-sm text-gray-300">
+            API key de OpenRouter
+            <input
+              type="password"
+              value={openRouterDraft.apiKey}
+              onChange={(event) => setOpenRouterDraft((current) => ({ ...current, apiKey: event.target.value }))}
+              placeholder={aiStatus?.chat?.config?.api_key_configured ? 'Deja vacío para conservar la actual' : 'sk-or-…'}
+              autoComplete="new-password"
+              className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
+            />
+            <p className="mt-1 text-xs text-gray-500">Se guarda cifrada en tu equipo y nunca vuelve a mostrarse.</p>
+          </label>
+          <label className="block text-sm text-gray-300">
+            Modelo para EVA
+            <input
+              list="openrouter-tool-models"
+              value={openRouterDraft.model}
+              onChange={(event) => setOpenRouterDraft((current) => ({ ...current, model: event.target.value }))}
+              placeholder="Proveedor/modelo"
+              className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
+            />
+            <datalist id="openrouter-tool-models">
+              {openRouterModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </datalist>
+            <p className="mt-1 text-xs text-gray-500">Elige un modelo sugerido o escribe su ID exacto.</p>
+          </label>
+          <label className="block text-sm text-gray-300 md:col-span-2">
+            URL base avanzada
+            <input
+              type="url"
+              value={openRouterDraft.baseUrl}
+              onChange={(event) => setOpenRouterDraft((current) => ({ ...current, baseUrl: event.target.value }))}
+              placeholder="https://openrouter.ai/api/v1"
+              className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
+            />
+          </label>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void loadOpenRouterModels()}
+              disabled={loadingOpenRouterModels || !aiStatus?.chat?.config?.api_key_configured}
+              className="rounded-lg border border-violet-400/30 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/10 disabled:opacity-50"
+            >
+              {loadingOpenRouterModels ? 'Cargando modelos…' : 'Recargar modelos'}
+            </button>
+            {aiStatus?.chat?.config?.api_key_configured && (
+              <button
+                type="button"
+                onClick={() => void removeOpenRouterKey()}
+                disabled={removingOpenRouterKey}
+                className="rounded-lg border border-red-400/30 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-400/10 disabled:opacity-50"
+              >
+                {removingOpenRouterKey ? 'Eliminando…' : 'Eliminar API key'}
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={savingUseCase === 'openrouter' || phase === 'loading'}
+            onClick={() => void saveOpenRouterConfig()}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {savingUseCase === 'openrouter' && <Spinner size="sm" />}
+            {savingUseCase === 'openrouter' ? 'Guardando…' : 'Guardar OpenRouter'}
+          </button>
+        </div>
+        {savedUseCase === 'openrouter' && <p className="mt-3 text-xs text-emerald-300">OpenRouter se usará en el siguiente mensaje de EVA.</p>}
+      </div>
 
       <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-5">
         <div className="flex items-center gap-3">

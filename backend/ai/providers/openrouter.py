@@ -5,6 +5,7 @@ clase conserva el contrato histórico de proveedores para la API de ajustes.
 """
 
 from ai.providers.base import AIProvider
+from ai.credentials import has_openrouter_api_key
 
 
 class OpenRouterProvider(AIProvider):
@@ -15,11 +16,18 @@ class OpenRouterProvider(AIProvider):
 
     def status(self) -> dict:
         # No se realiza una llamada remota aquí ni se revela si existe una clave.
+        configured = has_openrouter_api_key()
         return {
-            "available": False,
+            "state": "available" if configured else "unreachable",
+            "available": configured,
             "installed": True,
             "running": None,
-            "message": "OpenRouter se valida al iniciar una conversación de chat.",
+            "model_available": None,
+            "api_key_configured": configured,
+            "message": (
+                "OpenRouter está configurado; se validará al iniciar una conversación."
+                if configured else "Falta la API key de OpenRouter."
+            ),
         }
 
     def clasificar_emociones(self, texto: str):
