@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../config';
 import { Spinner } from './ui';
 import ollamaLogo from '../assets/ollama-logo.png';
@@ -18,7 +18,11 @@ const USE_CASES = [
   },
 ];
 
-const LOCAL_PROVIDERS = new Set(['ollama', 'llamacpp']);
+const OPENROUTER_PRESET_MODELS = [
+  { id: 'qwen/qwen3.5-9b', name: 'Qwen 3.5 · Equilibrado' },
+  { id: 'openai/gpt-4o', name: 'GPT-4o · Avanzado' },
+  { id: 'google/gemini-3-flash-preview', name: 'Gemini Flash · Rápido' },
+];
 
 const STATUS_LABELS = {
   available: 'Disponible',
@@ -51,6 +55,7 @@ const AiSettings = () => {
   const [openRouterModels, setOpenRouterModels] = useState([]);
   const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false);
   const [removingOpenRouterKey, setRemovingOpenRouterKey] = useState(false);
+  const [providerMode, setProviderMode] = useState('local');
 
   const loadSettings = useCallback(async () => {
     const token = sessionStorage.getItem('token');
@@ -73,6 +78,7 @@ const AiSettings = () => {
       const statuses = (await response.json()).statuses || {};
       setAiStatus(statuses);
       const chatConfig = statuses.chat?.config || {};
+      setProviderMode(chatConfig.provider === 'openrouter' ? 'remote' : 'local');
       setOpenRouterDraft((current) => ({
         ...current,
         model: chatConfig.provider === 'openrouter' ? (chatConfig.model || '') : current.model,
@@ -121,13 +127,6 @@ const AiSettings = () => {
     }, 0);
     return () => window.clearTimeout(timerId);
   }, [loadSettings]);
-
-  const externalProviders = useMemo(() => USE_CASES
-    .filter(({ id }) => {
-      const provider = aiStatus?.[id]?.config?.provider;
-      return provider && !LOCAL_PROVIDERS.has(provider);
-    })
-    .map(({ label }) => label), [aiStatus]);
 
   const updateDraft = (useCase, field, value) => {
     setDrafts((current) => ({
@@ -250,8 +249,14 @@ const AiSettings = () => {
         </button>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <article className="rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] p-5">
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2" role="radiogroup" aria-label="Tipo de inteligencia artificial">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={providerMode === 'local'}
+          onClick={() => setProviderMode('local')}
+          className={`rounded-xl border p-5 text-left transition ${providerMode === 'local' ? 'border-emerald-300 bg-emerald-400/[0.12] ring-1 ring-emerald-300/50' : 'border-emerald-400/25 bg-emerald-400/[0.06] hover:bg-emerald-400/[0.1]'}`}
+        >
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300" aria-hidden="true">⌂</span>
             <div>
@@ -262,9 +267,15 @@ const AiSettings = () => {
           <p className="mt-3 text-sm text-gray-300">
             Las notas se procesan contra un servicio local, normalmente en <code className="text-emerald-200">localhost:11434</code>. Requiere tener Ollama y los modelos instalados.
           </p>
-        </article>
+        </button>
 
-        <article className="rounded-xl border border-violet-400/25 bg-violet-400/[0.06] p-5">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={providerMode === 'remote'}
+          onClick={() => setProviderMode('remote')}
+          className={`rounded-xl border p-5 text-left transition ${providerMode === 'remote' ? 'border-violet-300 bg-violet-400/[0.12] ring-1 ring-violet-300/50' : 'border-violet-400/25 bg-violet-400/[0.06] hover:bg-violet-400/[0.1]'}`}
+        >
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-400/15 text-violet-200" aria-hidden="true">☁</span>
             <div>
@@ -273,18 +284,16 @@ const AiSettings = () => {
             </div>
           </div>
           <p className="mt-3 text-sm text-gray-300">
-            Está pensada para proveedores externos como OpenRouter. Requiere configurar la clave del proveedor en el backend; no se guarda ninguna clave en esta pantalla.
+            Usa OpenRouter para EVA y envía las conversaciones al proveedor elegido.
           </p>
-          {externalProviders.length > 0 && (
-            <p className="mt-3 text-xs text-violet-200">Configuración externa activa: {externalProviders.join(', ')}.</p>
-          )}
-        </article>
+        </button>
       </div>
 
       {error && (
         <p role="alert" className="mt-4 rounded-lg border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>
       )}
 
+      {providerMode === 'remote' && (
       <div className="mt-5 rounded-xl border border-violet-400/25 bg-violet-400/[0.05] p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -312,7 +321,20 @@ const AiSettings = () => {
             <p className="mt-1 text-xs text-gray-500">Se guarda cifrada en tu equipo y nunca vuelve a mostrarse.</p>
           </label>
           <label className="block text-sm text-gray-300">
-            Modelo para EVA
+            Modelos predeterminados
+            <select
+              value=""
+              onChange={(event) => {
+                if (event.target.value) setOpenRouterDraft((current) => ({ ...current, model: event.target.value }));
+              }}
+              className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
+            >
+              <option value="">Selecciona una recomendación</option>
+              {OPENROUTER_PRESET_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </select>
+          </label>
+          <label className="block text-sm text-gray-300">
+            ID de modelo para EVA
             <input
               list="openrouter-tool-models"
               value={openRouterDraft.model}
@@ -323,7 +345,7 @@ const AiSettings = () => {
             <datalist id="openrouter-tool-models">
               {openRouterModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
             </datalist>
-            <p className="mt-1 text-xs text-gray-500">Elige un modelo sugerido o escribe su ID exacto.</p>
+            <p className="mt-1 text-xs text-gray-500">Usa una recomendación o escribe cualquier ID exacto de OpenRouter.</p>
           </label>
           <label className="block text-sm text-gray-300 md:col-span-2">
             URL base avanzada
@@ -370,7 +392,9 @@ const AiSettings = () => {
         </div>
         {savedUseCase === 'openrouter' && <p className="mt-3 text-xs text-emerald-300">OpenRouter se usará en el siguiente mensaje de EVA.</p>}
       </div>
+      )}
 
+      {providerMode === 'local' && (
       <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-5">
         <div className="flex items-center gap-3">
           <img
@@ -484,6 +508,7 @@ const AiSettings = () => {
           </div>
         )}
       </div>
+      )}
     </section>
   );
 };
