@@ -31,7 +31,7 @@ FastAPI empaquetada con PyInstaller
         +-- SQLite local
         +-- cola persistente SQLite
         +-- sesiones de chat SQLite
-        +-- Ollama opcional
+        +-- Proveedores de IA opcionales (Ollama u OpenRouter)
 ```
 
 Tauri es el propietario del proceso FastAPI. Al arrancar:
@@ -100,6 +100,12 @@ ausencia o el fallo de Ollama nunca revierte la operación.
 
 ## IA opcional
 
+Puedes elegir por separado el proveedor del análisis emocional y el del chat
+EVA. La aplicación admite Ollama para ejecutar modelos en el equipo y
+OpenRouter para conectar un modelo remoto con una clave API configurada por la
+persona usuaria. Ninguno es obligatorio: el diario, las cuentas y las
+estadísticas funcionan sin IA.
+
 Ollama no se instala ni se inicia silenciosamente. El diagnóstico diferencia:
 
 - no instalado;
@@ -108,8 +114,10 @@ Ollama no se instala ni se inicia silenciosamente. El diagnóstico diferencia:
 - disponible;
 - desactivado o mal configurado.
 
-La aplicación sigue funcionando sin IA. Una futura integración con
-`llama.cpp` podrá reutilizar el contrato de proveedores sin cambiar el
+Al usar OpenRouter, las solicitudes se envían al proveedor remoto seleccionado;
+al usar Ollama, se procesan en el entorno local. La configuración permite
+mantener ambos perfiles y escoger cuál usa cada función. Una futura integración
+con `llama.cpp` podrá reutilizar el contrato de proveedores sin cambiar el
 almacenamiento ni la cola.
 
 ## Instalador y actualizaciones
@@ -246,7 +254,7 @@ pnpm desktop:build
 Tauri deja el instalador original en:
 
 ```text
-frontend/src-tauri/target/release/bundle/nsis/EmoVest_0.4.0_x64-setup.exe
+frontend/src-tauri/target/release/bundle/nsis/EmoVest_X.Y.Z_x64-setup.exe
 ```
 
 El workflow de CI lo publica como artefacto con el nombre estable
@@ -372,7 +380,7 @@ Variables de configuración admitidas para desarrollo o soporte:
 | Variable | Función | Valor por defecto |
 | --- | --- | --- |
 | `APP_MODE` | Modo de producto; solo acepta `desktop` | `desktop` |
-| `EMOVEST_APP_VERSION` | Versión inyectada por Tauri al sidecar | `0.4.0` |
+| `EMOVEST_APP_VERSION` | Versión inyectada por Tauri al sidecar | `X.Y.Z` |
 | `EMOVEST_DATA_DIR` | Datos persistentes | Directorio estándar por usuario |
 | `EMOVEST_CONFIG_DIR` | Configuración y secreto local | Directorio estándar por usuario |
 | `EMOVEST_LOG_DIR` | Logs rotados | `<data>/logs` |
