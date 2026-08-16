@@ -22,7 +22,7 @@ import models  # noqa: F401
 
 
 CORE_REVISION = "0001_desktop_core"
-RUNTIME_REVISION = "0004_operation_risk"
+RUNTIME_REVISION = "0005_ai_provider_profiles"
 CORE_TABLES = {
     "ai_settings",
     "alerta",

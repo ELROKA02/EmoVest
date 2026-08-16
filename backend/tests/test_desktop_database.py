@@ -20,12 +20,14 @@ from migration_manager import (
     is_revision_at_least,
 )
 from models import (
+    AiSetting,
     BackgroundJob,
     ChatSessionRecord,
     Cuenta_Trading,
     Operacion,
     Usuario,
 )
+from ai.manager import get_effective_ai_settings, get_saved_ai_profiles
 
 
 class DesktopDatabaseTests(unittest.TestCase):
@@ -165,6 +167,35 @@ class DesktopDatabaseTests(unittest.TestCase):
             )
             with self.assertRaises(IntegrityError):
                 db.commit()
+
+    def test_ai_profiles_keep_local_and_remote_settings_without_losing_selection(self):
+        self.prepare()
+        Session = sessionmaker(bind=self.engine, expire_on_commit=False)
+        with Session() as db:
+            db.add_all([
+                AiSetting(
+                    use_case="chat", provider="ollama", model="qwen3.5:latest",
+                    base_url="http://localhost:11434", install_mode="manual", is_active=True,
+                ),
+                AiSetting(
+                    use_case="chat", provider="openrouter", model="openai/gpt-4o-mini",
+                    base_url="https://openrouter.ai/api/v1", install_mode="remote", is_active=False,
+                ),
+            ])
+            db.commit()
+
+            self.assertEqual(get_effective_ai_settings("chat", db).provider, "ollama")
+            self.assertEqual(set(get_saved_ai_profiles("chat", db)), {"ollama", "openrouter"})
+
+            db.query(AiSetting).filter(AiSetting.use_case == "chat").update({AiSetting.is_active: False})
+            db.query(AiSetting).filter(
+                AiSetting.use_case == "chat", AiSetting.provider == "openrouter"
+            ).update({AiSetting.is_active: True})
+            db.commit()
+
+            active = get_effective_ai_settings("chat", db)
+            self.assertEqual(active.provider, "openrouter")
+            self.assertEqual(active.model, "openai/gpt-4o-mini")
 
     def test_manual_backup_is_a_consistent_snapshot(self):
         self.prepare()

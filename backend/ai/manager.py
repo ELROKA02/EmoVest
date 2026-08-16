@@ -181,7 +181,11 @@ def get_effective_ai_settings(use_case: str = AI_USE_CASE_EMOTION, db: Session |
     use_case = normalize_use_case(use_case)
     if db is not None:
         try:
-            stored = db.query(AiSetting).filter(AiSetting.use_case == use_case).first()
+            stored = (
+                db.query(AiSetting)
+                .filter(AiSetting.use_case == use_case, AiSetting.is_active.is_(True))
+                .first()
+            )
             if stored is not None:
                 return AiRuntimeSettings(
                     use_case=stored.use_case,
@@ -196,6 +200,29 @@ def get_effective_ai_settings(use_case: str = AI_USE_CASE_EMOTION, db: Session |
 
     # Fallback: usar valores de variables de entorno.
     return get_default_ai_settings(use_case)
+
+
+def get_saved_ai_profiles(use_case: str, db: Session | None = None) -> dict[str, AiRuntimeSettings]:
+    """Devuelve los perfiles guardados por proveedor para un caso de uso."""
+    use_case = normalize_use_case(use_case)
+    if db is None:
+        return {}
+    try:
+        profiles = db.query(AiSetting).filter(AiSetting.use_case == use_case).all()
+        return {
+            profile.provider: AiRuntimeSettings(
+                use_case=profile.use_case,
+                provider=profile.provider,
+                model=profile.model,
+                base_url=profile.base_url.rstrip("/"),
+                install_mode=profile.install_mode,
+                source="database",
+            )
+            for profile in profiles
+        }
+    except SQLAlchemyError:
+        db.rollback()
+        return {}
 
 
 def get_provider(settings: AiRuntimeSettings) -> AIProvider:

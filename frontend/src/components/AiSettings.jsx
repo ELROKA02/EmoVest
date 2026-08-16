@@ -67,7 +67,7 @@ const AiSettings = () => {
   });
   const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false);
   const [removingOpenRouterKey, setRemovingOpenRouterKey] = useState(false);
-  const [providerMode, setProviderMode] = useState('local');
+  const [activeProviders, setActiveProviders] = useState({ emotion: 'ollama', chat: 'ollama' });
 
   const loadSettings = useCallback(async () => {
     const token = sessionStorage.getItem('token');
@@ -91,26 +91,28 @@ const AiSettings = () => {
       setAiStatus(statuses);
       const chatConfig = statuses.chat?.config || {};
       const emotionConfig = statuses.emotion?.config || {};
-      setProviderMode(
-        chatConfig.provider === 'openrouter' || emotionConfig.provider === 'openrouter'
-          ? 'remote' : 'local',
-      );
+      const chatProfiles = statuses.chat?.profiles || {};
+      const emotionProfiles = statuses.emotion?.profiles || {};
+      setActiveProviders({
+        chat: chatConfig.provider || 'ollama',
+        emotion: emotionConfig.provider || 'ollama',
+      });
       setOpenRouterDraft((current) => ({
         ...current,
-        model: chatConfig.provider === 'openrouter' ? (chatConfig.model || '') : current.model,
-        baseUrl: chatConfig.provider === 'openrouter'
-          ? (chatConfig.base_url || 'https://openrouter.ai/api/v1')
-          : current.baseUrl,
+        model: chatProfiles.openrouter?.model || current.model,
+        baseUrl: chatProfiles.openrouter?.base_url
+          || current.baseUrl
+          || 'https://openrouter.ai/api/v1',
       }));
       setOpenRouterEmotionDraft((current) => ({
         ...current,
-        model: emotionConfig.provider === 'openrouter' ? (emotionConfig.model || '') : current.model,
-        baseUrl: emotionConfig.provider === 'openrouter'
-          ? (emotionConfig.base_url || 'https://openrouter.ai/api/v1')
-          : current.baseUrl,
+        model: emotionProfiles.openrouter?.model || current.model,
+        baseUrl: emotionProfiles.openrouter?.base_url
+          || current.baseUrl
+          || 'https://openrouter.ai/api/v1',
       }));
       setDrafts(Object.fromEntries(USE_CASES.map(({ id, defaultModel }) => {
-        const config = statuses[id]?.config || {};
+        const config = statuses[id]?.profiles?.ollama || {};
         return [id, {
           model: config.model || defaultModel,
           baseUrl: config.base_url || 'http://localhost:11434',
@@ -185,6 +187,7 @@ const AiSettings = () => {
           model: draft.model.trim(),
           base_url: draft.baseUrl.trim(),
           install_mode: draft.installMode || 'manual',
+          activate: activeProviders[useCase] === 'ollama',
         }),
       });
       if (!response.ok) {
@@ -219,6 +222,7 @@ const AiSettings = () => {
           model: openRouterDraft.model.trim(),
           base_url: openRouterDraft.baseUrl.trim() || 'https://openrouter.ai/api/v1',
           install_mode: 'remote',
+          activate: activeProviders.chat === 'openrouter',
           ...(openRouterDraft.apiKey.trim() ? { api_key: openRouterDraft.apiKey.trim() } : {}),
         }),
       });
@@ -255,6 +259,7 @@ const AiSettings = () => {
           model: openRouterEmotionDraft.model.trim(),
           base_url: openRouterEmotionDraft.baseUrl.trim() || 'https://openrouter.ai/api/v1',
           install_mode: 'remote',
+          activate: activeProviders.emotion === 'openrouter',
           ...(openRouterDraft.apiKey.trim() ? { api_key: openRouterDraft.apiKey.trim() } : {}),
         }),
       });
@@ -292,8 +297,49 @@ const AiSettings = () => {
   };
 
   const openRouterKeyConfigured = Boolean(
-    aiStatus?.chat?.config?.api_key_configured || aiStatus?.emotion?.config?.api_key_configured,
+    aiStatus?.chat?.config?.api_key_configured
+    || aiStatus?.emotion?.config?.api_key_configured
+    || aiStatus?.chat?.profiles?.openrouter?.api_key_configured
+    || aiStatus?.emotion?.profiles?.openrouter?.api_key_configured,
   );
+
+  const selectProvider = async (useCase, provider) => {
+    const previousProvider = activeProviders[useCase];
+    if (previousProvider === provider) return;
+    setActiveProviders((current) => ({ ...current, [useCase]: provider }));
+    setSavedUseCase('');
+
+    const profileExists = Boolean(aiStatus?.[useCase]?.profiles?.[provider]);
+    if (!profileExists) {
+      setError('Configura y guarda este proveedor para activarlo.');
+      return;
+    }
+
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+    setSavingUseCase(`select-${useCase}`);
+    setError('');
+    try {
+      const response = await apiFetch(`/ia/config/${useCase}/active-provider`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider }),
+      });
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, 'No se pudo seleccionar el proveedor de IA.'));
+      }
+      setSavedUseCase(`select-${useCase}`);
+      await loadSettings();
+    } catch (requestError) {
+      setActiveProviders((current) => ({ ...current, [useCase]: previousProvider }));
+      setError(requestError.message || 'No se pudo seleccionar el proveedor de IA.');
+    } finally {
+      setSavingUseCase('');
+    }
+  };
+
+  const hasRemoteSelected = Object.values(activeProviders).includes('openrouter');
+  const hasLocalSelected = Object.values(activeProviders).includes('ollama');
 
   return (
     <section className="pt-6 border-t border-white/10">
@@ -314,55 +360,55 @@ const AiSettings = () => {
         </button>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2" role="radiogroup" aria-label="Tipo de inteligencia artificial">
-        <button
-          type="button"
-          role="radio"
-          aria-checked={providerMode === 'local'}
-          onClick={() => setProviderMode('local')}
-          className={`rounded-xl border p-5 text-left transition ${providerMode === 'local' ? 'border-emerald-300 bg-emerald-400/[0.12] ring-1 ring-emerald-300/50' : 'border-emerald-400/25 bg-emerald-400/[0.06] hover:bg-emerald-400/[0.1]'}`}
-        >
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300" aria-hidden="true">⌂</span>
-            <div>
-              <h5 className="font-semibold text-white">IA local</h5>
-              <p className="text-xs text-emerald-100/70">Ollama se ejecuta en tu equipo.</p>
-            </div>
-          </div>
-          <p className="mt-3 text-sm text-gray-300">
-            Las notas se procesan contra un servicio local, normalmente en <code className="text-emerald-200">localhost:11434</code>. Requiere tener Ollama y los modelos instalados.
-          </p>
-        </button>
-
-        <button
-          type="button"
-          role="radio"
-          aria-checked={providerMode === 'remote'}
-          onClick={() => setProviderMode('remote')}
-          className={`rounded-xl border p-5 text-left transition ${providerMode === 'remote' ? 'border-violet-300 bg-violet-400/[0.12] ring-1 ring-violet-300/50' : 'border-violet-400/25 bg-violet-400/[0.06] hover:bg-violet-400/[0.1]'}`}
-        >
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-400/15 text-violet-200" aria-hidden="true">☁</span>
-            <div>
-              <h5 className="font-semibold text-white">IA no local</h5>
-              <p className="text-xs text-violet-100/70">El proveedor procesa las solicitudes fuera del equipo.</p>
-            </div>
-          </div>
-          <p className="mt-3 text-sm text-gray-300">
-            Usa OpenRouter para EVA y envía las conversaciones al proveedor elegido.
-          </p>
-        </button>
+      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-5">
+        <h5 className="font-semibold text-white">Proveedor activo por función</h5>
+        <p className="mt-1 text-sm text-gray-400">Puedes conservar las dos configuraciones y decidir cuál usa cada función.</p>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {USE_CASES.map(({ id, label, description }) => {
+            const selected = activeProviders[id] || 'ollama';
+            const selecting = savingUseCase === `select-${id}`;
+            return (
+              <div key={id} className="rounded-lg border border-white/10 p-4" role="radiogroup" aria-label={`Proveedor para ${label}`}>
+                <h6 className="font-medium text-white">{label}</h6>
+                <p className="mt-1 text-xs text-gray-400">{description}</p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={selected === 'ollama'}
+                    disabled={selecting}
+                    onClick={() => void selectProvider(id, 'ollama')}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${selected === 'ollama' ? 'border-emerald-300 bg-emerald-400/15 text-emerald-100' : 'border-white/10 text-gray-300 hover:bg-white/5'}`}
+                  >
+                    IA local
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={selected === 'openrouter'}
+                    disabled={selecting}
+                    onClick={() => void selectProvider(id, 'openrouter')}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${selected === 'openrouter' ? 'border-violet-300 bg-violet-400/15 text-violet-100' : 'border-white/10 text-gray-300 hover:bg-white/5'}`}
+                  >
+                    IA no local
+                  </button>
+                </div>
+                {savedUseCase === `select-${id}` && <p className="mt-2 text-xs text-emerald-300">Proveedor activo actualizado.</p>}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {error && (
         <p role="alert" className="mt-4 rounded-lg border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>
       )}
 
-      {providerMode === 'remote' && (
+      {hasRemoteSelected && (
       <div className="mt-5 rounded-xl border border-violet-400/25 bg-violet-400/[0.05] p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h5 className="font-semibold text-white">OpenRouter · EVA remoto</h5>
+            <h5 className="font-semibold text-white">OpenRouter · IA no local</h5>
             <p className="mt-1 text-xs text-violet-100/70">
               Configura por separado EVA y el análisis emocional; ambos comparten la API key cifrada.
             </p>
@@ -385,6 +431,8 @@ const AiSettings = () => {
             />
             <p className="mt-1 text-xs text-gray-500">Se guarda cifrada en tu equipo y nunca vuelve a mostrarse.</p>
           </label>
+          {activeProviders.chat === 'openrouter' && (
+            <>
           <label className="block text-sm text-gray-300">
             Modelos predeterminados
             <select
@@ -422,18 +470,20 @@ const AiSettings = () => {
               className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
             />
           </label>
+            </>
+          )}
         </div>
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2">
-            <button
+            {activeProviders.chat === 'openrouter' && <button
               type="button"
               onClick={() => void loadOpenRouterModels()}
               disabled={loadingOpenRouterModels || !openRouterKeyConfigured}
               className="rounded-lg border border-violet-400/30 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/10 disabled:opacity-50"
             >
               {loadingOpenRouterModels ? 'Cargando modelos…' : 'Recargar modelos'}
-            </button>
+            </button>}
             {openRouterKeyConfigured && (
               <button
                 type="button"
@@ -445,7 +495,7 @@ const AiSettings = () => {
               </button>
             )}
           </div>
-          <button
+          {activeProviders.chat === 'openrouter' && <button
             type="button"
             disabled={savingUseCase === 'openrouter' || phase === 'loading'}
             onClick={() => void saveOpenRouterConfig()}
@@ -453,11 +503,11 @@ const AiSettings = () => {
           >
             {savingUseCase === 'openrouter' && <Spinner size="sm" />}
             {savingUseCase === 'openrouter' ? 'Guardando…' : 'Guardar OpenRouter'}
-          </button>
+          </button>}
         </div>
-        {savedUseCase === 'openrouter' && <p className="mt-3 text-xs text-emerald-300">OpenRouter se usará en el siguiente mensaje de EVA.</p>}
+        {activeProviders.chat === 'openrouter' && savedUseCase === 'openrouter' && <p className="mt-3 text-xs text-emerald-300">OpenRouter se usará en el siguiente mensaje de EVA.</p>}
 
-        <div className="mt-6 border-t border-violet-400/20 pt-5">
+        {activeProviders.emotion === 'openrouter' && <div className="mt-6 border-t border-violet-400/20 pt-5">
           <div>
             <h6 className="font-semibold text-white">Análisis emocional remoto</h6>
             <p className="mt-1 text-xs text-violet-100/70">
@@ -525,11 +575,11 @@ const AiSettings = () => {
             </button>
           </div>
           {savedUseCase === 'openrouter-emotion' && <p className="mt-3 text-xs text-emerald-300">OpenRouter clasificará las nuevas notas emocionales.</p>}
-        </div>
+        </div>}
       </div>
       )}
 
-      {providerMode === 'local' && (
+      {hasLocalSelected && (
       <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-5">
         <div className="flex items-center gap-3">
           <img
@@ -548,7 +598,7 @@ const AiSettings = () => {
           <div className="flex items-center gap-2 py-8 text-sm text-gray-400"><Spinner size="sm" /> Cargando configuración de Ollama…</div>
         ) : (
           <div className="mt-5 space-y-5">
-            {USE_CASES.map(({ id, label, description }) => {
+            {USE_CASES.filter(({ id }) => activeProviders[id] === 'ollama').map(({ id, label, description }) => {
               const statusItem = aiStatus?.[id];
               const status = statusItem?.status;
               const activeProvider = statusItem?.config?.provider;

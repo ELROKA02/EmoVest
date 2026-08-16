@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -211,13 +212,17 @@ class Registro_emocional(Base):
 
 class AiSetting(Base):
     __tablename__ = "ai_settings"
+    __table_args__ = (
+        UniqueConstraint("use_case", "provider", name="uq_ai_settings_use_case_provider"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    use_case = Column(String(50), nullable=False, unique=True)
+    use_case = Column(String(50), nullable=False)
     provider = Column(String(50), nullable=False)
     model = Column(String(120), nullable=False)
     base_url = Column(String(255), nullable=False)
     install_mode = Column(String(50), nullable=False, default="manual")
+    is_active = Column(Boolean, nullable=False, default=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 

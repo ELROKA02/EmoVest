@@ -18,6 +18,7 @@ from ai.manager import (
     AI_USE_CASE_EMOTION,
     default_base_url_for_provider,
     get_effective_ai_settings,
+    get_saved_ai_profiles,
     get_langchain_chat_model,
     get_provider,
     get_provider_catalog,
@@ -48,6 +49,11 @@ class AiConfigUpdate(BaseModel):
     base_url: str | None = None
     install_mode: str = "manual"
     api_key: str | None = None
+    activate: bool = False
+
+
+class AiProviderSelection(BaseModel):
+    provider: str
 
 
 class AiTestRequest(BaseModel):
@@ -191,6 +197,16 @@ def obtener_configuracion_ia(
             AI_USE_CASE_EMOTION: _settings_to_response(emotion_settings),
             AI_USE_CASE_CHAT: _settings_to_response(chat_settings),
         },
+        "profiles": {
+            AI_USE_CASE_EMOTION: {
+                provider: _settings_to_response(settings)
+                for provider, settings in get_saved_ai_profiles(AI_USE_CASE_EMOTION, db).items()
+            },
+            AI_USE_CASE_CHAT: {
+                provider: _settings_to_response(settings)
+                for provider, settings in get_saved_ai_profiles(AI_USE_CASE_CHAT, db).items()
+            },
+        },
         "recommended_models": {
             AI_USE_CASE_EMOTION: list_recommended_models(emotion_settings.provider, AI_USE_CASE_EMOTION),
             AI_USE_CASE_CHAT: list_recommended_models(chat_settings.provider, AI_USE_CASE_CHAT),
@@ -258,9 +274,13 @@ def actualizar_configuracion_ia(
             detail="No se pudo validar el modelo de chat. Revisa el proveedor y vuelve a intentarlo.",
         ) from error
 
-    setting = db.query(AiSetting).filter(AiSetting.use_case == use_case).first()
+    setting = (
+        db.query(AiSetting)
+        .filter(AiSetting.use_case == use_case, AiSetting.provider == provider)
+        .first()
+    )
     if setting is None:
-        setting = AiSetting(use_case=use_case)
+        setting = AiSetting(use_case=use_case, provider=provider)
         db.add(setting)
 
     setting.use_case = use_case
@@ -269,11 +289,64 @@ def actualizar_configuracion_ia(
     setting.base_url = base_url
     setting.install_mode = install_mode
 
+    has_active_profile = (
+        db.query(AiSetting)
+        .filter(AiSetting.use_case == use_case, AiSetting.is_active.is_(True))
+        .first()
+        is not None
+    )
+    if payload.activate or not has_active_profile:
+        db.query(AiSetting).filter(AiSetting.use_case == use_case).update(
+            {AiSetting.is_active: False}, synchronize_session=False
+        )
+        setting.is_active = True
+
     db.commit()
     db.refresh(setting)
 
     settings = get_effective_ai_settings(use_case, db)
     return {"config": _settings_to_response(settings)}
+
+
+@router.put(
+    "/config/{use_case}/active-provider",
+    tags=["configuracion"],
+    summary="Elegir el proveedor activo de IA por uso",
+    status_code=status.HTTP_200_OK,
+)
+def seleccionar_proveedor_activo(
+    use_case: str,
+    payload: AiProviderSelection,
+    db: Session = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    try:
+        use_case = normalize_use_case(use_case)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    provider = payload.provider.strip().lower()
+    if provider not in {item["id"] for item in get_provider_catalog()}:
+        raise HTTPException(status_code=400, detail=f"Proveedor de IA no soportado: {provider}")
+
+    setting = (
+        db.query(AiSetting)
+        .filter(AiSetting.use_case == use_case, AiSetting.provider == provider)
+        .first()
+    )
+    if setting is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Configura y guarda este proveedor antes de activarlo.",
+        )
+
+    db.query(AiSetting).filter(AiSetting.use_case == use_case).update(
+        {AiSetting.is_active: False}, synchronize_session=False
+    )
+    setting.is_active = True
+    db.commit()
+    db.refresh(setting)
+    return {"config": _settings_to_response(get_effective_ai_settings(use_case, db))}
 
 
 @router.get(
@@ -331,6 +404,10 @@ def consultar_estado_ia(
         "statuses": {
             AI_USE_CASE_EMOTION: {
                 "config": _settings_to_response(emotion_settings),
+                "profiles": {
+                    provider: _settings_to_response(settings)
+                    for provider, settings in get_saved_ai_profiles(AI_USE_CASE_EMOTION, db).items()
+                },
                 "status": _provider_status(emotion_settings),
                 "recommended_models": list_recommended_models(
                     emotion_settings.provider,
@@ -339,6 +416,10 @@ def consultar_estado_ia(
             },
             AI_USE_CASE_CHAT: {
                 "config": _settings_to_response(chat_settings),
+                "profiles": {
+                    provider: _settings_to_response(settings)
+                    for provider, settings in get_saved_ai_profiles(AI_USE_CASE_CHAT, db).items()
+                },
                 "status": _provider_status(chat_settings),
                 "recommended_models": list_recommended_models(
                     chat_settings.provider,
