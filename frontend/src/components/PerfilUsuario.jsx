@@ -7,6 +7,13 @@ import { formatCurrency } from '../utils/currency';
 import { apiFetch } from '../config';
 import { Spinner, LoadingState, ErrorState, EmptyState } from './ui';
 
+const formatCommission = (cuenta) => {
+  const value = Number(cuenta.valor_comision || 0);
+  if (cuenta.tipo_comision === 'fija') return `${formatCurrency(value, cuenta.divisa)} fija por operación`;
+  if (cuenta.tipo_comision === 'porcentaje') return `${value}% del importe invertido`;
+  return 'Sin comisión';
+};
+
 const PerfilUsuario = () => {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const saved = localStorage.getItem('sidebarOpen');
@@ -43,7 +50,9 @@ const PerfilUsuario = () => {
   const [accountData, setAccountData] = useState({
     nombre_cuenta: '',
     divisa: 'EUR',
-    saldo: ''
+    saldo: '',
+    tipo_comision: 'sin_comision',
+    valor_comision: ''
   });
 
   useEffect(() => {
@@ -162,11 +171,15 @@ const PerfilUsuario = () => {
 
     const payload = isEditing ? {
       nombre_cuenta: accountData.nombre_cuenta,
-      saldo_actual: parseFloat(accountData.saldo)
+      saldo_actual: parseFloat(accountData.saldo),
+      tipo_comision: accountData.tipo_comision,
+      valor_comision: accountData.tipo_comision === 'sin_comision' ? 0 : parseFloat(accountData.valor_comision || 0)
     } : {
       nombre_cuenta: accountData.nombre_cuenta,
       divisa: accountData.divisa,
-      saldo_inicial: parseFloat(accountData.saldo)
+      saldo_inicial: parseFloat(accountData.saldo),
+      tipo_comision: accountData.tipo_comision,
+      valor_comision: accountData.tipo_comision === 'sin_comision' ? 0 : parseFloat(accountData.valor_comision || 0)
     };
 
     setSubmitting(true);
@@ -225,7 +238,7 @@ const PerfilUsuario = () => {
   const openCreateForm = () => {
     setEditingAccount(null);
     setActionError(null);
-    setAccountData({ nombre_cuenta: '', divisa: defaultCurrency, saldo: '' });
+    setAccountData({ nombre_cuenta: '', divisa: defaultCurrency, saldo: '', tipo_comision: 'sin_comision', valor_comision: '' });
     setShowAccountForm(true);
   };
 
@@ -235,7 +248,9 @@ const PerfilUsuario = () => {
     setAccountData({
       nombre_cuenta: cuenta.nombre_cuenta,
       divisa: cuenta.divisa,
-      saldo: cuenta.saldo_actual
+      saldo: cuenta.saldo_actual,
+      tipo_comision: cuenta.tipo_comision || 'sin_comision',
+      valor_comision: cuenta.valor_comision ?? ''
     });
     setShowAccountForm(true);
   };
@@ -565,6 +580,7 @@ const PerfilUsuario = () => {
                               <span className="text-gray-400 text-sm">Divisa: <strong className="text-white">{cuenta.divisa}</strong></span>
                               <span className="text-gray-400 text-sm">Saldo Actual: <strong className={cuenta.saldo_actual >= cuenta.saldo_inicial ? "text-green-400" : "text-red-400"}>{formatCurrency(cuenta.saldo_actual, cuenta.divisa)}</strong></span>
                             </div>
+                            <p className="mt-2 text-sm text-gray-400">Comisión: <strong className="text-white">{formatCommission(cuenta)}</strong></p>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -706,6 +722,38 @@ const PerfilUsuario = () => {
                       className="w-full p-2.5 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
                       required
                     />
+                  </div>
+
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-3">
+                    <div>
+                      <label className="block text-xs text-white mb-1">Comisiones por operación</label>
+                      <select
+                        value={accountData.tipo_comision}
+                        onChange={(e) => setAccountData({ ...accountData, tipo_comision: e.target.value, valor_comision: e.target.value === 'sin_comision' ? '' : accountData.valor_comision })}
+                        className="w-full p-2.5 text-sm text-white bg-[#1a2235] border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="sin_comision">Sin comisión</option>
+                        <option value="fija">Importe fijo por operación</option>
+                        <option value="porcentaje">Porcentaje del importe invertido</option>
+                      </select>
+                    </div>
+                    {accountData.tipo_comision !== 'sin_comision' && (
+                      <div>
+                        <label className="block text-xs text-white mb-1">
+                          {accountData.tipo_comision === 'fija' ? `Importe fijo (${accountData.divisa})` : 'Porcentaje (%)'}
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={accountData.valor_comision}
+                          onChange={(e) => setAccountData({ ...accountData, valor_comision: e.target.value })}
+                          className="w-full p-2.5 text-sm text-white bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                    )}
+                    <p className="text-[11px] text-gray-400">La tarifa se cobra una sola vez por operación y se aplicará a las nuevas operaciones.</p>
                   </div>
                   
                   <div className="flex justify-end gap-3 pt-4">

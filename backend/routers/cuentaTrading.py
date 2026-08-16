@@ -6,10 +6,22 @@ from sqlalchemy.orm import Session
 from routers.auth import get_current_user
 from datetime import datetime
 from models import Cuenta_Trading
+from trading_commissions import COMMISSION_TYPES, to_decimal
 from typing import Annotated
 
 
 router = APIRouter(prefix="/cuentas", tags=["cuentas"])
+
+
+def normalizar_configuracion_comision(tipo_comision: str, valor_comision) -> tuple[str, object]:
+    if tipo_comision not in COMMISSION_TYPES:
+        raise HTTPException(status_code=422, detail="Tipo de comisión no válido")
+
+    valor = to_decimal(valor_comision or 0)
+    if valor < 0:
+        raise HTTPException(status_code=422, detail="El valor de comisión no puede ser negativo")
+
+    return tipo_comision, (0 if tipo_comision == "sin_comision" else valor)
 
 @router.post(
     "/crearcuenta",
@@ -59,13 +71,19 @@ router = APIRouter(prefix="/cuentas", tags=["cuentas"])
     }
 )
 def crear_cuenta(cuenta: createCuentaTrading, usuario: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    tipo_comision, valor_comision = normalizar_configuracion_comision(
+        cuenta.tipo_comision,
+        cuenta.valor_comision,
+    )
     nueva_cuenta = Cuenta_Trading(
         nombre_cuenta=cuenta.nombre_cuenta,
         divisa=cuenta.divisa,
         id_usuario=usuario.id,
         saldo_inicial=cuenta.saldo_inicial,
         saldo_actual=cuenta.saldo_inicial,  
-        fecha_creacion=datetime.now()
+        fecha_creacion=datetime.now(),
+        tipo_comision=tipo_comision,
+        valor_comision=valor_comision,
     )
 
     db.add(nueva_cuenta)
@@ -313,8 +331,16 @@ def actualizar_cuenta(
     
     if cuenta.nombre_cuenta:
         cuenta_db.nombre_cuenta = cuenta.nombre_cuenta
-    if cuenta.saldo_actual:
+    if cuenta.saldo_actual is not None:
         cuenta_db.saldo_actual = cuenta.saldo_actual
+
+    if cuenta.tipo_comision is not None or cuenta.valor_comision is not None:
+        tipo_comision, valor_comision = normalizar_configuracion_comision(
+            cuenta.tipo_comision or cuenta_db.tipo_comision,
+            cuenta.valor_comision if cuenta.valor_comision is not None else cuenta_db.valor_comision,
+        )
+        cuenta_db.tipo_comision = tipo_comision
+        cuenta_db.valor_comision = valor_comision
 
     db.commit()
     db.refresh(cuenta_db)

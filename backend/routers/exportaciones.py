@@ -27,6 +27,8 @@ CSV_HEADERS = [
     "cantidad",
     "precio_entrada",
     "precio_salida",
+    "resultado_bruto",
+    "comisiones",
     "resultado",
     "stop_loss",
     "take_profit",
@@ -50,6 +52,8 @@ IMPORT_DECIMAL_FIELDS = {
     "cantidad",
     "precio_entrada",
     "precio_salida",
+    "resultado_bruto",
+    "comisiones",
     "resultado",
     "stop_loss",
     "take_profit",
@@ -164,6 +168,17 @@ def parse_csv_operaciones(csv_text: str, cuenta_id: int) -> list[Operacion]:
         nivel_confianza = parse_int_field(row, "nivel_confianza", index, errors)
         notas = clean_csv_cell(row, "notas")
 
+        comisiones = optional_values["comisiones"]
+        resultado_neto = optional_values["resultado"]
+        resultado_bruto = optional_values["resultado_bruto"]
+        # A CSV with the new commission columns is authoritative. Older CSVs
+        # keep their historical result unchanged and receive no commission.
+        if "comisiones" not in headers:
+            comisiones = Decimal("0")
+            resultado_bruto = resultado_neto
+        elif resultado_bruto is None and resultado_neto is not None:
+            resultado_bruto = resultado_neto + (comisiones or Decimal("0"))
+
         operaciones.append(
             Operacion(
                 id_cuenta=cuenta_id,
@@ -173,7 +188,9 @@ def parse_csv_operaciones(csv_text: str, cuenta_id: int) -> list[Operacion]:
                 cantidad=cantidad,
                 precio_entrada=precio_entrada,
                 precio_salida=optional_values["precio_salida"],
-                resultado=optional_values["resultado"],
+                resultado_bruto=resultado_bruto,
+                comisiones=comisiones or Decimal("0"),
+                resultado=resultado_neto,
                 stop_loss=optional_values["stop_loss"],
                 take_profit=optional_values["take_profit"],
                 ratio_rr=optional_values["ratio_rr"],
@@ -305,6 +322,8 @@ def export_operaciones_csv(
                 serialize_csv_value(operacion.cantidad),
                 serialize_csv_value(operacion.precio_entrada),
                 serialize_csv_value(operacion.precio_salida),
+                serialize_csv_value(operacion.resultado_bruto),
+                serialize_csv_value(operacion.comisiones),
                 serialize_csv_value(operacion.resultado),
                 serialize_csv_value(operacion.stop_loss),
                 serialize_csv_value(operacion.take_profit),

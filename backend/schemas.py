@@ -32,7 +32,7 @@ class OperacionCreate(BaseModel):
     notas: Optional[str] = None
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
-    resultado: Optional[float] = None
+    resultado_bruto: Optional[float] = None
     ratio_rr: Optional[float] = None
     nivel_confianza: Optional[int] = None
     screenshot: Optional[str] = None
@@ -47,7 +47,7 @@ class OperacionUpdate(BaseModel):
     notas: Optional[str] = None
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
-    resultado: Optional[float] = None
+    resultado_bruto: Optional[float] = None
     ratio_rr: Optional[float] = None
     nivel_confianza: Optional[int] = None
     screenshot: Optional[str] = None
@@ -65,7 +65,11 @@ class createCuentaTrading(BaseModel):
     nombre_cuenta: str
     divisa: Literal["EUR","USD"]
     saldo_inicial: Optional[float] = None
+    tipo_comision: Literal["sin_comision", "fija", "porcentaje"] = "sin_comision"
+    valor_comision: float = Field(default=0, ge=0)
     
 class updateCuentaTrading(BaseModel):
     nombre_cuenta: Optional[str] = None
     saldo_actual: Optional[float] = None
+    tipo_comision: Optional[Literal["sin_comision", "fija", "porcentaje"]] = None
+    valor_comision: Optional[float] = Field(default=None, ge=0)

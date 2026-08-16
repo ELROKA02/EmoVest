@@ -58,6 +58,17 @@ const calculateRiskRewardRatio = ({ tipo_operacion, precio_entrada, stop_loss, t
   return (reward / risk).toFixed(2);
 };
 
+const calculateCommissionPreview = (account, { cantidad, precio_entrada }) => {
+  const quantity = parseNumericField(cantidad);
+  const entryPrice = parseNumericField(precio_entrada);
+  if (quantity === null || entryPrice === null) return null;
+
+  const value = Number(account?.valor_comision || 0);
+  if (account?.tipo_comision === 'fija') return Number.isFinite(value) ? value : 0;
+  if (account?.tipo_comision === 'porcentaje') return Number.isFinite(value) ? quantity * entryPrice * value / 100 : 0;
+  return 0;
+};
+
 const InfoIcon = ({ text }) => {
   const [alignRight, setAlignRight] = useState(false);
   const iconRef = useRef(null);
@@ -278,8 +289,7 @@ const OperacionesTrading = () => {
     notas: '',
     stop_loss: '',
     take_profit: '',
-    comisiones: '',
-    resultado: '',
+    resultado_bruto: '',
     ratio_rr: '',
     nivel_confianza: 0,
     screenshot: null,
@@ -288,6 +298,11 @@ const OperacionesTrading = () => {
   });
 
   const calculatedRatioRR = calculateRiskRewardRatio(formData);
+  const calculatedCommission = calculateCommissionPreview(selectedAccount, formData);
+  const grossResult = parseNumericField(formData.resultado_bruto);
+  const calculatedNetResult = grossResult === null || calculatedCommission === null
+    ? null
+    : grossResult - calculatedCommission;
 
   const getSpeechRecognition = () => {
     if (typeof window === 'undefined') return null;
@@ -328,13 +343,13 @@ const OperacionesTrading = () => {
           res = (pe - ps) * qty;
         }
         const resStr = res.toFixed(2);
-        if (formData.resultado !== resStr) {
+        if (formData.resultado_bruto !== resStr) {
           // eslint-disable-next-line react-hooks/set-state-in-effect
-          setFormData(prev => ({ ...prev, resultado: resStr }));
+          setFormData(prev => ({ ...prev, resultado_bruto: resStr }));
         }
       }
     }
-  }, [formData.precio_entrada, formData.precio_salida, formData.cantidad, formData.tipo_operacion, formData.resultado]);
+  }, [formData.precio_entrada, formData.precio_salida, formData.cantidad, formData.tipo_operacion, formData.resultado_bruto]);
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -504,8 +519,7 @@ const OperacionesTrading = () => {
       notas: '',
       stop_loss: '',
       take_profit: '',
-      comisiones: '',
-      resultado: '',
+      resultado_bruto: '',
       ratio_rr: '',
       nivel_confianza: 0,
       screenshot: null,
@@ -527,8 +541,7 @@ const OperacionesTrading = () => {
       notas: op.notas || '',
       stop_loss: op.stop_loss || '',
       take_profit: op.take_profit || '',
-      comisiones: op.comisiones || '',
-      resultado: op.resultado || '',
+      resultado_bruto: op.resultado_bruto ?? op.resultado ?? '',
       ratio_rr: op.ratio_rr || '',
       nivel_confianza: op.nivel_confianza ?? 0,
       screenshot: op.screenshot || null,
@@ -583,7 +596,7 @@ const OperacionesTrading = () => {
     if (formData.notas) data.append('notas', formData.notas);
     if (formData.stop_loss) data.append('stop_loss', String(parseFloat(formData.stop_loss)));
     if (formData.take_profit) data.append('take_profit', String(parseFloat(formData.take_profit)));
-    if (formData.resultado) data.append('resultado', String(parseFloat(formData.resultado)));
+    if (formData.resultado_bruto) data.append('resultado_bruto', String(parseFloat(formData.resultado_bruto)));
     if (calculatedRatioRR) data.append('ratio_rr', String(parseFloat(calculatedRatioRR)));
     if (formData.nivel_confianza !== null && formData.nivel_confianza !== undefined && formData.nivel_confianza !== '') {
       data.append('nivel_confianza', String(parseInt(formData.nivel_confianza)));
@@ -1001,17 +1014,15 @@ const OperacionesTrading = () => {
                       </div>
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
-                          <label className="block text-xs text-white">Comisiones</label>
-                          <InfoIcon text="Costes de la operación. No disponible todavía." />
+                          <label className="block text-xs text-white">Comisión calculada</label>
+                          <InfoIcon text="Se obtiene de la configuración de la cuenta y se cobra una vez por operación." />
                         </div>
                         <input
-                          type="number"
-                          step="any"
-                          value={formData.comisiones}
+                          type="text"
+                          value={calculatedCommission === null ? 'Completa cantidad y entrada' : formatCurrency(calculatedCommission, currencyDivisa)}
                           readOnly
                           className="w-full p-1.5 text-xs text-gray-400 bg-white/5 border border-white/10 rounded-xl cursor-not-allowed opacity-80"
                           disabled
-                          placeholder="No disponible todavía"
                         />
                       </div>
                     </div>
@@ -1080,17 +1091,17 @@ const OperacionesTrading = () => {
                       </div>
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
-                          <label className="block text-xs text-white">Resultado</label>
-                          <InfoIcon text="Ganancia o pérdida de la operación." />
+                          <label className="block text-xs text-white">Resultado bruto</label>
+                          <InfoIcon text="Ganancia o pérdida antes de descontar la comisión." />
                         </div>
                         <input
                           type="number"
                           step="any"
-                          value={formData.resultado}
-                          onChange={(e) => setFormData({...formData, resultado: e.target.value})}
+                          value={formData.resultado_bruto}
+                          onChange={(e) => setFormData({...formData, resultado_bruto: e.target.value})}
                           className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
                           disabled={loading}
-                          placeholder="G/P"
+                          placeholder="G/P bruto"
                         />
                       </div>
                       <div>
@@ -1108,6 +1119,10 @@ const OperacionesTrading = () => {
                           placeholder="Auto"
                         />
                       </div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100 flex items-center justify-between gap-3">
+                      <span>Resultado neto (bruto − comisión)</span>
+                      <strong>{calculatedNetResult === null ? 'Pendiente de resultado' : formatCurrency(calculatedNetResult, currencyDivisa)}</strong>
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-2">

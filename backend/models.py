@@ -114,6 +114,8 @@ class Cuenta_Trading(Base):
         ),
         nullable=False,
     )
+    tipo_comision = Column(String(20), nullable=False, default="sin_comision", server_default="sin_comision")
+    valor_comision = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
     
     # relaciones
     usuario = relationship("Usuario", back_populates="cuentas_trading")
@@ -182,6 +184,8 @@ class Operacion(Base):
     riesgo_importe = Column(DECIMAL(20,6), nullable=True)
     riesgo_porcentaje = Column(DECIMAL(10,4), nullable=True)
 
+    resultado_bruto = Column(DECIMAL(20,6), nullable=True)
+    comisiones = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
     resultado = Column(DECIMAL(20,6), nullable=True)
     ratio_rr = Column(DECIMAL(10,4), nullable=True)
 

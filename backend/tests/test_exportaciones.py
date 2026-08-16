@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from database import Base
 from models import Cuenta_Trading, Operacion, Usuario
-from routers.exportaciones import export_operaciones_csv
+from routers.exportaciones import export_operaciones_csv, parse_csv_operaciones
 
 
 class ExportOperacionesTests(unittest.TestCase):
@@ -92,8 +92,34 @@ class ExportOperacionesTests(unittest.TestCase):
         rows = list(csv.DictReader(StringIO(response.body.decode("utf-8"))))
 
         self.assertEqual([row["resultado"] for row in rows], ["30.000000", "20.000000"])
+        self.assertEqual([row["comisiones"] for row in rows], ["0.000000", "0.000000"])
         self.assertEqual({row["tipo_operacion"] for row in rows}, {"LONG"})
         self.assertEqual({row["activo"].lower() for row in rows}, {"btc"})
+
+    def test_import_preserves_commission_values_when_present(self):
+        csv_text = "\n".join([
+            "fecha_hora,tipo_operacion,activo,cantidad,precio_entrada,resultado_bruto,comisiones,resultado",
+            "2026-01-04T10:00:00,LONG,BTC,2,100,20,1.5,18.5",
+        ])
+
+        operations = parse_csv_operaciones(csv_text, self.cuenta.id)
+
+        self.assertEqual(len(operations), 1)
+        self.assertEqual(operations[0].resultado_bruto, Decimal("20"))
+        self.assertEqual(operations[0].comisiones, Decimal("1.5"))
+        self.assertEqual(operations[0].resultado, Decimal("18.5"))
+
+    def test_legacy_import_keeps_existing_result_without_commission(self):
+        csv_text = "\n".join([
+            "fecha_hora,tipo_operacion,activo,cantidad,precio_entrada,resultado",
+            "2026-01-04T10:00:00,LONG,BTC,2,100,20",
+        ])
+
+        operations = parse_csv_operaciones(csv_text, self.cuenta.id)
+
+        self.assertEqual(operations[0].resultado_bruto, Decimal("20"))
+        self.assertEqual(operations[0].comisiones, Decimal("0"))
+        self.assertEqual(operations[0].resultado, Decimal("20"))
 
 
 if __name__ == "__main__":

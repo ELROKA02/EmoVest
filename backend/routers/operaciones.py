@@ -15,6 +15,7 @@ from models import Cuenta_Trading, Operacion, Usuario
 from routers.auth import get_current_user
 from rq_queue import dispatch_emociones_job, stage_emociones_job
 from storage import image_storage
+from trading_commissions import calculate_commission, calculate_gross_result, calculate_net_result, to_decimal
 from trading_risk import calculate_operation_risk
 
 router = APIRouter(prefix="/cuentas/{cuenta_id_trading}/operaciones", tags=["operaciones"])
@@ -56,6 +57,35 @@ def actualizar_riesgo_operacion(op: Operacion, saldo_referencia: Decimal) -> Non
     op.saldo_referencia_riesgo = saldo_referencia if riesgo_importe is not None else None
     op.riesgo_importe = riesgo_importe
     op.riesgo_porcentaje = riesgo_porcentaje
+
+
+def actualizar_resultados_operacion(
+    operacion: Operacion,
+    cuenta: Cuenta_Trading,
+    resultado_bruto_manual: Decimal | None = None,
+) -> None:
+    """Persist the current account's commission and the operation's net result."""
+    operacion.comisiones = calculate_commission(
+        cuenta.tipo_comision,
+        cuenta.valor_comision,
+        operacion.cantidad,
+        operacion.precio_entrada,
+    )
+    resultado_calculado = calculate_gross_result(
+        operacion.tipo_operacion,
+        operacion.cantidad,
+        operacion.precio_entrada,
+        operacion.precio_salida,
+    )
+    operacion.resultado_bruto = (
+        resultado_calculado
+        if resultado_calculado is not None
+        else resultado_bruto_manual
+    )
+    operacion.resultado = calculate_net_result(
+        operacion.resultado_bruto,
+        operacion.comisiones,
+    )
 
 
 def autenticar_usuario_desde_request(request: Request, db: Session) -> Usuario:
@@ -141,6 +171,8 @@ def create_operacion(
     notas: Annotated[Optional[str], Form()] = None,
     stop_loss: Annotated[Optional[float], Form()] = None,
     take_profit: Annotated[Optional[float], Form()] = None,
+    resultado_bruto: Annotated[Optional[float], Form()] = None,
+    # Kept temporarily for integrations that still submit the old gross result field.
     resultado: Annotated[Optional[float], Form()] = None,
     ratio_rr: Annotated[Optional[float], Form()] = None,
     nivel_confianza: Annotated[Optional[int], Form()] = None,
@@ -163,7 +195,6 @@ def create_operacion(
         notas=notas,
         stop_loss=stop_loss,
         take_profit=take_profit,
-        resultado=resultado,
         ratio_rr=ratio_rr,
         nivel_confianza=nivel_confianza,
         screenshot=screenshot_path,
@@ -172,14 +203,20 @@ def create_operacion(
         nueva_operacion,
         Decimal(str(cuenta.saldo_actual or Decimal("0"))),
     )
+    resultado_manual = (
+        to_decimal(resultado_bruto)
+        if resultado_bruto is not None
+        else (to_decimal(resultado) if resultado is not None else None)
+    )
+    actualizar_resultados_operacion(nueva_operacion, cuenta, resultado_manual)
 
     db.add(nueva_operacion)
     queued_job = None
     try:
         db.flush()
 
-        if resultado is not None:
-            actualizar_saldo_cuenta(db, cuenta.id, Decimal(str(resultado)))
+        if nueva_operacion.resultado is not None:
+            actualizar_saldo_cuenta(db, cuenta.id, to_decimal(nueva_operacion.resultado))
 
         if notas:
             try:
@@ -253,6 +290,8 @@ async def update_operacion(
     notas: Annotated[Optional[str], Form()] = None,
     stop_loss: Annotated[Optional[float], Form()] = None,
     take_profit: Annotated[Optional[float], Form()] = None,
+    resultado_bruto: Annotated[Optional[float], Form()] = None,
+    # Kept temporarily for integrations that still submit the old gross result field.
     resultado: Annotated[Optional[float], Form()] = None,
     ratio_rr: Annotated[Optional[float], Form()] = None,
     nivel_confianza: Annotated[Optional[int], Form()] = None,
@@ -280,20 +319,32 @@ async def update_operacion(
         "notas": notas,
         "stop_loss": stop_loss,
         "take_profit": take_profit,
-        "resultado": resultado,
         "ratio_rr": ratio_rr,
         "nivel_confianza": nivel_confianza,
     }
     datos_filtrados = {key: value for key, value in datos.items() if key in form_payload}
-
-    if "resultado" in datos_filtrados:
-        resultado_anterior = Decimal(str(op.resultado)) if op.resultado is not None else Decimal("0")
-        resultado_nuevo = Decimal(str(datos_filtrados["resultado"]))
-        diferencia = resultado_nuevo - resultado_anterior
-        actualizar_saldo_cuenta(db, cuenta.id, diferencia)
+    resultado_bruto_enviado = None
+    if "resultado_bruto" in form_payload:
+        resultado_bruto_enviado = to_decimal(resultado_bruto) if resultado_bruto is not None else None
+    elif "resultado" in form_payload:
+        resultado_bruto_enviado = to_decimal(resultado) if resultado is not None else None
 
     for key, value in datos_filtrados.items():
         setattr(op, key, value)
+
+    campos_financieros = {
+        "tipo_operacion",
+        "cantidad",
+        "precio_entrada",
+        "precio_salida",
+        "resultado_bruto",
+        "resultado",
+    }
+    if campos_financieros & set(form_payload.keys()):
+        resultado_anterior = to_decimal(op.resultado) if op.resultado is not None else Decimal("0")
+        actualizar_resultados_operacion(op, cuenta, resultado_bruto_enviado)
+        resultado_nuevo = to_decimal(op.resultado) if op.resultado is not None else Decimal("0")
+        actualizar_saldo_cuenta(db, cuenta.id, resultado_nuevo - resultado_anterior)
 
     saldo_referencia = Decimal(str(
         op.saldo_referencia_riesgo
