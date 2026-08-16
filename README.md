@@ -2,105 +2,81 @@
   <img src="docs/Emovest.png" alt="EmoVest" width="720">
 </p>
 
-<h1 align="center">EmoVest — entiende a la persona detrás de cada operación</h1>
+<h1 align="center">Opera con datos. Aprende de tus decisiones.</h1>
 
 <p align="center">
-  Un diario de trading libre que conecta resultados, contexto y emociones para convertir cada operación en aprendizaje.
+  <strong>EmoVest</strong> es el diario de trading para entender no solo qué hiciste en una operación, sino también qué pensabas y sentías al tomarla.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/versi%C3%B3n-0.4.0-blue" alt="Versión 0.4.0">
-  <img src="https://img.shields.io/badge/licencia-MIT-2ea44f" alt="Licencia MIT">
-  <img src="https://img.shields.io/badge/IA-local-6f42c1" alt="IA local">
+  <a href="https://github.com/ELROKA02/EmoVest/releases/latest/download/EmoVest-Setup.exe"><img src="https://img.shields.io/badge/Descargar-para%20Windows-5b21b6?style=for-the-badge&logo=windows&logoColor=white" alt="Descargar EmoVest para Windows"></a>
+  <a href="https://github.com/ELROKA02/EmoVest/releases/latest"><img src="https://img.shields.io/badge/Ver%20la%20release-0.4.2-2563eb?style=for-the-badge" alt="Ver la última release"></a>
 </p>
 
-> EmoVest no da señales ni asesoramiento financiero. Es un espacio para registrar, revisar y aprender de tu propia operativa.
+<p align="center">
+  <img src="https://img.shields.io/badge/Windows-10%2F11-0078D4" alt="Windows 10 y 11">
+  <img src="https://img.shields.io/badge/Escritorio-local-6f42c1" alt="Aplicación local de escritorio">
+  <img src="https://img.shields.io/badge/Licencia-MIT-2ea44f" alt="Licencia MIT">
+</p>
 
-## 🎬 EmoVest en acción
+> EmoVest no da señales ni asesoramiento financiero. Te ayuda a registrar, revisar y mejorar tu propio proceso de trading.
+
+## El gráfico no cuenta toda la historia
+
+Un historial tradicional muestra el precio de entrada y salida. No explica si cerraste por miedo, aumentaste el riesgo por euforia o seguiste tu plan con confianza.
+
+EmoVest une cada operación con su contexto. Convierte tus notas, resultados y hábitos en una vista clara para que detectes patrones y tomes decisiones más conscientes en la siguiente sesión.
+
+## Todo lo que necesitas para revisar tu operativa
+
+| | Con EmoVest puedes |
+| --- | --- |
+| 📒 | Registrar operaciones LONG y SHORT, riesgo, confianza, notas y capturas en un solo diario. |
+| 💸 | Calcular automáticamente el resultado neto con comisiones fijas o porcentuales por cuenta. |
+| 📊 | Ver beneficio neto, win rate, drawdown, rachas y rendimiento sin depender de hojas de cálculo. |
+| 🧠 | Analizar el contexto emocional de tus notas para revisar miedo, duda, euforia, confianza y neutralidad junto a cada resultado. |
+| 🤖 | Elegir IA local con Ollama o modelos remotos mediante OpenRouter, de forma independiente para el análisis emocional y el chat EVA. |
+| 🔄 | Importar y exportar operaciones en CSV para no perder tu histórico ni quedarte atado a una herramienta. |
+
+## Tu trading, con tu contexto
+
+EmoVest está hecho para quienes quieren dejar de revisar operaciones aisladas y empezar a revisar su proceso completo.
+
+- Crea varias cuentas y configura la moneda y las comisiones de cada una.
+- Guarda la imagen y las notas que explican por qué tomaste una decisión.
+- Revisa el resultado bruto, la comisión aplicada y el beneficio neto de forma transparente.
+- Usa EVA para conversar sobre tu diario y tus patrones de forma más natural.
+- Mantén el análisis en tu equipo con Ollama o conecta OpenRouter cuando prefieras un modelo remoto.
+
+La IA es opcional: el diario, las cuentas y las estadísticas siguen funcionando aunque no configures ningún proveedor. Si eliges IA local, el análisis se ejecuta en tu entorno; si eliges un proveedor remoto, la solicitud se procesa según la configuración y las políticas de ese proveedor.
+
+## Empieza hoy en tres pasos
+
+1. [Descarga EmoVest para Windows](https://github.com/ELROKA02/EmoVest/releases/latest/download/EmoVest-Setup.exe).
+2. Ejecuta `EmoVest-Setup.exe` y completa el instalador.
+3. Crea tu primera cuenta y registra la próxima operación con el contexto que normalmente se queda fuera de tu bróker.
+
+No necesitas instalar Python, Docker, MySQL, Redis ni Node.js. Ollama solo es necesario si quieres utilizar modelos locales. Tus datos se guardan fuera de la carpeta de instalación y se conservan al actualizar la aplicación.
+
+## EmoVest en acción
 
 <video src="docs/Video_presentacion.mp4" controls preload="metadata">
-  Tu navegador no puede reproducir este vídeo. Puedes verlo [aquí](docs/Video_presentacion.mp4).
+  Tu navegador no puede reproducir este vídeo. Puedes verlo <a href="docs/Video_presentacion.mp4">aquí</a>.
 </video>
 
----
+## ¿Cómo está construido?
 
-## 🎯 El problema
+EmoVest es una aplicación de escritorio para Windows: Tauri integra la interfaz de React con una API local de FastAPI, SQLite guarda el diario y una cola persistente procesa las tareas de IA sin bloquearte. El instalador se actualiza de forma firmada y protege tus datos mediante copias de seguridad antes de aplicar cambios de esquema.
 
-Un histórico de operaciones explica qué ocurrió con el precio, pero rara vez explica qué ocurrió contigo. El miedo, la duda, la euforia o el exceso de confianza quedan en notas dispersas —cuando quedan registradas— y los mismos errores terminan pareciendo una mala racha más.
+Si quieres conocer la arquitectura, la privacidad de la API local, las copias de seguridad, las actualizaciones o preparar un entorno de desarrollo, consulta la [guía técnica de la edición de escritorio](docs/escritorio-windows.md).
 
-EmoVest reúne la operación y su contexto humano en el mismo lugar. Así puedes revisar patrones operativos y emocionales con evidencia, no solo con memoria.
-
-## ⚡ Qué hace EmoVest
-
-EmoVest es un diario de trading de escritorio para quien quiere operar con más reflexión. Registra cada operación, conserva su contexto y transforma las notas personales en indicadores emocionales orientativos mediante IA local.
-
-| En vez de… | Con EmoVest puedes… |
-|---|---|
-| Revisar hojas de cálculo y notas sueltas | Ver operaciones, métricas y contexto en un mismo diario |
-| Atribuir los errores a una sensación imprecisa | Comparar el resultado con la confianza y las emociones registradas |
-| Entregar tus notas a servicios de terceros | Ejecutar el análisis con Ollama en tu propio entorno |
-
-## 🧠 Cómo funciona
-
-1. **Crea una cuenta de trading** y define su saldo y moneda.
-2. **Registra la operación**: activo, entrada, salida, riesgo, resultado, nivel de confianza, notas y una captura opcional.
-3. **Describe el contexto** con tus propias palabras. El análisis se procesa en segundo plano para no interrumpir tu flujo.
-4. **Revisa tus patrones** con estadísticas de rendimiento, drawdown, rachas y contexto emocional.
-
-```mermaid
-flowchart LR
-    A["Operación y nota"] --> B["Diario de EmoVest"]
-    B --> C["Análisis emocional local"]
-    B --> D["Métricas de trading"]
-    C --> E["Revisión de patrones"]
-    D --> E
-```
-
-El análisis emocional es una interpretación orientativa de tus notas; no sustituye tu criterio ni ofrece recomendaciones de inversión.
-
-## 🚀 Funcionalidades
-
-- Puedes crear y gestionar varias cuentas de trading.
-- Puedes registrar operaciones LONG y SHORT con precios, cantidad, stop loss, take profit, resultado, relación riesgo-recompensa y confianza.
-- Puedes añadir notas y una captura para conservar el contexto de cada decisión.
-- Puedes consultar beneficio neto, win rate, drawdown, rachas y rendimiento por día.
-- Puedes revisar cómo aparecen la confianza, duda, euforia, miedo y neutralidad junto a tus resultados.
-- Puedes ejecutar el análisis emocional con IA local y mantener el control de tu entorno.
-- Puedes consultar y editar la configuración del proveedor de IA desde la aplicación.
-
-## 🛠️ Stack tecnológico
-
-| Capa | Tecnología |
-|---|---|
-| Interfaz | React, Vite, Tailwind CSS y Recharts |
-| API | FastAPI y SQLAlchemy |
-| Escritorio | Tauri 2 y WebView2 |
-| Datos | SQLite local |
-| Procesamiento asíncrono | Cola persistente SQLite |
-| IA emocional | Ollama y modelos locales |
-| Autenticación | JWT |
-| Instalador | NSIS (`EmoVest-Setup.exe`) |
-
-## ⚙️ Empieza en minutos
-
-### Aplicación de escritorio
-
-EmoVest se instala en Windows con `EmoVest-Setup.exe`. El usuario no necesita
-Python, Docker, MySQL ni Redis. La base de datos, las imágenes y las copias de
-seguridad se guardan fuera de la carpeta de instalación y se conservan al
-actualizar o reinstalar.
-
-Ollama es opcional: si no está instalado, el diario y las estadísticas siguen
-funcionando. EmoVest informa si falta el servicio o el modelo antes de intentar
-un análisis.
-
-### Desarrollo en Windows
+### Desarrollo local
 
 ```powershell
 cd backend
 python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+
 cd ..
 .\scripts\build-windows-sidecar.ps1
 
@@ -109,53 +85,14 @@ pnpm install
 pnpm desktop:dev
 ```
 
-El instalador reproducible se genera con `pnpm desktop:build`. Consulta
-[la guía de escritorio](docs/escritorio-windows.md) para rutas, migraciones,
-backups, diagnóstico, updater y validación Windows.
+La guía técnica incluye los requisitos completos, la creación del instalador y las comprobaciones de calidad.
 
-## 🏗️ Arquitectura
+## Construyamos un trading más consciente
 
-```mermaid
-flowchart TB
-    T["Tauri 2"] --> UI["React · Interfaz"]
-    T --> API["FastAPI · Sidecar"]
-    API --> DB[("SQLite local")]
-    API --> Q["Cola SQLite"]
-    Q --> W["Runner emocional"]
-    W --> AI["Ollama · Opcional"]
-    W --> DB
-```
+EmoVest es open source y las contribuciones son bienvenidas. Puedes proponer una mejora, informar de un problema o colaborar en experiencia de usuario, accesibilidad, privacidad, documentación y análisis responsable.
 
-El procesamiento emocional es asíncrono: recibir un `201` al crear una operación confirma que se ha guardado, no que el análisis ya haya terminado.
+Antes de abrir un cambio de interfaz, ejecuta `pnpm lint` y `pnpm build` desde `frontend/`.
 
-## 📚 Documentación y recursos
+## Licencia
 
-| Recurso | Contenido |
-|---|---|
-| [Edición de escritorio](docs/escritorio-windows.md) | Arquitectura, datos, backups, updater y validación |
-| [Vídeo de presentación](docs/Video_presentacion.mp4) | Vista general del proyecto |
-
-## 🤝 Contribuir
-
-EmoVest mejora con personas que quieren hacer el trading más consciente y privado. Antes de abrir un cambio:
-
-1. Revisa las [issues](../../issues) abiertas o plantea la idea en una nueva.
-2. Mantén los cambios pequeños, documentados y centrados en un problema.
-3. Ejecuta `pnpm lint` y `pnpm build` dentro de `frontend/` si modificas la interfaz.
-4. Si tocas el flujo emocional, verifica la cola local, sus reintentos y la recuperación tras reinicio.
-
-Las aportaciones que mejor encajan son mejoras de experiencia, accesibilidad, documentación, pruebas, privacidad y análisis responsable de patrones.
-
-## 👥 Equipo
-
-EmoVest es un proyecto abierto construido por una comunidad que cree que la disciplina también se puede medir. Si compartes esa visión, tus contribuciones son bienvenidas.
-
----
-
-## ⚠️ Aviso
-
-EMOVEST no proporciona asesoramiento financiero. Es una herramienta de analisis conductual y estadistico.
-
-## 📄 Licencia
-
-EmoVest se publica bajo [licencia MIT](LICENSE).
+EmoVest se publica bajo la [licencia MIT](LICENSE).
