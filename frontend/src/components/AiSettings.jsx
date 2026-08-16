@@ -26,6 +26,12 @@ const OPENROUTER_PRESET_MODELS = [
   { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini · Muy económico', detail: '$0.15 / $0.60 por 1M tokens' },
 ];
 
+const OPENROUTER_EMOTION_PRESET_MODELS = [
+  { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash · Recomendado', detail: '$0.50 / $3 por 1M tokens' },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini · Muy económico', detail: '$0.15 / $0.60 por 1M tokens' },
+  { id: 'qwen/qwen3.5-9b', name: 'Qwen 3.5 9B · Económico', detail: 'Modelo ligero para clasificar' },
+];
+
 const STATUS_LABELS = {
   available: 'Disponible',
   not_installed: 'No instalado',
@@ -55,6 +61,10 @@ const AiSettings = () => {
     model: '', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '',
   });
   const [openRouterModels, setOpenRouterModels] = useState([]);
+  const [openRouterEmotionModels, setOpenRouterEmotionModels] = useState([]);
+  const [openRouterEmotionDraft, setOpenRouterEmotionDraft] = useState({
+    model: '', baseUrl: 'https://openrouter.ai/api/v1',
+  });
   const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false);
   const [removingOpenRouterKey, setRemovingOpenRouterKey] = useState(false);
   const [providerMode, setProviderMode] = useState('local');
@@ -80,12 +90,23 @@ const AiSettings = () => {
       const statuses = (await response.json()).statuses || {};
       setAiStatus(statuses);
       const chatConfig = statuses.chat?.config || {};
-      setProviderMode(chatConfig.provider === 'openrouter' ? 'remote' : 'local');
+      const emotionConfig = statuses.emotion?.config || {};
+      setProviderMode(
+        chatConfig.provider === 'openrouter' || emotionConfig.provider === 'openrouter'
+          ? 'remote' : 'local',
+      );
       setOpenRouterDraft((current) => ({
         ...current,
         model: chatConfig.provider === 'openrouter' ? (chatConfig.model || '') : current.model,
         baseUrl: chatConfig.provider === 'openrouter'
           ? (chatConfig.base_url || 'https://openrouter.ai/api/v1')
+          : current.baseUrl,
+      }));
+      setOpenRouterEmotionDraft((current) => ({
+        ...current,
+        model: emotionConfig.provider === 'openrouter' ? (emotionConfig.model || '') : current.model,
+        baseUrl: emotionConfig.provider === 'openrouter'
+          ? (emotionConfig.base_url || 'https://openrouter.ai/api/v1')
           : current.baseUrl,
       }));
       setDrafts(Object.fromEntries(USE_CASES.map(({ id, defaultModel }) => {
@@ -103,19 +124,21 @@ const AiSettings = () => {
     }
   }, []);
 
-  const loadOpenRouterModels = useCallback(async () => {
+  const loadOpenRouterModels = useCallback(async (useCase = 'chat') => {
     const token = sessionStorage.getItem('token');
     if (!token) return;
     setLoadingOpenRouterModels(true);
     setError('');
     try {
-      const response = await apiFetch('/ia/openrouter/models', {
+      const response = await apiFetch(`/ia/openrouter/models?use_case=${useCase}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) {
         throw new Error(await getErrorMessage(response, 'No se pudieron cargar los modelos de OpenRouter.'));
       }
-      setOpenRouterModels((await response.json()).models || []);
+      const models = (await response.json()).models || [];
+      if (useCase === 'emotion') setOpenRouterEmotionModels(models);
+      else setOpenRouterModels(models);
     } catch (requestError) {
       setError(requestError.message || 'No se pudieron cargar los modelos de OpenRouter.');
     } finally {
@@ -213,6 +236,42 @@ const AiSettings = () => {
     }
   };
 
+  const saveOpenRouterEmotionConfig = async () => {
+    if (!openRouterEmotionDraft.model.trim()) {
+      setError('Selecciona o indica un modelo de OpenRouter para el análisis emocional.');
+      return;
+    }
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+
+    setSavingUseCase('openrouter-emotion');
+    setError('');
+    try {
+      const response = await apiFetch('/ia/config/emotion', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openrouter',
+          model: openRouterEmotionDraft.model.trim(),
+          base_url: openRouterEmotionDraft.baseUrl.trim() || 'https://openrouter.ai/api/v1',
+          install_mode: 'remote',
+          ...(openRouterDraft.apiKey.trim() ? { api_key: openRouterDraft.apiKey.trim() } : {}),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, 'No se pudo guardar el análisis emocional remoto.'));
+      }
+      setOpenRouterDraft((current) => ({ ...current, apiKey: '' }));
+      setSavedUseCase('openrouter-emotion');
+      await loadSettings();
+      await loadOpenRouterModels('emotion');
+    } catch (requestError) {
+      setError(requestError.message || 'No se pudo guardar el análisis emocional remoto.');
+    } finally {
+      setSavingUseCase('');
+    }
+  };
+
   const removeOpenRouterKey = async () => {
     const token = sessionStorage.getItem('token');
     if (!token) return;
@@ -231,6 +290,10 @@ const AiSettings = () => {
       setRemovingOpenRouterKey(false);
     }
   };
+
+  const openRouterKeyConfigured = Boolean(
+    aiStatus?.chat?.config?.api_key_configured || aiStatus?.emotion?.config?.api_key_configured,
+  );
 
   return (
     <section className="pt-6 border-t border-white/10">
@@ -301,11 +364,11 @@ const AiSettings = () => {
           <div>
             <h5 className="font-semibold text-white">OpenRouter · EVA remoto</h5>
             <p className="mt-1 text-xs text-violet-100/70">
-              EVA enviará las conversaciones al modelo remoto seleccionado. El análisis emocional seguirá siendo local.
+              Configura por separado EVA y el análisis emocional; ambos comparten la API key cifrada.
             </p>
           </div>
-          <span className={`self-start rounded-full px-2.5 py-1 text-xs font-medium ${aiStatus?.chat?.config?.api_key_configured ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-400/15 text-amber-200'}`}>
-            {aiStatus?.chat?.config?.api_key_configured ? 'API key configurada' : 'API key pendiente'}
+          <span className={`self-start rounded-full px-2.5 py-1 text-xs font-medium ${openRouterKeyConfigured ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-400/15 text-amber-200'}`}>
+            {openRouterKeyConfigured ? 'API key configurada' : 'API key pendiente'}
           </span>
         </div>
 
@@ -316,7 +379,7 @@ const AiSettings = () => {
               type="password"
               value={openRouterDraft.apiKey}
               onChange={(event) => setOpenRouterDraft((current) => ({ ...current, apiKey: event.target.value }))}
-              placeholder={aiStatus?.chat?.config?.api_key_configured ? 'Deja vacío para conservar la actual' : 'sk-or-…'}
+              placeholder={openRouterKeyConfigured ? 'Deja vacío para conservar la actual' : 'sk-or-…'}
               autoComplete="new-password"
               className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
             />
@@ -366,12 +429,12 @@ const AiSettings = () => {
             <button
               type="button"
               onClick={() => void loadOpenRouterModels()}
-              disabled={loadingOpenRouterModels || !aiStatus?.chat?.config?.api_key_configured}
+              disabled={loadingOpenRouterModels || !openRouterKeyConfigured}
               className="rounded-lg border border-violet-400/30 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/10 disabled:opacity-50"
             >
               {loadingOpenRouterModels ? 'Cargando modelos…' : 'Recargar modelos'}
             </button>
-            {aiStatus?.chat?.config?.api_key_configured && (
+            {openRouterKeyConfigured && (
               <button
                 type="button"
                 onClick={() => void removeOpenRouterKey()}
@@ -393,6 +456,76 @@ const AiSettings = () => {
           </button>
         </div>
         {savedUseCase === 'openrouter' && <p className="mt-3 text-xs text-emerald-300">OpenRouter se usará en el siguiente mensaje de EVA.</p>}
+
+        <div className="mt-6 border-t border-violet-400/20 pt-5">
+          <div>
+            <h6 className="font-semibold text-white">Análisis emocional remoto</h6>
+            <p className="mt-1 text-xs text-violet-100/70">
+              Clasifica las notas de operación en OpenRouter. Los modelos económicos son suficientes para esta tarea estructurada.
+            </p>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="block text-sm text-gray-300">
+              Modelos económicos predeterminados
+              <select
+                value=""
+                onChange={(event) => {
+                  if (event.target.value) setOpenRouterEmotionDraft((current) => ({ ...current, model: event.target.value }));
+                }}
+                className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
+              >
+                <option value="">Selecciona una recomendación</option>
+                {OPENROUTER_EMOTION_PRESET_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name} — {model.detail}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm text-gray-300">
+              ID de modelo para emociones
+              <input
+                list="openrouter-emotion-models"
+                value={openRouterEmotionDraft.model}
+                onChange={(event) => setOpenRouterEmotionDraft((current) => ({ ...current, model: event.target.value }))}
+                placeholder="Proveedor/modelo"
+                className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
+              />
+              <datalist id="openrouter-emotion-models">
+                {openRouterEmotionModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+              </datalist>
+              <p className="mt-1 text-xs text-gray-500">También puedes escribir un ID de modelo de OpenRouter.</p>
+            </label>
+            <label className="block text-sm text-gray-300 md:col-span-2">
+              URL base avanzada
+              <input
+                type="url"
+                value={openRouterEmotionDraft.baseUrl}
+                onChange={(event) => setOpenRouterEmotionDraft((current) => ({ ...current, baseUrl: event.target.value }))}
+                placeholder="https://openrouter.ai/api/v1"
+                className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => void loadOpenRouterModels('emotion')}
+              disabled={loadingOpenRouterModels || !openRouterKeyConfigured}
+              className="self-start rounded-lg border border-violet-400/30 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/10 disabled:opacity-50"
+            >
+              {loadingOpenRouterModels ? 'Cargando modelos…' : 'Recargar modelos económicos'}
+            </button>
+            <button
+              type="button"
+              disabled={savingUseCase === 'openrouter-emotion' || phase === 'loading'}
+              onClick={() => void saveOpenRouterEmotionConfig()}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingUseCase === 'openrouter-emotion' && <Spinner size="sm" />}
+              {savingUseCase === 'openrouter-emotion' ? 'Guardando…' : 'Guardar análisis emocional'}
+            </button>
+          </div>
+          {savedUseCase === 'openrouter-emotion' && <p className="mt-3 text-xs text-emerald-300">OpenRouter clasificará las nuevas notas emocionales.</p>}
+        </div>
       </div>
       )}
 

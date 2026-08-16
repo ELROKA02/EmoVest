@@ -9,13 +9,21 @@ class OpenRouterUnavailable(RuntimeError):
     pass
 
 
-def list_tool_models(base_url: str, api_key: str) -> list[dict[str, str]]:
+def list_models(
+    base_url: str,
+    api_key: str,
+    *,
+    require_tools: bool = False,
+) -> list[dict[str, str]]:
     if not api_key:
         raise OpenRouterUnavailable("Configura una API key de OpenRouter antes de cargar modelos.")
     try:
         response = requests.get(
             f"{base_url.rstrip('/')}/models",
-            params={"supported_parameters": "tools", "output_modalities": "text"},
+            params={
+                "output_modalities": "text",
+                **({"supported_parameters": "tools"} if require_tools else {}),
+            },
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=10,
         )
@@ -31,14 +39,25 @@ def list_tool_models(base_url: str, api_key: str) -> list[dict[str, str]]:
             for item in models
             if isinstance(item, dict)
             and isinstance(item.get("id"), str)
-            and "tools" in item.get("supported_parameters", [])
+            and (not require_tools or "tools" in item.get("supported_parameters", []))
         ],
         key=lambda item: item["name"].lower(),
     )
 
 
-def validate_tool_model(base_url: str, api_key: str, model: str) -> None:
-    if model not in {item["id"] for item in list_tool_models(base_url, api_key)}:
+def list_tool_models(base_url: str, api_key: str) -> list[dict[str, str]]:
+    return list_models(base_url, api_key, require_tools=True)
+
+
+def validate_model(base_url: str, api_key: str, model: str, *, require_tools: bool = False) -> None:
+    if model not in {item["id"] for item in list_models(base_url, api_key, require_tools=require_tools)}:
         raise OpenRouterUnavailable(
-            "El modelo seleccionado no está disponible o no admite herramientas para EVA."
+            (
+                "El modelo seleccionado no está disponible o no admite herramientas para EVA."
+                if require_tools else "El modelo seleccionado no está disponible en OpenRouter."
+            )
         )
+
+
+def validate_tool_model(base_url: str, api_key: str, model: str) -> None:
+    validate_model(base_url, api_key, model, require_tools=True)

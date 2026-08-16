@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from ai.emotions import Emociones
 from ai.providers.base import AIServiceUnavailable, AiRuntimeSettings
 from ai.providers.ollama import OllamaProvider, ResponseError
+from ai.providers.openrouter import OpenRouterProvider
 from database import Base
 from models import Registro_emocional
 from routers.ia import guardar_registro_emocional
@@ -107,6 +108,32 @@ class OllamaProviderTests(unittest.TestCase):
                 self.provider.clasificar_emociones("Entrada con miedo")
 
         client.chat.assert_called_once()
+
+
+class OpenRouterProviderTests(unittest.TestCase):
+    def setUp(self):
+        self.provider = OpenRouterProvider(AiRuntimeSettings(
+            use_case="emotion",
+            provider="openrouter",
+            model="openai/gpt-4o-mini",
+            base_url="https://openrouter.ai/api/v1",
+        ))
+
+    @patch("ai.providers.openrouter.get_openrouter_api_key", return_value="sk-or-test")
+    @patch("ai.providers.openrouter.requests.post")
+    def test_classifies_emotions_with_json_response(self, post, _api_key):
+        response = MagicMock()
+        response.json.return_value = {
+            "choices": [{"message": {"content": (
+                '{"confianza":10,"duda":20,"euforia":30,"miedo":15,"neutral":25}'
+            )}}]
+        }
+        post.return_value = response
+
+        emociones = self.provider.clasificar_emociones("Entrada con dudas")
+
+        self.assertEqual(emociones.duda, Decimal("20"))
+        self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
 
 
 if __name__ == "__main__":

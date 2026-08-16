@@ -27,7 +27,13 @@ from ai.manager import (
 )
 from ai.providers.base import AIDisabled, AiRuntimeSettings
 from ai.chat_models import ChatModelConfigurationError, ChatModelUnavailable
-from ai.openrouter import OpenRouterUnavailable, list_tool_models, validate_tool_model
+from ai.openrouter import (
+    OpenRouterUnavailable,
+    list_models,
+    list_tool_models,
+    validate_model,
+    validate_tool_model,
+)
 from database import get_db
 from models import AiSetting, Registro_emocional, Usuario
 from routers.auth import get_current_user
@@ -216,13 +222,13 @@ def actualizar_configuracion_ia(
 
     if not model:
         raise HTTPException(status_code=400, detail="El modelo de IA no puede estar vacio.")
-    if provider == "openrouter" and use_case != AI_USE_CASE_CHAT:
-        raise HTTPException(status_code=400, detail="OpenRouter solo está disponible para el chat EVA.")
-
     openrouter_api_key = (payload.api_key or get_openrouter_api_key()).strip()
     if provider == "openrouter":
         try:
-            validate_tool_model(base_url, openrouter_api_key, model)
+            if use_case == AI_USE_CASE_CHAT:
+                validate_tool_model(base_url, openrouter_api_key, model)
+            else:
+                validate_model(base_url, openrouter_api_key, model)
         except OpenRouterUnavailable as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         if payload.api_key is not None:
@@ -276,14 +282,21 @@ def actualizar_configuracion_ia(
     summary="Listar modelos OpenRouter compatibles con EVA",
 )
 def listar_modelos_openrouter(
+    use_case: str = AI_USE_CASE_CHAT,
     db: Session = Depends(get_db),
     _current_user: Usuario = Depends(get_current_user),
 ):
     try:
-        settings = get_effective_ai_settings(AI_USE_CASE_CHAT, db)
+        use_case = normalize_use_case(use_case)
+        settings = get_effective_ai_settings(use_case, db)
         base_url = settings.base_url if settings.provider == "openrouter" else config.OPENROUTER_BASE_URL
-        return {"models": list_tool_models(base_url, get_openrouter_api_key())}
-    except OpenRouterUnavailable as error:
+        models = (
+            list_tool_models(base_url, get_openrouter_api_key())
+            if use_case == AI_USE_CASE_CHAT
+            else list_models(base_url, get_openrouter_api_key())
+        )
+        return {"models": models}
+    except (OpenRouterUnavailable, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 

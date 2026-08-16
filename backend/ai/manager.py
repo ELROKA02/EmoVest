@@ -40,6 +40,23 @@ PROVIDERS: dict[str, type[AIProvider]] = {
 # Se expone a través de la API para que el frontend pueda sugerirlos al usuario.
 RECOMMENDED_MODELS = {
     "emotion": {
+        "openrouter": [
+            {
+                "id": "google/gemini-3-flash-preview",
+                "name": "Gemini 3 Flash",
+                "description": "Modelo remoto rápido y económico para clasificar emociones.",
+            },
+            {
+                "id": "openai/gpt-4o-mini",
+                "name": "GPT-4o mini",
+                "description": "Alternativa económica con salida estructurada.",
+            },
+            {
+                "id": "qwen/qwen3.5-9b",
+                "name": "Qwen 3.5 9B",
+                "description": "Modelo ligero para clasificaciones sencillas.",
+            },
+        ],
         "ollama": [
             {
                 "id": "clasificador_emociones_gemma4:latest",

@@ -1,11 +1,12 @@
-"""Proveedor OpenRouter para la configuración existente de IA.
+"""Proveedor OpenRouter para el chat EVA y clasificación emocional remota."""
 
-Su uso conversacional real se realiza mediante el adaptador LangChain. Esta
-clase conserva el contrato histórico de proveedores para la API de ajustes.
-"""
+import requests
+from pydantic import ValidationError
 
+from ai.emotions import Emociones, construir_prompt_emociones
 from ai.providers.base import AIProvider
-from ai.credentials import has_openrouter_api_key
+from ai.providers.base import AIInvalidResponse, AIServiceUnavailable
+from ai.credentials import get_openrouter_api_key, has_openrouter_api_key
 
 
 class OpenRouterProvider(AIProvider):
@@ -25,13 +26,41 @@ class OpenRouterProvider(AIProvider):
             "model_available": None,
             "api_key_configured": configured,
             "message": (
-                "OpenRouter está configurado; se validará al iniciar una conversación."
+                (
+                    "OpenRouter está configurado; se validará al iniciar una conversación."
+                    if self.settings.use_case == "chat"
+                    else "OpenRouter está configurado para el análisis emocional remoto."
+                )
                 if configured else "Falta la API key de OpenRouter."
             ),
         }
 
     def clasificar_emociones(self, texto: str):
-        raise RuntimeError("OpenRouter no está habilitado para clasificación emocional.")
+        api_key = get_openrouter_api_key()
+        if not api_key:
+            raise AIServiceUnavailable("Falta la API key de OpenRouter.")
+
+        try:
+            response = requests.post(
+                f"{self.settings.base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": self.settings.model,
+                    "messages": [{"role": "user", "content": construir_prompt_emociones(texto)}],
+                    "temperature": 0,
+                    "response_format": {"type": "json_object"},
+                },
+                timeout=120,
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"].strip()
+        except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as error:
+            raise AIServiceUnavailable("OpenRouter no pudo procesar el análisis emocional.") from error
+
+        try:
+            return Emociones.model_validate_json(content)
+        except (ValidationError, ValueError) as error:
+            raise AIInvalidResponse("La respuesta de OpenRouter no cumple el formato emocional esperado.") from error
 
     def generar_respuesta_chat(self, mensaje: str) -> str:
         # El endpoint histórico conserva su contrato; la ruta nueva usará
