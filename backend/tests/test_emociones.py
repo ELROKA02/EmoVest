@@ -135,6 +135,24 @@ class OpenRouterProviderTests(unittest.TestCase):
         self.assertEqual(emociones.duda, Decimal("20"))
         self.assertEqual(post.call_args.kwargs["json"]["response_format"], {"type": "json_object"})
 
+    @patch("ai.providers.openrouter.get_openrouter_api_key", return_value="sk-or-test")
+    @patch("ai.providers.openrouter.requests.post")
+    def test_retries_without_json_mode_when_the_model_does_not_support_it(self, post, _api_key):
+        rejected = MagicMock(status_code=400)
+        response = MagicMock(status_code=200)
+        response.json.return_value = {
+            "choices": [{"message": {"content": (
+                '{"confianza":10,"duda":20,"euforia":30,"miedo":15,"neutral":25}'
+            )}}]
+        }
+        post.side_effect = [rejected, response]
+
+        emociones = self.provider.clasificar_emociones("Entrada con dudas")
+
+        self.assertEqual(emociones.confianza, Decimal("10"))
+        self.assertEqual(post.call_count, 2)
+        self.assertNotIn("response_format", post.call_args.kwargs["json"])
+
 
 if __name__ == "__main__":
     unittest.main()

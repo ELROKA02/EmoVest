@@ -41,17 +41,28 @@ class OpenRouterProvider(AIProvider):
             raise AIServiceUnavailable("Falta la API key de OpenRouter.")
 
         try:
+            request_payload = {
+                "model": self.settings.model,
+                "messages": [{"role": "user", "content": construir_prompt_emociones(texto)}],
+                "temperature": 0,
+                "response_format": {"type": "json_object"},
+            }
             response = requests.post(
                 f"{self.settings.base_url.rstrip('/')}/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": self.settings.model,
-                    "messages": [{"role": "user", "content": construir_prompt_emociones(texto)}],
-                    "temperature": 0,
-                    "response_format": {"type": "json_object"},
-                },
+                json=request_payload,
                 timeout=120,
             )
+            # Algunos modelos económicos no implementan JSON mode. El prompt
+            # ya exige JSON y la respuesta se valida estrictamente después.
+            if response.status_code in {400, 422}:
+                request_payload.pop("response_format")
+                response = requests.post(
+                    f"{self.settings.base_url.rstrip('/')}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json=request_payload,
+                    timeout=120,
+                )
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"].strip()
         except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as error:

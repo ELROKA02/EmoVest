@@ -600,7 +600,7 @@ const AiSettings = () => {
           <div className="mt-5 space-y-5">
             {USE_CASES.filter(({ id }) => activeProviders[id] === 'ollama').map(({ id, label, description }) => {
               const statusItem = aiStatus?.[id];
-              const status = statusItem?.status;
+              const status = statusItem?.local_status || statusItem?.status;
               const activeProvider = statusItem?.config?.provider;
               const draft = drafts[id] || {};
               const isSaving = savingUseCase === id;

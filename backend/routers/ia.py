@@ -117,6 +117,26 @@ def _provider_status(settings: AiRuntimeSettings) -> dict:
         }
 
 
+def _local_status(use_case: str, profiles: dict[str, AiRuntimeSettings]) -> dict:
+    """Consulta Ollama también cuando otro proveedor sea el activo.
+
+    Así la pantalla puede preparar el perfil local antes de activarlo, sin
+    confundir el estado del proveedor remoto con los modelos instalados.
+    """
+    settings = profiles.get("ollama")
+    if settings is None:
+        recommendations = list_recommended_models("ollama", use_case)
+        settings = AiRuntimeSettings(
+            use_case=use_case,
+            provider="ollama",
+            model=recommendations[0]["id"] if recommendations else "",
+            base_url=default_base_url_for_provider("ollama", use_case),
+            install_mode="manual",
+            source="default-local-profile",
+        )
+    return _provider_status(settings)
+
+
 def clasificar_emociones(texto: str, db: Session | None = None) -> Emociones:
     if not _enabled(AI_USE_CASE_EMOTION):
         raise AIDisabled("La clasificación emocional está desactivada.")
@@ -400,15 +420,18 @@ def consultar_estado_ia(
 ):
     emotion_settings = get_effective_ai_settings(AI_USE_CASE_EMOTION, db)
     chat_settings = get_effective_ai_settings(AI_USE_CASE_CHAT, db)
+    emotion_profiles = get_saved_ai_profiles(AI_USE_CASE_EMOTION, db)
+    chat_profiles = get_saved_ai_profiles(AI_USE_CASE_CHAT, db)
     return {
         "statuses": {
             AI_USE_CASE_EMOTION: {
                 "config": _settings_to_response(emotion_settings),
                 "profiles": {
                     provider: _settings_to_response(settings)
-                    for provider, settings in get_saved_ai_profiles(AI_USE_CASE_EMOTION, db).items()
+                    for provider, settings in emotion_profiles.items()
                 },
                 "status": _provider_status(emotion_settings),
+                "local_status": _local_status(AI_USE_CASE_EMOTION, emotion_profiles),
                 "recommended_models": list_recommended_models(
                     emotion_settings.provider,
                     AI_USE_CASE_EMOTION,
@@ -418,9 +441,10 @@ def consultar_estado_ia(
                 "config": _settings_to_response(chat_settings),
                 "profiles": {
                     provider: _settings_to_response(settings)
-                    for provider, settings in get_saved_ai_profiles(AI_USE_CASE_CHAT, db).items()
+                    for provider, settings in chat_profiles.items()
                 },
                 "status": _provider_status(chat_settings),
+                "local_status": _local_status(AI_USE_CASE_CHAT, chat_profiles),
                 "recommended_models": list_recommended_models(
                     chat_settings.provider,
                     AI_USE_CASE_CHAT,
