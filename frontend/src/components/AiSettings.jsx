@@ -19,9 +19,11 @@ const USE_CASES = [
 ];
 
 const OPENROUTER_PRESET_MODELS = [
-  { id: 'qwen/qwen3.5-9b', name: 'Qwen 3.5 · Equilibrado' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o · Avanzado' },
-  { id: 'google/gemini-3-flash-preview', name: 'Gemini Flash · Rápido' },
+  { id: 'openai/gpt-5.6-terra', name: 'GPT-5.6 Terra · Equilibrado', detail: '$2.50 / $15 por 1M tokens' },
+  { id: 'anthropic/claude-sonnet-4.6', name: 'Claude Sonnet 4.6 · Equilibrado', detail: '$3 / $15 por 1M tokens' },
+  { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash · Gran valor', detail: '$0.50 / $3 por 1M tokens' },
+  { id: 'qwen/qwen3.5-9b', name: 'Qwen 3.5 9B · Económico', detail: 'Modelo ligero para EVA' },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini · Muy económico', detail: '$0.15 / $0.60 por 1M tokens' },
 ];
 
 const STATUS_LABELS = {
@@ -330,7 +332,7 @@ const AiSettings = () => {
               className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-violet-400"
             >
               <option value="">Selecciona una recomendación</option>
-              {OPENROUTER_PRESET_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+              {OPENROUTER_PRESET_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name} — {model.detail}</option>)}
             </select>
           </label>
           <label className="block text-sm text-gray-300">
