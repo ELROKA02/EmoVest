@@ -639,32 +639,6 @@ const PerfilUsuario = () => {
 
                   <AiSettings />
 
-                  {/* Cuenta (requiere backend, no disponible) */}
-                  <div className="pt-6 border-t border-white/10">
-                    <h4 className="text-lg font-semibold text-white mb-2">Cuenta</h4>
-                    <p className="text-gray-400 text-sm mb-4">Estas opciones aún no están disponibles.</p>
-                    <div className="flex flex-wrap gap-3">
-                      <button disabled title="No disponible" className="px-6 py-2.5 bg-blue-600/40 text-white/70 font-semibold rounded-xl cursor-not-allowed border border-blue-500/30">
-                        Editar nombre y correo
-                      </button>
-                      <button disabled title="No disponible" className="px-6 py-2.5 bg-white/5 text-white/70 font-semibold rounded-xl cursor-not-allowed border border-white/10">
-                        Cambiar contraseña
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Suscripción (requiere backend, no disponible) */}
-                  <div className="pt-6 border-t border-white/10">
-                    <h4 className="text-lg font-semibold text-white mb-2">Suscripción</h4>
-                    <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-4">
-                      <div>
-                        <p className="text-white font-medium">Plan actual</p>
-                        <p className="text-xs text-gray-500">Gestión de plan no disponible.</p>
-                      </div>
-                      <span className="px-3 py-1 rounded-full bg-gray-600/40 text-gray-300 text-xs font-semibold border border-white/10">No disponible</span>
-                    </div>
-                  </div>
-
                   {/* Sesión y zona de peligro */}
                   <div className="pt-6 border-t border-white/10">
                     <h4 className="text-lg font-semibold text-white mb-4">Sesión</h4>
