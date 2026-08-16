@@ -37,6 +37,7 @@ backend/images/
 automation_assets
 docs/*
 !docs/escritorio-windows.md
+!docs/emovest-demo.gif
 
 # Artefactos locales de la edición de escritorio.
 frontend/src-tauri/target/

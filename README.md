@@ -64,9 +64,15 @@ No necesitas Python, Docker, MySQL, Redis ni Node.js. Tus datos se guardan fuera
 
 ## 🎬 EmoVest en acción
 
-<video src="docs/Video_presentacion.mp4" controls preload="metadata">
-  Tu navegador no puede reproducir este vídeo. Puedes verlo <a href="docs/Video_presentacion.mp4">aquí</a>.
-</video>
+<p align="center">
+  <a href="docs/Video_presentacion.mp4">
+    <img src="docs/emovest-demo.gif" alt="Vista previa animada de EmoVest: análisis emocional y estadísticas de trading" width="640">
+  </a>
+</p>
+
+<p align="center">
+  🎥 <strong>Vista previa animada</strong> — pulsa la imagen para ver el vídeo completo.
+</p>
 
 ## 🛠️ ¿Quieres saber cómo está hecho?
 
