@@ -67,7 +67,10 @@ const AiSettings = () => {
   });
   const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false);
   const [removingOpenRouterKey, setRemovingOpenRouterKey] = useState(false);
-  const [activeProviders, setActiveProviders] = useState({ emotion: 'ollama', chat: 'ollama' });
+  // No asumimos Ollama mientras se carga la configuración. De ese modo cada
+  // selector refleja exclusivamente el proveedor activo que el backend ha
+  // confirmado para su caso de uso.
+  const [activeProviders, setActiveProviders] = useState({});
 
   const loadSettings = useCallback(async () => {
     const token = sessionStorage.getItem('token');
@@ -94,8 +97,8 @@ const AiSettings = () => {
       const chatProfiles = statuses.chat?.profiles || {};
       const emotionProfiles = statuses.emotion?.profiles || {};
       setActiveProviders({
-        chat: chatConfig.provider || 'ollama',
-        emotion: emotionConfig.provider || 'ollama',
+        chat: chatConfig.provider,
+        emotion: emotionConfig.provider,
       });
       setOpenRouterDraft((current) => ({
         ...current,
@@ -306,8 +309,6 @@ const AiSettings = () => {
   const selectProvider = async (useCase, provider) => {
     const previousProvider = activeProviders[useCase];
     if (previousProvider === provider) return;
-    setActiveProviders((current) => ({ ...current, [useCase]: provider }));
-    setSavedUseCase('');
 
     const profileExists = Boolean(aiStatus?.[useCase]?.profiles?.[provider]);
     if (!profileExists) {
@@ -317,6 +318,8 @@ const AiSettings = () => {
 
     const token = sessionStorage.getItem('token');
     if (!token) return;
+    setActiveProviders((current) => ({ ...current, [useCase]: provider }));
+    setSavedUseCase('');
     setSavingUseCase(`select-${useCase}`);
     setError('');
     try {
@@ -392,7 +395,7 @@ const AiSettings = () => {
 
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
         {USE_CASES.map(({ id, label, description }) => {
-          const selected = activeProviders[id] || 'ollama';
+          const selected = activeProviders[id];
           const selecting = savingUseCase === `select-${id}`;
           const isEmotion = id === 'emotion';
           const draft = drafts[id] || {};
@@ -409,6 +412,11 @@ const AiSettings = () => {
             <div key={id} className="rounded-xl border border-white/10 bg-white/[0.03] p-5" role="radiogroup" aria-label={`Proveedor para ${label}`}>
               <h5 className="font-semibold text-white">{label}</h5>
               <p className="mt-1 text-xs text-gray-400">{description}</p>
+              {!selected ? (
+                <div className="mt-4 rounded-lg border border-white/10 bg-black/10 px-3 py-4 text-sm text-gray-400" role="status">
+                  Cargando el proveedor seleccionado…
+                </div>
+              ) : <>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button type="button" role="radio" aria-checked={selected === 'ollama'} disabled={selecting} onClick={() => void selectProvider(id, 'ollama')} className={`rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${selected === 'ollama' ? 'border-emerald-300 bg-emerald-400/15 text-emerald-100' : 'border-white/10 text-gray-300 hover:bg-white/5'}`}>IA local</button>
                 <button type="button" role="radio" aria-checked={selected === 'openrouter'} disabled={selecting} onClick={() => void selectProvider(id, 'openrouter')} className={`rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${selected === 'openrouter' ? 'border-violet-300 bg-violet-400/15 text-violet-100' : 'border-white/10 text-gray-300 hover:bg-white/5'}`}>IA no local</button>
@@ -462,6 +470,7 @@ const AiSettings = () => {
                   </>
                 )}
               </div>
+              </>}
             </div>
           );
         })}
