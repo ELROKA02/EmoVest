@@ -99,6 +99,15 @@ pnpm desktop:dev
 
 EmoVest es open source. Puedes proponer una mejora, informar de un problema o colaborar en experiencia de usuario, accesibilidad, privacidad, documentación y análisis responsable.
 
+## ☕ Apoya EmoVest
+
+Si EmoVest te ayuda a revisar tu operativa con más perspectiva, puedes contribuir a que el proyecto siga mejorando:
+
+- **¿Tienes cuenta de GitHub?** [Patrocina EmoVest en GitHub Sponsors](https://github.com/sponsors/ELROKA02).
+- **¿No tienes cuenta de GitHub?** [Invítame a un café en Buy Me a Coffee](https://buymeacoffee.com/elroka02).
+
+Cada aportación ayuda a mantener y desarrollar este diario de trading open source.
+
 ## 📄 Licencia
 
 EmoVest se publica bajo la [licencia MIT](LICENSE).
