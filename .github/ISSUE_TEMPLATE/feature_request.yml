@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest an improvement to EmoVest.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping shape EmoVest. Proposals should support reflection and analysis, not trading signals or financial advice.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the trader workflow or frustration behind the idea.
+      placeholder: I find it difficult to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Tell us what a useful solution could look like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other workflows or solutions have you tried?
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and data impact
+      description: Would this need sensitive trading data, an external service, or a new permission? If not, say so.
+    validations:
+      required: true

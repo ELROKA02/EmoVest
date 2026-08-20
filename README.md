@@ -2,85 +2,113 @@
   <img src="docs/Emovest.png" alt="EmoVest" width="720">
 </p>
 
-<h1 align="center">📈 Opera con datos. Aprende de tus decisiones.</h1>
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.es.md">Español</a>
+</p>
+
+<h1 align="center">EmoVest</h1>
 
 <p align="center">
-  <strong>EmoVest</strong> es el diario de trading que conecta cada resultado con el contexto y las emociones que lo acompañaron.
+  <strong>The open-source, local-first trading journal for understanding your performance, emotions, and trading behavior.</strong>
+  <br>
+  Understand not only how you trade, but why you trade the way you do.
 </p>
 
 <p align="center">
-  <a href="https://github.com/ELROKA02/EmoVest/releases/latest/download/EmoVest-Setup.exe"><img src="https://img.shields.io/badge/⬇️_Descargar_para_Windows-5b21b6?style=for-the-badge" alt="Descargar EmoVest para Windows"></a>
-  <a href="https://github.com/ELROKA02/EmoVest/releases/latest"><img src="https://img.shields.io/badge/Release-0.4.2-2563eb?style=for-the-badge" alt="Ver la última release"></a>
+  <a href="https://github.com/ELROKA02/EmoVest/releases/latest/download/EmoVest-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-5B21B6?style=for-the-badge&logo=windows&logoColor=white" alt="Download EmoVest for Windows"></a>
+  <a href="https://github.com/ELROKA02/EmoVest/releases/latest"><img src="https://img.shields.io/badge/View_latest_release-2563EB?style=for-the-badge&logo=github&logoColor=white" alt="View the latest EmoVest release"></a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/🖥️_Windows_10%2F11-0078D4" alt="Windows 10 y 11">
-  <img src="https://img.shields.io/badge/🔒_Datos_locales-6f42c1" alt="Datos locales">
-  <img src="https://img.shields.io/badge/📖_Open_source-MIT-2ea44f" alt="Licencia MIT">
+  <a href="https://github.com/ELROKA02/EmoVest/releases"><img src="https://img.shields.io/github/v/release/ELROKA02/EmoVest?display_name=release&sort=semver" alt="Latest release"></a>
+  <a href="https://github.com/ELROKA02/EmoVest/actions/workflows/desktop-windows.yml"><img src="https://github.com/ELROKA02/EmoVest/actions/workflows/desktop-windows.yml/badge.svg?branch=main" alt="Windows desktop build"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ELROKA02/EmoVest" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4?logo=windows&logoColor=white" alt="Windows 10 and 11">
+  <img src="https://img.shields.io/badge/data-local--first-6F42C1" alt="Local-first data">
 </p>
 
-> ⚠️ EmoVest no da señales ni asesoramiento financiero. Es tu espacio para revisar, entender y mejorar tu propio proceso.
+> EmoVest does not provide trading signals or financial advice. It is a private space to review, understand, and improve your own process.
 
-## ✨ Lo que nos diferencia
-
-| Un diario de trading convencional | EmoVest |
-| --- | --- |
-| 📉 Registra precios y resultado | 🧠 Une resultado, confianza, notas y emociones en cada operación |
-| 💰 Muestra una ganancia sin contexto | 💸 Calcula resultado bruto, comisión y beneficio neto por cuenta |
-| 🗂️ Deja las capturas y motivos fuera | 📸 Guarda la operación con la imagen y la razón de tu decisión |
-| 📊 Te dice qué ocurrió | 🔎 Te ayuda a descubrir **por qué se repiten** tus mejores y peores hábitos |
-| ☁️ Impone una única forma de usar IA | 🤖 Tú eliges: IA local con Ollama o modelos remotos mediante OpenRouter |
-
-### 🧠 No analices solo el mercado. Analízate también a ti.
-
-El miedo, la euforia, la duda o el exceso de confianza no aparecen en la curva de capital. EmoVest los pone junto a tus estadísticas para que puedas revisar tu operativa con más perspectiva y menos memoria selectiva.
-
-## 🚀 Todo tu proceso, en un solo lugar
-
-- 📒 **Diario completo** — Operaciones LONG y SHORT, riesgo, confianza, notas y capturas.
-- 💸 **Comisiones reales** — Tarifas fijas o porcentuales y resultado neto calculado automáticamente.
-- 📊 **Estadísticas claras** — Beneficio neto, win rate, drawdown, rachas y rendimiento diario.
-- 🧠 **Contexto emocional** — Analiza las notas de cada operación para detectar patrones de comportamiento.
-- 💬 **EVA** — Conversa con tu diario para explorar tus hábitos de trading de forma más natural.
-- 🔄 **Tus datos, sin ataduras** — Importa y exporta operaciones en CSV cuando lo necesites.
-
-## 🔐 La IA se adapta a ti
-
-| Si prefieres… | Puedes usar… |
-| --- | --- |
-| 🏠 Mantener el análisis en tu equipo | **Ollama** con un modelo local |
-| 🌐 Conectar un modelo remoto | **OpenRouter** con tu propia API key |
-| ⚙️ Combinar ambos enfoques | Un proveedor distinto para el análisis emocional y para EVA |
-
-La IA es opcional: tus cuentas, operaciones y estadísticas funcionan aunque no configures ningún proveedor.
-
-## ⚡ Empieza en 3 pasos
-
-1. ⬇️ [Descarga EmoVest para Windows](https://github.com/ELROKA02/EmoVest/releases/latest/download/EmoVest-Setup.exe).
-2. 🛠️ Ejecuta `EmoVest-Setup.exe` y completa el instalador.
-3. 🎯 Crea una cuenta y registra tu próxima operación con todo su contexto.
-
-No necesitas Python, Docker, MySQL, Redis ni Node.js. Tus datos se guardan fuera de la carpeta de instalación y se conservan al actualizar la aplicación.
-
-## 🎬 EmoVest en acción
+## See EmoVest in action
 
 <p align="center">
   <a href="docs/Video_presentacion.mp4">
-    <img src="docs/emovest-demo.gif" alt="Vista previa animada de EmoVest: análisis emocional y estadísticas de trading" width="640">
+    <img src="docs/emovest-demo.gif" alt="Animated preview of EmoVest showing trading statistics and emotional insights" width="760">
   </a>
 </p>
 
 <p align="center">
-  🎥 <strong>Vista previa animada</strong> — pulsa la imagen para ver el vídeo completo.
+  <a href="docs/Video_presentacion.mp4">Watch the full product demo</a>
 </p>
 
-## 🛠️ ¿Quieres saber cómo está hecho?
+## Why EmoVest?
 
-EmoVest combina una interfaz React, una aplicación de escritorio Tauri, una API local FastAPI y SQLite. Las tareas de IA se procesan en segundo plano para que registrar una operación nunca te frene.
+A trade history tells you what price did. It rarely tells you what happened to you: the fear, hesitation, euphoria, or overconfidence behind a decision.
 
-👉 Consulta la [guía técnica de la edición de escritorio](docs/escritorio-windows.md) para conocer la arquitectura, la privacidad de la API local, las copias de seguridad, las actualizaciones y el entorno de desarrollo.
+EmoVest keeps the trade and its human context together. Review your results with evidence—not selective memory—and find the behavioral patterns that affect your process.
 
-### 👩‍💻 Desarrollo local
+| Instead of… | With EmoVest you can… |
+| --- | --- |
+| Spreadsheets, broker history, and scattered notes | Keep trades, metrics, screenshots, and context in one journal |
+| Treating every mistake as a bad streak | Compare results with your recorded confidence and emotional context |
+| Sending sensitive notes to a default cloud service | Choose local analysis with Ollama or explicitly configure a remote provider |
+
+## Built around your trading process
+
+- **Complete journal** — Record LONG and SHORT trades, risk, confidence, notes, commissions, and screenshots.
+- **Useful performance review** — Track net profit, win rate, drawdown, streaks, and daily performance per account.
+- **Emotional context** — Turn trade notes into indicative emotional insights, always alongside the original trade data.
+- **EVA** — Explore your journal and habits through a more natural conversation.
+- **Your data, your choice** — Import and export CSV data when you need it.
+
+## Your trading data belongs to you
+
+| Area | How EmoVest handles it |
+| --- | --- |
+| Trades, screenshots, and statistics | Stored and calculated locally on your device |
+| Database changes | Backups are created before migrations and remain outside the installation folder |
+| Desktop API | Runs on `127.0.0.1` and uses a token generated for the desktop session |
+| EVA with Ollama | Processed locally when you choose a local model |
+| EVA with OpenRouter | Sent only when you explicitly configure OpenRouter and provide your own key |
+| AI | Optional; the journal and statistics work without it |
+
+The emotional analysis is an indicative interpretation of your notes. It supports reflection; it does not replace your judgment or provide investment recommendations.
+
+## Choose how you use AI
+
+| If you prefer… | You can use… |
+| --- | --- |
+| Analysis that stays on your machine | **Ollama** with a local model |
+| A remote model you control | **OpenRouter** with your own API key |
+| Different tools for different jobs | Separate providers for emotional analysis and EVA |
+
+## Get started in three steps
+
+1. [Download EmoVest for Windows](https://github.com/ELROKA02/EmoVest/releases/latest/download/EmoVest-Setup.exe).
+2. Run `EmoVest-Setup.exe` and complete the installer.
+3. Create an account and record your next trade with the context behind it.
+
+You do not need Python, Docker, MySQL, Redis, or Node.js. Your data lives outside the installation folder and stays there when you update or reinstall EmoVest.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    T["Tauri desktop app"] --> UI["React interface"]
+    T --> API["FastAPI sidecar · 127.0.0.1"]
+    API --> DB[("Local SQLite")]
+    API --> Q["Persistent SQLite queue"]
+    Q --> W["Background AI worker"]
+    W --> O["Ollama · optional"]
+    W -. "only when configured" .-> R["OpenRouter"]
+    W --> DB
+```
+
+Creating a trade saves it first; emotional analysis runs in the background so your journal does not interrupt your workflow.
+
+## Development
+
+See [the Windows desktop guide](docs/escritorio-windows.md) for the architecture, data paths, backups, updates, and validation process.
 
 ```powershell
 cd backend
@@ -95,19 +123,19 @@ pnpm install
 pnpm desktop:dev
 ```
 
-## 🤝 Construyamos un trading más consciente
+## Roadmap and contributing
 
-EmoVest es open source. Puedes proponer una mejora, informar de un problema o colaborar en experiencia de usuario, accesibilidad, privacidad, documentación y análisis responsable.
+EmoVest is built in the open. Read the [public roadmap](ROADMAP.md), browse [open issues](https://github.com/ELROKA02/EmoVest/issues), and start with [CONTRIBUTING.md](CONTRIBUTING.md) when you are ready to help.
 
-## ☕ Apoya EmoVest
+Contributions that improve the experience, accessibility, privacy, documentation, testing, or responsible analysis are especially welcome.
 
-Si EmoVest te ayuda a revisar tu operativa con más perspectiva, puedes contribuir a que el proyecto siga mejorando:
+## Support EmoVest
 
-- **¿Tienes cuenta de GitHub?** [Patrocina EmoVest en GitHub Sponsors](https://github.com/sponsors/ELROKA02).
-- **¿No tienes cuenta de GitHub?** [Invítame a un café en Buy Me a Coffee](https://buymeacoffee.com/elroka02).
+If EmoVest helps you review your trading with more perspective, you can help keep the project moving:
 
-Cada aportación ayuda a mantener y desarrollar este diario de trading open source.
+- [Sponsor EmoVest on GitHub Sponsors](https://github.com/sponsors/ELROKA02)
+- [Buy me a coffee](https://buymeacoffee.com/elroka02)
 
-## 📄 Licencia
+## License
 
-EmoVest se publica bajo la [licencia MIT](LICENSE).
+EmoVest is released under the [MIT License](LICENSE).
