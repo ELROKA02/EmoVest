@@ -1,0 +1,170 @@
+name: Publicar EmoVest Desktop macOS
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag estable existente: desktop-vMAJOR.MINOR.PATCH"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-macos-release-${{ github.event.release.tag_name || inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      ${{ (github.event_name == 'release' && github.event.release.prerelease == false &&
+          startsWith(github.event.release.tag_name, 'desktop-v')) ||
+          github.event_name == 'workflow_dispatch' }}
+    name: macOS firmado ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    environment: desktop-production
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Apple Silicon
+            runner: macos-15
+            target: aarch64-apple-darwin
+            artifact_suffix: arm64
+          - name: Intel
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            artifact_suffix: x64
+    env:
+      APP_MODE: desktop
+      PYTHONUTF8: "1"
+      TAURI_TARGET_TRIPLE: ${{ matrix.target }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+
+    steps:
+      - name: Resolver tag y versión
+        id: release
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          tag="${EVENT_TAG:-$INPUT_TAG}"
+          if [[ ! "$tag" =~ ^desktop-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo 'El tag debe tener el formato desktop-vMAJOR.MINOR.PATCH.' >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - name: Descargar el tag estable
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Verificar que el tag pertenece a main
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$RELEASE_TAG" origin/main; then
+            echo "El tag $RELEASE_TAG debe apuntar a un commit contenido en main." >&2
+            exit 1
+          fi
+
+      - name: Validar credenciales Apple
+        run: |
+          for required in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_API_ISSUER APPLE_API_KEY APPLE_API_KEY_BASE64; do
+            if [[ -z "${!required}" ]]; then
+              echo "Falta el secreto obligatorio $required." >&2
+              exit 1
+            fi
+          done
+
+      - name: Configurar herramientas de compilación
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          version: 11.1.3
+          run_install: false
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Configurar Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Configurar Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Instalar dependencias
+        run: |
+          python3 -m pip install --disable-pip-version-check -r backend/requirements.txt
+          pnpm --dir frontend install --frozen-lockfile
+
+      - name: Preparar credencial temporal de notarización
+        run: |
+          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -D > "$api_key_path"
+          chmod 600 "$api_key_path"
+          echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+
+      - name: Construir sidecar macOS
+        run: ./scripts/build-macos-sidecar.sh
+
+      - name: Crear overlay de versión
+        run: |
+          printf '{"version":"%s"}\n' "${{ steps.release.outputs.version }}" > "$RUNNER_TEMP/tauri-macos-release.json"
+
+      - name: Construir, firmar y notarizar
+        working-directory: frontend
+        run: |
+          pnpm tauri build --target "$TAURI_TARGET_TRIPLE" --bundles app,dmg --config "$RUNNER_TEMP/tauri-macos-release.json"
+
+      - name: Verificar ticket y firma
+        run: |
+          bundle_root="frontend/src-tauri/target/$TAURI_TARGET_TRIPLE/release/bundle"
+          app="$bundle_root/macos/EmoVest.app"
+          dmg="$(find "$bundle_root/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          if [[ ! -d "$app" || -z "$dmg" ]]; then
+            echo 'No se generó el .app y .dmg esperados.' >&2
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign --verify --strict --verbose=2 "$app/Contents/MacOS/emovest-desktop"
+          codesign --verify --strict --verbose=2 "$app/Contents/MacOS/emovest-backend"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute -vv "$app"
+          codesign --verify --verbose=2 "$dmg"
+          EMOVEST_MACOS_ARCHITECTURE="${{ matrix.target == 'aarch64-apple-darwin' && 'arm64' || 'x86_64' }}" \
+            ./scripts/test-macos-bundle.sh
+
+      - name: Adjuntar instalador a la release estable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          dmg="$(find "frontend/src-tauri/target/$TAURI_TARGET_TRIPLE/release/bundle/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          gh release upload "$RELEASE_TAG" "$dmg#EmoVest-macOS-${{ matrix.artifact_suffix }}.dmg" --clobber
+
+      - name: Eliminar credencial temporal de notarización
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"

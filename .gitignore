@@ -27,6 +27,8 @@ Thumbs.db
 !.github/workflows/
 .github/workflows/*
 !.github/workflows/desktop-windows.yml
+!.github/workflows/desktop-macos.yml
+!.github/workflows/desktop-macos-release.yml
 
 skills-lock.json
 .agents/
@@ -37,6 +39,7 @@ backend/images/
 automation_assets
 docs/*
 !docs/escritorio-windows.md
+!docs/escritorio-macos.md
 !docs/emovest-demo.gif
 
 # Artefactos locales de la edición de escritorio.

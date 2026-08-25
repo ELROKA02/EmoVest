@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const tauriDir = resolve(scriptDir, '..');
 const frontendDir = resolve(tauriDir, '..');
-const targetTriple = process.env.TAURI_TARGET_TRIPLE || 'x86_64-pc-windows-msvc';
+const hostTargetTriple = process.platform === 'darwin'
+  ? (process.arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin')
+  : 'x86_64-pc-windows-msvc';
+const targetTriple = process.env.TAURI_TARGET_TRIPLE || hostTargetTriple;
 const defaultName = process.platform === 'win32' ? 'emovest-backend.exe' : 'emovest-backend';
 const source = resolve(
   process.env.EMOVEST_SIDECAR_SOURCE
