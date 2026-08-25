@@ -1,0 +1,152 @@
+name: EmoVest Desktop macOS
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  APP_MODE: desktop
+  PYTHONUTF8: "1"
+
+jobs:
+  build:
+    name: macOS ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Apple Silicon
+            runner: macos-14
+            target: aarch64-apple-darwin
+            architecture: arm64
+            artifact_suffix: arm64
+          - name: Intel
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            architecture: x86_64
+            artifact_suffix: x64
+    env:
+      TAURI_TARGET_TRIPLE: ${{ matrix.target }}
+      EMOVEST_MACOS_ARCHITECTURE: ${{ matrix.architecture }}
+      EMOVEST_DESKTOP_TOKEN: ci-only-token-000000000000000000000000000000000000000000000000
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Rechazar credenciales privadas versionadas
+        run: |
+          tracked_secrets="$(git ls-files | grep -E '(^|/)\.secrets/|\.(key|p12|pfx)$' || true)"
+          if [[ -n "$tracked_secrets" ]]; then
+            echo "Hay credenciales privadas rastreadas por Git:" >&2
+            printf '%s\n' "$tracked_secrets" >&2
+            exit 1
+          fi
+
+      - name: Configurar rutas temporales de EmoVest
+        run: |
+          echo "EMOVEST_DATA_DIR=$RUNNER_TEMP/EmoVest CI/data" >> "$GITHUB_ENV"
+          echo "EMOVEST_CONFIG_DIR=$RUNNER_TEMP/EmoVest CI/config" >> "$GITHUB_ENV"
+          echo "EMOVEST_LOG_DIR=$RUNNER_TEMP/EmoVest CI/logs" >> "$GITHUB_ENV"
+          echo "EMOVEST_BACKUP_DIR=$RUNNER_TEMP/EmoVest CI/backups" >> "$GITHUB_ENV"
+          echo "IMAGE_STORAGE_DIR=$RUNNER_TEMP/EmoVest CI/data/images" >> "$GITHUB_ENV"
+          echo "EMOVEST_MODEL_DIR=$RUNNER_TEMP/EmoVest CI/data/models" >> "$GITHUB_ENV"
+
+      - name: Preparar pnpm
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          version: 11.1.3
+          run_install: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Preparar Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Preparar Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+
+      - name: Instalar dependencias
+        run: |
+          python3 -m pip install --disable-pip-version-check -r backend/requirements.txt
+          pnpm --dir frontend install --frozen-lockfile
+
+      - name: Validar backend de escritorio
+        working-directory: backend
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Validar frontend
+        working-directory: frontend
+        run: |
+          pnpm lint
+          pnpm build
+
+      - name: Construir sidecar macOS
+        run: ./scripts/build-macos-sidecar.sh
+
+      - name: Validar sidecar macOS empaquetado
+        run: ./scripts/test-macos-sidecar.sh
+
+      - name: Validar Rust
+        working-directory: frontend/src-tauri
+        run: |
+          cargo fmt --all -- --check
+          cargo check --locked --target "$TAURI_TARGET_TRIPLE"
+          cargo clippy --locked --target "$TAURI_TARGET_TRIPLE" --all-targets -- -D warnings
+          cargo test --locked --target "$TAURI_TARGET_TRIPLE" --all-targets
+
+      - name: Construir instalador macOS
+        working-directory: frontend
+        run: pnpm tauri build --target "$TAURI_TARGET_TRIPLE" --bundles app,dmg
+
+      - name: Validar bundle e instalador macOS
+        run: ./scripts/test-macos-bundle.sh
+
+      - name: Preparar artefacto de CI
+        id: artifacts
+        run: |
+          output="$RUNNER_TEMP/emovest-artifacts"
+          mkdir -p "$output"
+          installer="$(find "frontend/src-tauri/target/$TAURI_TARGET_TRIPLE/release/bundle/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          if [[ -z "$installer" ]]; then
+            echo 'Tauri no generó un instalador .dmg.' >&2
+            exit 1
+          fi
+          cp "$installer" "$output/EmoVest-macOS-${{ matrix.artifact_suffix }}.dmg"
+          echo "path=$output" >> "$GITHUB_OUTPUT"
+
+      - name: Subir instalador como artefacto de CI
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: EmoVest-macOS-${{ matrix.artifact_suffix }}-${{ github.sha }}
+          path: ${{ steps.artifacts.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14

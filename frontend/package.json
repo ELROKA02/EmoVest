@@ -11,7 +11,8 @@
     "tauri": "tauri",
     "desktop:prepare-sidecar": "node src-tauri/scripts/prepare-sidecar.mjs",
     "desktop:dev": "pnpm desktop:prepare-sidecar && tauri dev",
-    "desktop:build": "pnpm desktop:prepare-sidecar && tauri build --bundles nsis"
+    "desktop:build": "pnpm desktop:prepare-sidecar && tauri build --bundles nsis",
+    "desktop:build:mac": "pnpm desktop:prepare-sidecar && tauri build --bundles app,dmg"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.20",
