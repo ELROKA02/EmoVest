@@ -2,15 +2,11 @@
 
 set -euo pipefail
 
-if [[ "${GITHUB_ACTIONS:-}" != 'true' || "${CI:-}" != 'true' ]]; then
-  echo 'Esta prueba solo puede ejecutarse en GitHub Actions.' >&2
-  exit 1
-fi
-
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 target_triple="${TAURI_TARGET_TRIPLE:?TAURI_TARGET_TRIPLE es obligatorio}"
-sidecar="$repository_root/frontend/src-tauri/binaries/emovest-backend-$target_triple"
-test_root="${RUNNER_TEMP:?RUNNER_TEMP es obligatorio}/EmoVest sidecar ñ con espacios"
+python_command="${PYTHON_COMMAND:-python3}"
+sidecar="${EMOVEST_SIDECAR_PATH:-$repository_root/frontend/src-tauri/binaries/emovest-backend-$target_triple}"
+test_root="${EMOVEST_TEST_ROOT:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/EmoVest sidecar ñ con espacios}"
 token="ci-sidecar-smoke-token-$(printf '0%.0s' {1..48})"
 
 if [[ ! -x "$sidecar" ]]; then
@@ -18,7 +14,7 @@ if [[ ! -x "$sidecar" ]]; then
   exit 1
 fi
 
-expected_schema_revision="$(cd "$repository_root/backend" && python3 -c 'from migration_manager import get_head_revision; print(get_head_revision())')"
+expected_schema_revision="$(cd "$repository_root/backend" && "$python_command" -c 'from migration_manager import get_head_revision; print(get_head_revision())')"
 if [[ -z "$expected_schema_revision" ]]; then
   echo 'No se pudo resolver la revisión Alembic esperada.' >&2
   exit 1
@@ -84,8 +80,8 @@ if curl --silent --show-error --fail "$base_url/health/ready" >/dev/null 2>&1; t
 fi
 
 health="$(curl --silent --show-error --fail -H "X-Emovest-Desktop-Token: $token" "$base_url/health/ready")"
-health_ready="$(printf '%s' "$health" | python3 -c 'import json, sys; payload=json.load(sys.stdin); print(payload.get("ready") is True)')"
-health_schema="$(printf '%s' "$health" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("schema_revision", ""))')"
+health_ready="$(printf '%s' "$health" | "$python_command" -c 'import json, sys; payload=json.load(sys.stdin); print(payload.get("ready") is True)')"
+health_schema="$(printf '%s' "$health" | "$python_command" -c 'import json, sys; print(json.load(sys.stdin).get("schema_revision", ""))')"
 if [[ "$health_ready" != 'True' || "$health_schema" != "$expected_schema_revision" ]]; then
   echo "El health autenticado no confirmó el esquema esperado: $health" >&2
   exit 1

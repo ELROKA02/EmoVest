@@ -89,5 +89,19 @@ nunca se versionan ni se incluyen en artefactos de CI.
 Hasta que esas credenciales existan, el flujo automatiza builds verificables de
 desarrollo, pero no una distribución pública notarizada.
 
+Una vez configuradas, el workflow
+[desktop-macos-release.yml](../.github/workflows/desktop-macos-release.yml) se
+activa al publicar una release estable `desktop-vX.Y.Z` —o manualmente para un
+tag existente—, construye los dos targets, firma, notariza y adjunta los dos
+`.dmg` a esa release. No modifica `latest.json`, de modo que el updater Windows
+permanece aislado y no corre riesgo.
+
+Los secretos obligatorios del entorno protegido `desktop-production` son:
+`APPLE_CERTIFICATE` (P12 Developer ID Application en base64),
+`APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_ISSUER`, `APPLE_API_KEY` (Key ID) y
+`APPLE_API_KEY_BASE64` (la API key `.p8` de App Store Connect en base64). El
+workflow falla de forma explícita si falta alguno; nunca publica un instalador
+macOS sin firma ni notarización.
+
 Referencias: [DMG de Tauri](https://v2.tauri.app/distribute/dmg/) y [firma y
 notarización de macOS en Tauri](https://v2.tauri.app/distribute/sign/macos/).
