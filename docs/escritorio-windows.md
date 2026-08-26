@@ -98,6 +98,14 @@ Utilizan una clave de idempotencia, leases con caducidad, reintentos acotados y
 backoff. Un trabajo interrumpido se recupera en el siguiente arranque. La
 ausencia o el fallo de Ollama nunca revierte la operación.
 
+## Importar operaciones de MetaTrader 5
+
+La edición Windows permite importar localmente el reporte HTML guardado desde
+el historial de MetaTrader 5, con vista previa, salidas parciales y protección
+contra duplicados. Consulta [Importar un historial de MetaTrader
+5](importar-metatrader.md) para preparar el archivo y resolver posibles
+ambigüedades de cuentas hedging.
+
 ## IA opcional
 
 Puedes elegir por separado el proveedor del análisis emocional y el del chat

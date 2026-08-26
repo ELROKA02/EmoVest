@@ -5,6 +5,11 @@ Tauri inicia un sidecar FastAPI empaquetado con PyInstaller, que mantiene los
 datos, SQLite, logs y copias de seguridad fuera de la carpeta instalada. La API
 queda limitada a loopback y exige el token efímero generado por Tauri.
 
+La edición macOS incluye el mismo importador local de reportes HTML de
+MetaTrader 5 que Windows. El flujo, los límites y la resolución de posiciones
+hedging están documentados en [Importar un historial de MetaTrader
+5](importar-metatrader.md).
+
 Se construyen instaladores nativos separados para las dos arquitecturas de Mac:
 
 | Equipo | Target Rust/Tauri | Instalador CI |

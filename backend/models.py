@@ -122,6 +122,8 @@ class Cuenta_Trading(Base):
     alertas = relationship("Alerta", back_populates="cuenta_trading")
     operaciones = relationship("Operacion", back_populates="cuenta_trading")
     estadisticas = relationship("Estadistica", back_populates="cuenta_trading")
+    movimientos = relationship("MovimientoCuenta", back_populates="cuenta_trading", cascade="all, delete-orphan")
+    importaciones = relationship("Importacion", back_populates="cuenta_trading", cascade="all, delete-orphan")
 
 
 class Alerta(Base):
@@ -156,6 +158,12 @@ class Estadistica(Base):
 
 class Operacion(Base):
     __tablename__ = "operacion"
+    __table_args__ = (
+        CheckConstraint(
+            "estado IN ('OPEN', 'PARTIALLY_CLOSED', 'CLOSED')",
+            name="ck_operacion_estado",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     id_cuenta = Column(Integer, ForeignKey("cuenta_trading.id"))
@@ -187,7 +195,12 @@ class Operacion(Base):
     resultado_bruto = Column(DECIMAL(20,6), nullable=True)
     comisiones = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
     resultado = Column(DECIMAL(20,6), nullable=True)
+    swap = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
+    tasas = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
     ratio_rr = Column(DECIMAL(10,4), nullable=True)
+    estado = Column(String(24), nullable=False, default="OPEN", server_default="OPEN")
+    cantidad_abierta = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
+    fecha_cierre = Column(DateTime, nullable=True)
 
     nivel_confianza = Column(Integer, nullable=True)  # 1–10
 
@@ -196,6 +209,102 @@ class Operacion(Base):
     
     cuenta_trading = relationship("Cuenta_Trading", back_populates="operaciones")
     registro_emocional = relationship("Registro_emocional", uselist=False, back_populates="operacion")
+    ejecuciones = relationship(
+        "OperacionEjecucion",
+        back_populates="operacion",
+        cascade="all, delete-orphan",
+        order_by="OperacionEjecucion.fecha_hora, OperacionEjecucion.id",
+    )
+
+
+class OperacionEjecucion(Base):
+    __tablename__ = "operacion_ejecucion"
+    __table_args__ = (
+        CheckConstraint("rol IN ('ENTRY', 'EXIT')", name="ck_operacion_ejecucion_rol"),
+        CheckConstraint("origen IN ('CALCULATED', 'MANUAL', 'BROKER', 'LEGACY')", name="ck_operacion_ejecucion_origen"),
+        CheckConstraint("cantidad > 0", name="ck_operacion_ejecucion_cantidad"),
+        Index("ix_operacion_ejecucion_operacion_fecha", "id_operacion", "fecha_hora", "id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_operacion = Column(Integer, ForeignKey("operacion.id", ondelete="CASCADE"), nullable=False)
+    source_row_id = Column(Integer, ForeignKey("importacion_fila.id", ondelete="SET NULL"), nullable=True)
+    source_leg = Column(String(16), nullable=True)
+    rol = Column(String(8), nullable=False)
+    fecha_hora = Column(DateTime, nullable=False)
+    cantidad = Column(DECIMAL(20,6), nullable=False)
+    precio = Column(DECIMAL(20,6), nullable=True)
+    resultado_bruto = Column(DECIMAL(20,6), nullable=True)
+    impacto_comision = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
+    impacto_swap = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
+    impacto_tasa = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
+    resultado_neto = Column(DECIMAL(20,6), nullable=False, default=0, server_default="0")
+    origen = Column(String(16), nullable=False, default="CALCULATED", server_default="CALCULATED")
+
+    operacion = relationship("Operacion", back_populates="ejecuciones")
+    source_row = relationship("ImportacionFila", back_populates="ejecuciones")
+
+
+class MovimientoCuenta(Base):
+    __tablename__ = "movimiento_cuenta"
+    __table_args__ = (
+        CheckConstraint(
+            "tipo IN ('DEPOSIT', 'WITHDRAWAL', 'COMMISSION', 'FEE', 'ADJUSTMENT')",
+            name="ck_movimiento_cuenta_tipo",
+        ),
+        Index("ix_movimiento_cuenta_cuenta_fecha", "id_cuenta", "fecha_hora", "id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_cuenta = Column(Integer, ForeignKey("cuenta_trading.id", ondelete="CASCADE"), nullable=False)
+    source_row_id = Column(Integer, ForeignKey("importacion_fila.id", ondelete="SET NULL"), nullable=True)
+    fecha_hora = Column(DateTime, nullable=False)
+    tipo = Column(String(20), nullable=False)
+    importe = Column(DECIMAL(20,6), nullable=False)
+    descripcion = Column(String(255), nullable=True)
+
+    cuenta_trading = relationship("Cuenta_Trading", back_populates="movimientos")
+    source_row = relationship("ImportacionFila", back_populates="movimientos")
+
+
+class Importacion(Base):
+    __tablename__ = "importacion"
+    __table_args__ = (
+        UniqueConstraint("id_cuenta", "proveedor", "fingerprint", name="uq_importacion_archivo"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_cuenta = Column(Integer, ForeignKey("cuenta_trading.id", ondelete="CASCADE"), nullable=False)
+    proveedor = Column(String(32), nullable=False)
+    fingerprint = Column(String(64), nullable=False)
+    cuenta_origen_hash = Column(String(64), nullable=False)
+    broker = Column(String(120), nullable=True)
+    zona_horaria = Column(String(80), nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    cuenta_trading = relationship("Cuenta_Trading", back_populates="importaciones")
+    filas = relationship("ImportacionFila", back_populates="importacion", cascade="all, delete-orphan")
+
+
+class ImportacionFila(Base):
+    __tablename__ = "importacion_fila"
+    __table_args__ = (
+        UniqueConstraint("id_cuenta", "source_key", name="uq_importacion_fila_source"),
+        UniqueConstraint("id_importacion", "numero_fila", name="uq_importacion_fila_numero"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_importacion = Column(Integer, ForeignKey("importacion.id", ondelete="CASCADE"), nullable=False)
+    id_cuenta = Column(Integer, ForeignKey("cuenta_trading.id", ondelete="CASCADE"), nullable=False)
+    numero_fila = Column(Integer, nullable=False)
+    deal_ticket = Column(String(80), nullable=True)
+    source_key = Column(String(128), nullable=False)
+    clasificacion = Column(String(32), nullable=False)
+    normalized_json = Column(Text, nullable=False)
+
+    importacion = relationship("Importacion", back_populates="filas")
+    ejecuciones = relationship("OperacionEjecucion", back_populates="source_row")
+    movimientos = relationship("MovimientoCuenta", back_populates="source_row")
 
 
 class Registro_emocional(Base):

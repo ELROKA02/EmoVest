@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from database import SessionLocal, get_db
 from routers.auth import get_current_user
-from models import Cuenta_Trading, Estadistica, Operacion
+from models import Cuenta_Trading, Estadistica, MovimientoCuenta, Operacion, OperacionEjecucion
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -52,11 +52,83 @@ def get_operaciones_del_mes(
 
     operaciones = db.query(Operacion).filter(
         Operacion.id_cuenta == cuenta_id_trading,
-        Operacion.fecha_hora >= inicio_mes,
-        Operacion.fecha_hora < inicio_mes_siguiente,
-    ).order_by(Operacion.fecha_hora.asc(), Operacion.id.asc()).all()
+        Operacion.estado == "CLOSED",
+        Operacion.fecha_cierre >= inicio_mes,
+        Operacion.fecha_cierre < inicio_mes_siguiente,
+    ).order_by(Operacion.fecha_cierre.asc(), Operacion.id.asc()).all()
 
     return operaciones
+
+
+def fecha_resultado(operacion: Operacion) -> datetime:
+    """Date used by realized statistics; closed trades belong to their close date."""
+    return operacion.fecha_cierre or operacion.fecha_hora
+
+
+def obtener_vistas_realizadas(db: Session, cuenta_id: int, year: int, month: int) -> dict:
+    """Return independent operation and exit views without mixing account cash flows."""
+    if year is None or month is None:
+        now = datetime.now()
+        year, month = now.year, now.month
+    inicio = datetime(year, month, 1)
+    fin = get_inicio_mes_siguiente(inicio)
+
+    operaciones = get_operaciones_del_mes(db, cuenta_id, year, month)
+    operation_values = [Decimal(str(item.resultado)) for item in operaciones if item.resultado is not None]
+    exits = (
+        db.query(OperacionEjecucion)
+        .join(Operacion, Operacion.id == OperacionEjecucion.id_operacion)
+        .filter(
+            Operacion.id_cuenta == cuenta_id,
+            OperacionEjecucion.rol == "EXIT",
+            OperacionEjecucion.fecha_hora >= inicio,
+            OperacionEjecucion.fecha_hora < fin,
+        )
+        .order_by(OperacionEjecucion.fecha_hora.asc(), OperacionEjecucion.id.asc())
+        .all()
+    )
+    exit_values = [Decimal(str(item.resultado_neto or 0)) for item in exits]
+    entry_costs = (
+        db.query(OperacionEjecucion)
+        .join(Operacion, Operacion.id == OperacionEjecucion.id_operacion)
+        .filter(
+            Operacion.id_cuenta == cuenta_id,
+            OperacionEjecucion.rol == "ENTRY",
+            OperacionEjecucion.fecha_hora >= inicio,
+            OperacionEjecucion.fecha_hora < fin,
+        )
+        .all()
+    )
+    movimientos = db.query(MovimientoCuenta).filter(
+        MovimientoCuenta.id_cuenta == cuenta_id,
+        MovimientoCuenta.fecha_hora >= inicio,
+        MovimientoCuenta.fecha_hora < fin,
+    ).all()
+
+    def summarize(values: list[Decimal]) -> dict:
+        positives = sum(1 for value in values if value > 0)
+        negatives = sum(1 for value in values if value < 0)
+        neutral = len(values) - positives - negatives
+        return {
+            "total": len(values),
+            "ganadoras": positives,
+            "perdedoras": negatives,
+            "break_even": neutral,
+            "resultado_neto": float(sum(values, Decimal("0"))),
+            "win_rate": round(positives / len(values) * 100, 2) if values else 0.0,
+        }
+
+    return {
+        "operaciones": summarize(operation_values),
+        "salidas": {
+            **summarize(exit_values),
+            "costes_entrada": float(sum((Decimal(str(item.resultado_neto or 0)) for item in entry_costs), Decimal("0"))),
+        },
+        "movimientos_cuenta": {
+            "total": len(movimientos),
+            "importe_neto": float(sum((Decimal(str(item.importe)) for item in movimientos), Decimal("0"))),
+        },
+    }
 
 def calcular_saldo_diario_mensual(
     db: Session,
@@ -71,6 +143,7 @@ def calcular_saldo_diario_mensual(
         month = now.month
 
     inicio_mes = datetime(year, month, 1)
+    fin_mes = get_inicio_mes_siguiente(inicio_mes)
     operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     cuenta = db.query(Cuenta_Trading).filter(
@@ -80,10 +153,12 @@ def calcular_saldo_diario_mensual(
     if not cuenta:
         return []
 
-    # Calcula el saldo real con el que empieza el mes sumando resultados previos.
+    # El saldo incluye P&L cerrado y flujos de caja, pero estos últimos nunca
+    # entran en win rate, expectativa ni profit de trading.
     operaciones_previas = db.query(Operacion).filter(
         Operacion.id_cuenta == cuenta_id_trading,
-        Operacion.fecha_hora < inicio_mes,
+        Operacion.estado == "CLOSED",
+        Operacion.fecha_cierre < inicio_mes,
     ).all()
 
     resultado_acumulado_previo = Decimal("0")
@@ -91,41 +166,45 @@ def calcular_saldo_diario_mensual(
         if operacion_previa.resultado is not None:
             resultado_acumulado_previo += Decimal(str(operacion_previa.resultado))
 
-    saldo_inicio_mes = Decimal(str(cuenta.saldo_inicial)) + resultado_acumulado_previo
-    saldo_diario = []
-    saldo_actual = saldo_inicio_mes
-    fecha_actual = None
+    movimientos_previos = db.query(MovimientoCuenta).filter(
+        MovimientoCuenta.id_cuenta == cuenta_id_trading,
+        MovimientoCuenta.fecha_hora < inicio_mes,
+    ).all()
+    resultado_acumulado_previo += sum(
+        (Decimal(str(movimiento.importe)) for movimiento in movimientos_previos),
+        Decimal("0"),
+    )
 
+    saldo_inicio_mes = Decimal(str(cuenta.saldo_inicial)) + resultado_acumulado_previo
+    cambios_por_dia = {}
     for operacion in operaciones:
         if operacion.resultado is None:
             continue
+        fecha = fecha_resultado(operacion).date()
+        cambios_por_dia[fecha] = cambios_por_dia.get(fecha, Decimal("0")) + Decimal(str(operacion.resultado))
+    movimientos_mes = db.query(MovimientoCuenta).filter(
+        MovimientoCuenta.id_cuenta == cuenta_id_trading,
+        MovimientoCuenta.fecha_hora >= inicio_mes,
+        MovimientoCuenta.fecha_hora < fin_mes,
+    ).all()
+    for movimiento in movimientos_mes:
+        fecha = movimiento.fecha_hora.date()
+        cambios_por_dia[fecha] = cambios_por_dia.get(fecha, Decimal("0")) + Decimal(str(movimiento.importe))
 
-        if fecha_actual is None:
-            fecha_actual = operacion.fecha_hora.date()
-
-        if operacion.fecha_hora.date() != fecha_actual:
-            saldo_diario.append({
-                "fecha": fecha_actual.isoformat(),
-                "saldo": round(float(saldo_actual), 2)
-            })
-            fecha_actual = operacion.fecha_hora.date()
-
-        saldo_actual += Decimal(str(operacion.resultado))
-
-    if fecha_actual is not None:
+    saldo_diario = [{
+        "fecha": date_type(year, month, 1).isoformat(),
+        "saldo": round(float(saldo_inicio_mes), 2),
+        "es_inicio_mes": True,
+    }]
+    saldo_actual = saldo_inicio_mes
+    for fecha, cambio in sorted(cambios_por_dia.items()):
+        saldo_actual += cambio
+        if fecha == date_type(year, month, 1):
+            saldo_diario[0]["saldo"] = round(float(saldo_actual), 2)
+            continue
         saldo_diario.append({
-            "fecha": fecha_actual.isoformat(),
+            "fecha": fecha.isoformat(),
             "saldo": round(float(saldo_actual), 2)
-        })
-
-    # Añadir punto de saldo al inicio del mes para que el frontend pueda
-    # dibujar la línea desde el día 1 con el saldo correcto de arranque.
-    inicio_mes_date = date_type(year, month, 1)
-    if saldo_diario and saldo_diario[0]["fecha"] != inicio_mes_date.isoformat():
-        saldo_diario.insert(0, {
-            "fecha": inicio_mes_date.isoformat(),
-            "saldo": round(float(saldo_inicio_mes), 2),
-            "es_inicio_mes": True,
         })
 
     return saldo_diario
@@ -427,7 +506,7 @@ def calcular_dia_mas_rentable_semanal_mensual(
         if operacion.resultado is None:
             continue
 
-        dia_semana = operacion.fecha_hora.strftime("%A")
+        dia_semana = fecha_resultado(operacion).strftime("%A")
 
         if dia_semana not in ganancias_por_dia:
             ganancias_por_dia[dia_semana] = Decimal("0")
@@ -459,7 +538,7 @@ def calcular_dia_menos_rentable_semanal_mensual(
         if operacion.resultado is None:
             continue
 
-        dia_semana = operacion.fecha_hora.strftime("%A")
+        dia_semana = fecha_resultado(operacion).strftime("%A")
 
         if dia_semana not in ganancias_por_dia:
             ganancias_por_dia[dia_semana] = Decimal("0")
@@ -854,16 +933,12 @@ def calcular_ganancia_neta_y_total_operaciones_diarias_mensual(
     inicio_mes = datetime(year, month, 1)
     inicio_mes_siguiente = get_inicio_mes_siguiente(inicio_mes)
 
-    operaciones = db.query(Operacion).filter(
-        Operacion.id_cuenta == cuenta_id_trading,
-        Operacion.fecha_hora >= inicio_mes,
-        Operacion.fecha_hora < inicio_mes_siguiente,
-    ).order_by(Operacion.fecha_hora.asc(), Operacion.id.asc()).all()
+    operaciones = get_operaciones_del_mes(db, cuenta_id_trading, year, month)
 
     resultados_diarios = {}
 
     for operacion in operaciones:
-        fecha_str = operacion.fecha_hora.date().isoformat()
+        fecha_str = fecha_resultado(operacion).date().isoformat()
 
         if fecha_str not in resultados_diarios:
             resultados_diarios[fecha_str] = {
@@ -967,7 +1042,8 @@ def get_resumen_mensual(
         "activo_mas_rentable": activo_mas_rentable,
         "activo_menos_rentable": activo_menos_rentable,
         "winrate_long_short": winrate_long_short,
-        "saldo_diario": calcular_saldo_diario_mensual(db, cuenta.id, year, month)
+        "saldo_diario": calcular_saldo_diario_mensual(db, cuenta.id, year, month),
+        "vistas_realizadas": obtener_vistas_realizadas(db, cuenta.id, year, month),
     }
 
 @router.get(
@@ -1140,9 +1216,10 @@ def get_resumen_mensual_todas_cuentas(
     # Obtener todas las operaciones del mes de todas las cuentas, ordenadas cronologicamente
     operaciones = db.query(Operacion).filter(
         Operacion.id_cuenta.in_(cuenta_ids),
-        Operacion.fecha_hora >= inicio_mes,
-        Operacion.fecha_hora < inicio_mes_siguiente,
-    ).order_by(Operacion.fecha_hora.asc(), Operacion.id.asc()).all()
+        Operacion.estado == "CLOSED",
+        Operacion.fecha_cierre >= inicio_mes,
+        Operacion.fecha_cierre < inicio_mes_siguiente,
+    ).order_by(Operacion.fecha_cierre.asc(), Operacion.id.asc()).all()
 
     ops = [op for op in operaciones if op.resultado is not None]
     ops_ganadoras = [op for op in ops if op.resultado > 0]
@@ -1242,7 +1319,7 @@ def get_resumen_mensual_todas_cuentas(
     # --- Dia semanal mas/menos rentable (suma de todas las cuentas por dia) ---
     ganancias_dia = {}
     for op in ops:
-        dia = op.fecha_hora.strftime("%A")
+        dia = fecha_resultado(op).strftime("%A")
         if dia not in ganancias_dia:
             ganancias_dia[dia] = Decimal("0")
         ganancias_dia[dia] += Decimal(str(op.resultado))
@@ -1294,7 +1371,8 @@ def get_resumen_mensual_todas_cuentas(
     for cuenta in cuentas:
         ops_previas = db.query(Operacion).filter(
             Operacion.id_cuenta == cuenta.id,
-            Operacion.fecha_hora < inicio_mes,
+            Operacion.estado == "CLOSED",
+            Operacion.fecha_cierre < inicio_mes,
         ).all()
         saldo_base_total += Decimal(str(cuenta.saldo_inicial))
         for op_prev in ops_previas:
@@ -1304,7 +1382,7 @@ def get_resumen_mensual_todas_cuentas(
     # Agrupar resultados del mes por fecha
     resultados_por_fecha = {}
     for op in ops:
-        fecha_key = op.fecha_hora.date()
+        fecha_key = fecha_resultado(op).date()
         if fecha_key not in resultados_por_fecha:
             resultados_por_fecha[fecha_key] = Decimal("0")
         resultados_por_fecha[fecha_key] += Decimal(str(op.resultado))
@@ -1313,7 +1391,7 @@ def get_resumen_mensual_todas_cuentas(
     saldo_diario = []
     fecha_actual_sd = None
     for op in ops:
-        fecha_op = op.fecha_hora.date()
+        fecha_op = fecha_resultado(op).date()
         if fecha_actual_sd is None:
             fecha_actual_sd = fecha_op
         if fecha_op != fecha_actual_sd:
@@ -1377,6 +1455,3 @@ def stop_stats_scheduler() -> None:
     # No se dispone el engine hasta que un cálculo ya iniciado haya terminado.
     _scheduler.shutdown(wait=True)
     _scheduler = None
-
-
-

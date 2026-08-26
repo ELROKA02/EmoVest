@@ -22,7 +22,8 @@ import models  # noqa: F401
 
 
 CORE_REVISION = "0001_desktop_core"
-RUNTIME_REVISION = "0006_account_commissions"
+RUNTIME_REVISION = "0007_operation_executions"
+LEGACY_RUNTIME_REVISION = "0006_account_commissions"
 CORE_TABLES = {
     "ai_settings",
     "alerta",
@@ -36,7 +37,18 @@ CORE_TABLES = {
     "usuario_trofeo",
     "usuarios",
 }
-RUNTIME_TABLES = {"background_jobs", "chat_sessions"}
+RUNTIME_TABLES = {
+    "background_jobs",
+    "chat_sessions",
+    "operacion_ejecucion",
+    "movimiento_cuenta",
+    "importacion",
+    "importacion_fila",
+}
+LEGACY_RUNTIME_TABLES = {"background_jobs", "chat_sessions"}
+LEGACY_MISSING_COLUMNS = {
+    "operacion": {"swap", "tasas", "estado", "cantidad_abierta", "fecha_cierre"},
+}
 _MIGRATION_LOCK = threading.Lock()
 _SAFE_LABEL = re.compile(r"[^a-zA-Z0-9_-]+")
 
@@ -116,10 +128,13 @@ def _database_has_user_tables(database_engine: Engine) -> bool:
 def _validate_schema_columns(
     connection: Connection,
     table_names: set[str],
+    *,
+    missing_columns: dict[str, set[str]] | None = None,
 ) -> None:
     inspector = inspect(connection)
     for table_name in table_names:
         expected = set(Base.metadata.tables[table_name].columns.keys())
+        expected -= (missing_columns or {}).get(table_name, set())
         actual = {column["name"] for column in inspector.get_columns(table_name)}
         if actual != expected:
             raise MigrationError(
@@ -138,6 +153,9 @@ def _stamp_unversioned_schema(database_engine: Engine) -> None:
     if table_names == CORE_TABLES:
         target_revision = CORE_REVISION
         expected_tables = CORE_TABLES
+    elif table_names == CORE_TABLES | LEGACY_RUNTIME_TABLES:
+        target_revision = LEGACY_RUNTIME_REVISION
+        expected_tables = CORE_TABLES | LEGACY_RUNTIME_TABLES
     elif table_names == CORE_TABLES | RUNTIME_TABLES:
         target_revision = RUNTIME_REVISION
         expected_tables = CORE_TABLES | RUNTIME_TABLES
@@ -149,7 +167,11 @@ def _stamp_unversioned_schema(database_engine: Engine) -> None:
         )
 
     with database_engine.begin() as connection:
-        _validate_schema_columns(connection, expected_tables)
+        _validate_schema_columns(
+            connection,
+            expected_tables,
+            missing_columns=(LEGACY_MISSING_COLUMNS if target_revision == LEGACY_RUNTIME_REVISION else None),
+        )
         command.stamp(_alembic_config(connection), target_revision)
 
 

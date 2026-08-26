@@ -10,7 +10,7 @@ from desktop_security import DesktopApiSecurityMiddleware
 from backup_manager import current_schema_revision
 from migration_manager import get_head_revision
 from queueing.lifecycle import get_background_services_health
-from routers import auth, chat, desktop, exportaciones, ia, operaciones, cuentaTrading, estadisticas
+from routers import auth, chat, desktop, exportaciones, ia, importaciones, operaciones, cuentaTrading, estadisticas
 
 
 @asynccontextmanager
@@ -63,6 +63,10 @@ app = FastAPI(
             "description": "Registro y consulta de operaciones financieras realizadas por el usuario."
         },
         {
+            "name": "importaciones",
+            "description": "Previsualización y confirmación idempotente de historiales de proveedores de trading."
+        },
+        {
             "name": "emociones",
             "description": "Registro y analisis del contexto emocional vinculado a las operaciones."
         },
@@ -93,6 +97,7 @@ app.add_middleware(DesktopApiSecurityMiddleware)
 # Routers
 app.include_router(auth.router)
 app.include_router(exportaciones.router)
+app.include_router(importaciones.router)
 app.include_router(operaciones.router)
 app.include_router(cuentaTrading.router)
 app.include_router(estadisticas.router)

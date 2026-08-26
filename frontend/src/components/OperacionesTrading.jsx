@@ -6,7 +6,8 @@ import { fetchAndStoreUserName } from '../utils/userSession';
 import { formatCurrency } from '../utils/currency';
 import { apiFetch, createAuthenticatedObjectUrl } from '../config';
 import { LoadingState, ErrorState, EmptyState } from './ui';
-import ImportOperationsButton from './operations/ImportOperationsButton';
+import ImportOperationsMenu from './operations/ImportOperationsMenu';
+import PartialExitsEditor from './PartialExitsEditor';
 import ExportOperationsButton from './operations/ExportOperationsButton';
 
 const getAuthHeaders = ({ isJson = true } = {}) => {
@@ -285,11 +286,10 @@ const OperacionesTrading = () => {
     cantidad: '',
     activo: '',
     precio_entrada: '',
-    precio_salida: '',
+    salidas: [],
     notas: '',
     stop_loss: '',
     take_profit: '',
-    resultado_bruto: '',
     ratio_rr: '',
     nivel_confianza: 0,
     screenshot: null,
@@ -299,10 +299,11 @@ const OperacionesTrading = () => {
 
   const calculatedRatioRR = calculateRiskRewardRatio(formData);
   const calculatedCommission = calculateCommissionPreview(selectedAccount, formData);
-  const grossResult = parseNumericField(formData.resultado_bruto);
-  const calculatedNetResult = grossResult === null || calculatedCommission === null
+  const calculatedNetResult = formData.salidas.length === 0 || calculatedCommission === null
     ? null
-    : grossResult - calculatedCommission;
+    : formData.salidas.reduce((total, exit) => (
+      total + Number(exit.resultado_bruto || 0) - Number(exit.comision || 0) + Number(exit.swap || 0) - Number(exit.tasa || 0)
+    ), -calculatedCommission);
 
   const getSpeechRecognition = () => {
     if (typeof window === 'undefined') return null;
@@ -328,28 +329,6 @@ const OperacionesTrading = () => {
       return 'desconocido';
     }
   };
-
-  // Efecto para calcular el resultado automáticamente
-  useEffect(() => {
-    if (formData.precio_entrada && formData.precio_salida && formData.cantidad) {
-      const pe = parseFloat(formData.precio_entrada);
-      const ps = parseFloat(formData.precio_salida);
-      const qty = parseFloat(formData.cantidad);
-      if (!isNaN(pe) && !isNaN(ps) && !isNaN(qty)) {
-        let res = 0;
-        if (formData.tipo_operacion === 'LONG') {
-          res = (ps - pe) * qty;
-        } else {
-          res = (pe - ps) * qty;
-        }
-        const resStr = res.toFixed(2);
-        if (formData.resultado_bruto !== resStr) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setFormData(prev => ({ ...prev, resultado_bruto: resStr }));
-        }
-      }
-    }
-  }, [formData.precio_entrada, formData.precio_salida, formData.cantidad, formData.tipo_operacion, formData.resultado_bruto]);
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -515,11 +494,10 @@ const OperacionesTrading = () => {
       cantidad: '',
       activo: '',
       precio_entrada: '',
-      precio_salida: '',
+      salidas: [],
       notas: '',
       stop_loss: '',
       take_profit: '',
-      resultado_bruto: '',
       ratio_rr: '',
       nivel_confianza: 0,
       screenshot: null,
@@ -531,17 +509,32 @@ const OperacionesTrading = () => {
 
   const handleEdit = (op) => {
     setEditing(op.id);
+    const existingExits = op.salidas?.length > 0
+      ? op.salidas
+      : (op.precio_salida != null || op.resultado_bruto != null
+        ? [{
+          fecha_hora: op.fecha_cierre || op.fecha_hora,
+          cantidad: op.cantidad,
+          precio: op.precio_salida || '',
+          resultado_bruto: op.resultado_bruto ?? op.resultado ?? '',
+          comision: 0,
+          swap: op.swap || 0,
+          tasa: op.tasas || 0,
+        }]
+        : []);
     setFormData({
       fecha_hora: toLocalDatetimeInputValue(new Date(op.fecha_hora)),
       tipo_operacion: op.tipo_operacion,
       cantidad: op.cantidad,
       activo: op.activo,
       precio_entrada: op.precio_entrada,
-      precio_salida: op.precio_salida || '',
+      salidas: existingExits.map((exit) => ({
+        ...exit,
+        fecha_hora: toLocalDatetimeInputValue(new Date(exit.fecha_hora)),
+      })),
       notas: op.notas || '',
       stop_loss: op.stop_loss || '',
       take_profit: op.take_profit || '',
-      resultado_bruto: op.resultado_bruto ?? op.resultado ?? '',
       ratio_rr: op.ratio_rr || '',
       nivel_confianza: op.nivel_confianza ?? 0,
       screenshot: op.screenshot || null,
@@ -585,6 +578,24 @@ const OperacionesTrading = () => {
       return;
     }
 
+    const invalidExit = formData.salidas.find((exit) => {
+      const quantity = Number(exit.cantidad);
+      const price = Number(exit.precio);
+      const gross = Number(exit.resultado_bruto);
+      const commission = Number(exit.comision || 0);
+      const fee = Number(exit.tasa || 0);
+      return !exit.fecha_hora
+        || !Number.isFinite(new Date(exit.fecha_hora).getTime())
+        || !Number.isFinite(quantity) || quantity <= 0
+        || ((!Number.isFinite(price) || price <= 0) && !Number.isFinite(gross))
+        || !Number.isFinite(commission) || commission < 0
+        || !Number.isFinite(fee) || fee < 0;
+    });
+    if (invalidExit) {
+      setError('Revisa las salidas: fecha y cantidad son obligatorias; indica precio o resultado bruto, y los costes no pueden ser negativos.');
+      return;
+    }
+
     const data = new FormData();
     data.append('fecha_hora', new Date(formData.fecha_hora).toISOString());
     data.append('tipo_operacion', formData.tipo_operacion);
@@ -592,11 +603,20 @@ const OperacionesTrading = () => {
     data.append('activo', formData.activo);
     data.append('precio_entrada', String(parseFloat(formData.precio_entrada)));
 
-    if (formData.precio_salida) data.append('precio_salida', String(parseFloat(formData.precio_salida)));
+    const closedQuantity = formData.salidas.reduce((total, exit) => total + Number(exit.cantidad || 0), 0);
+    if (closedQuantity > Number(formData.cantidad) + 0.000001) {
+      setError('La suma de las salidas supera la cantidad de entrada.');
+      return;
+    }
+    const serializedExits = formData.salidas.map((exit) => ({
+      ...exit,
+      fecha_hora: new Date(exit.fecha_hora).toISOString(),
+    }));
+    data.append('salidas_json', JSON.stringify(serializedExits));
+
     if (formData.notas) data.append('notas', formData.notas);
     if (formData.stop_loss) data.append('stop_loss', String(parseFloat(formData.stop_loss)));
     if (formData.take_profit) data.append('take_profit', String(parseFloat(formData.take_profit)));
-    if (formData.resultado_bruto) data.append('resultado_bruto', String(parseFloat(formData.resultado_bruto)));
     if (calculatedRatioRR) data.append('ratio_rr', String(parseFloat(calculatedRatioRR)));
     if (formData.nivel_confianza !== null && formData.nivel_confianza !== undefined && formData.nivel_confianza !== '') {
       data.append('nivel_confianza', String(parseInt(formData.nivel_confianza)));
@@ -689,7 +709,7 @@ const OperacionesTrading = () => {
         <main className="flex-1 overflow-auto p-8">
           <div className="container mx-auto">
             {error && (
-              <div className={showForm ? 'fixed left-1/2 top-6 z-[10001] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 shadow-2xl' : 'mb-4'}>
+              <div className={showForm ? 'fixed left-1/2 top-6 z-[10001] w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 shadow-2xl' : 'mb-4'}>
                 <ErrorState variant="inline" message={error} onDismiss={() => setError(null)} className="backdrop-blur-xl" />
               </div>
             )}
@@ -709,7 +729,7 @@ const OperacionesTrading = () => {
 
               <div className="flex w-full flex-col items-stretch gap-4 sm:w-auto sm:items-end">
                 <div className="hidden flex-wrap items-start justify-end gap-3 sm:flex">
-                  <ImportOperationsButton
+                  <ImportOperationsMenu
                     cuentaId={cuentaSeleccionada}
                     disabled={!cuentaSeleccionada || loading}
                     onImported={cargarOperacionesDeCuenta}
@@ -741,7 +761,7 @@ const OperacionesTrading = () => {
                       </svg>
                     </summary>
                     <div className="absolute right-0 z-30 mt-2 flex w-max max-w-[calc(100vw-3rem)] min-w-56 flex-col gap-3 rounded-2xl border border-white/10 bg-[#111827]/95 p-3 shadow-2xl backdrop-blur-xl">
-                      <ImportOperationsButton
+                      <ImportOperationsMenu
                         cuentaId={cuentaSeleccionada}
                         disabled={!cuentaSeleccionada || loading}
                         onImported={cargarOperacionesDeCuenta}
@@ -869,7 +889,8 @@ const OperacionesTrading = () => {
                     </thead>
                     <tbody>
                       {paginatedOperaciones.map(op => (
-                        <tr key={op.id} className="border-t text-white border-white/10 hover:bg-white/5 transition-colors">
+                        <React.Fragment key={op.id}>
+                        <tr className="border-t text-white border-white/10 hover:bg-white/5 transition-colors">
                           <td className="p-4 text-center">{new Date(op.fecha_hora).toLocaleString()}</td>
                           <td className={`p-4 text-center font-bold ${op.tipo_operacion === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>
                             {op.tipo_operacion}
@@ -902,7 +923,8 @@ const OperacionesTrading = () => {
                           <td className="p-4 flex gap-2 justify-center">
                             <button
                               onClick={() => handleEdit(op)}
-                              disabled={loading}
+                              disabled={loading || op.importada}
+                              title={op.importada ? 'Los datos importados se corrigen en MetaTrader y se vuelven a importar' : 'Editar operación'}
                               className="px-4 py-2 text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 rounded-full text-sm transition-colors disabled:cursor-not-allowed"
                             >
                               Editar
@@ -916,6 +938,21 @@ const OperacionesTrading = () => {
                             </button>
                           </td>
                         </tr>
+                        {op.salidas?.length > 0 && (
+                          <tr className="border-b border-white/10 bg-black/15">
+                            <td colSpan="10" className="px-4 pb-3">
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+                                <span className="font-semibold text-blue-300">{op.estado === 'CLOSED' ? 'Cerrada' : 'Parcial'} · {op.salidas.length} {op.salidas.length === 1 ? 'salida' : 'salidas'} · restante {op.cantidad_abierta}</span>
+                                {op.salidas.map((exit, index) => (
+                                  <span key={exit.id || index} className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
+                                    #{index + 1} {exit.cantidad} @ {exit.precio ?? 'sin precio'} · neto {formatCurrency(exit.resultado_neto, currencyDivisa)}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -951,7 +988,7 @@ const OperacionesTrading = () => {
 
             {showForm && (
               <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-[10000] p-4">
-                <div className="bg-[#1a2235]/80 backdrop-blur-lg rounded-2xl p-6 border border-white/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                <div className="bg-[#1a2235]/80 backdrop-blur-lg rounded-2xl p-6 border border-white/30 w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
                   <h2 className="text-2xl font-bold mb-4 text-white">{editing ? 'Editar Operación' : 'Crear Operación'}</h2>
                   <form onSubmit={handleSubmit} className="space-y-3">
                     <div className="grid grid-cols-3 gap-2">
@@ -1044,21 +1081,6 @@ const OperacionesTrading = () => {
                       </div>
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
-                          <label className="block text-xs text-white">Precio Salida</label>
-                          <InfoIcon text="Precio de cierre, si ya saliste." />
-                        </div>
-                        <input
-                          type="number"
-                          step="any"
-                          value={formData.precio_salida}
-                          onChange={(e) => setFormData({...formData, precio_salida: e.target.value})}
-                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
-                          disabled={loading}
-                          placeholder="Opt"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Stop Loss</label>
                           <InfoIcon text="Precio donde limitas la pérdida." />
                         </div>
@@ -1091,21 +1113,6 @@ const OperacionesTrading = () => {
                       </div>
                       <div>
                         <div className="flex items-start gap-1 mb-1 min-w-0">
-                          <label className="block text-xs text-white">Resultado bruto</label>
-                          <InfoIcon text="Ganancia o pérdida antes de descontar la comisión." />
-                        </div>
-                        <input
-                          type="number"
-                          step="any"
-                          value={formData.resultado_bruto}
-                          onChange={(e) => setFormData({...formData, resultado_bruto: e.target.value})}
-                          className="w-full p-1.5 text-xs text-white bg-white/10 border border-white/10 rounded-xl focus:outline-none focus:border-blue-500"
-                          disabled={loading}
-                          placeholder="G/P bruto"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-start gap-1 mb-1 min-w-0">
                           <label className="block text-xs text-white">Ratio RR</label>
                           <InfoIcon text="Relación entre riesgo y beneficio previsto." />
                         </div>
@@ -1120,8 +1127,16 @@ const OperacionesTrading = () => {
                         />
                       </div>
                     </div>
+                    <PartialExitsEditor
+                      value={formData.salidas}
+                      onChange={(salidas) => setFormData({ ...formData, salidas })}
+                      entryQuantity={formData.cantidad}
+                      entryPrice={formData.precio_entrada}
+                      side={formData.tipo_operacion}
+                      disabled={loading}
+                    />
                     <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100 flex items-center justify-between gap-3">
-                      <span>Resultado neto (bruto − comisión)</span>
+                      <span>Resultado neto realizado (salidas y costes)</span>
                       <strong>{calculatedNetResult === null ? 'Pendiente de resultado' : formatCurrency(calculatedNetResult, currencyDivisa)}</strong>
                     </div>
                     <div>

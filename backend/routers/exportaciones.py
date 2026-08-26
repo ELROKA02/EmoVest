@@ -1,8 +1,10 @@
 import csv
+import json
 from datetime import datetime
 from decimal import Decimal
 from io import StringIO
 from typing import Annotated, Literal
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
@@ -14,6 +16,12 @@ from database import get_db
 from models import Cuenta_Trading, Operacion, Usuario
 from routers.auth import get_current_user
 from rq_queue import dispatch_emociones_job, stage_emociones_job
+from trading_operations import (
+    build_manual_executions,
+    legacy_exit_payload,
+    recalculate_operation,
+    serialize_execution,
+)
 
 router = APIRouter(tags=["operaciones"])
 
@@ -30,6 +38,13 @@ CSV_HEADERS = [
     "resultado_bruto",
     "comisiones",
     "resultado",
+    "swap",
+    "tasas",
+    "estado",
+    "cantidad_abierta",
+    "fecha_cierre",
+    "comision_entrada",
+    "salidas_json",
     "stop_loss",
     "take_profit",
     "saldo_referencia_riesgo",
@@ -55,6 +70,9 @@ IMPORT_DECIMAL_FIELDS = {
     "resultado_bruto",
     "comisiones",
     "resultado",
+    "swap",
+    "tasas",
+    "cantidad_abierta",
     "stop_loss",
     "take_profit",
     "ratio_rr",
@@ -179,8 +197,7 @@ def parse_csv_operaciones(csv_text: str, cuenta_id: int) -> list[Operacion]:
         elif resultado_bruto is None and resultado_neto is not None:
             resultado_bruto = resultado_neto + (comisiones or Decimal("0"))
 
-        operaciones.append(
-            Operacion(
+        operacion = Operacion(
                 id_cuenta=cuenta_id,
                 fecha_hora=fecha_hora,
                 tipo_operacion=tipo_operacion,
@@ -197,7 +214,33 @@ def parse_csv_operaciones(csv_text: str, cuenta_id: int) -> list[Operacion]:
                 nivel_confianza=nivel_confianza,
                 notas=notas,
             )
+
+        salidas = None
+        salidas_raw = clean_csv_cell(row, "salidas_json") if "salidas_json" in headers else None
+        if salidas_raw:
+            try:
+                salidas = json.loads(salidas_raw)
+                if not isinstance(salidas, list):
+                    raise ValueError
+            except (json.JSONDecodeError, ValueError):
+                errors.append({"row": index, "field": "salidas_json", "error": "JSON de salidas inválido"})
+                salidas = []
+        if salidas is None:
+            salidas = legacy_exit_payload(operacion, resultado_bruto)
+
+        exit_commissions = sum(
+            (Decimal(str(item.get("comision") or 0)) for item in salidas if isinstance(item, dict)),
+            Decimal("0"),
         )
+        entry_commission = parse_decimal_field(row, "comision_entrada", index, errors)
+        if entry_commission is None:
+            entry_commission = max(Decimal("0"), (comisiones or Decimal("0")) - exit_commissions)
+        commission_snapshot = SimpleNamespace(tipo_comision="fija", valor_comision=entry_commission)
+        operacion.ejecuciones.extend(
+            build_manual_executions(operacion, commission_snapshot, salidas, legacy_gross=resultado_bruto)
+        )
+        recalculate_operation(operacion)
+        operaciones.append(operacion)
 
     if errors:
         raise HTTPException(
@@ -311,6 +354,9 @@ def export_operaciones_csv(
 
     for operacion in operaciones_query.all():
         cuenta = cuentas_by_id[operacion.id_cuenta]
+        entradas = [item for item in operacion.ejecuciones if item.rol == "ENTRY"]
+        salidas = [serialize_execution(item) for item in operacion.ejecuciones if item.rol == "EXIT"]
+        comision_entrada = -sum((Decimal(str(item.impacto_comision or 0)) for item in entradas), Decimal("0"))
         writer.writerow(
             [
                 serialize_csv_value(cuenta.id),
@@ -325,6 +371,13 @@ def export_operaciones_csv(
                 serialize_csv_value(operacion.resultado_bruto),
                 serialize_csv_value(operacion.comisiones),
                 serialize_csv_value(operacion.resultado),
+                serialize_csv_value(operacion.swap),
+                serialize_csv_value(operacion.tasas),
+                serialize_csv_value(operacion.estado),
+                serialize_csv_value(operacion.cantidad_abierta),
+                serialize_csv_value(operacion.fecha_cierre),
+                serialize_csv_value(comision_entrada),
+                json.dumps(salidas, ensure_ascii=False, separators=(",", ":")),
                 serialize_csv_value(operacion.stop_loss),
                 serialize_csv_value(operacion.take_profit),
                 serialize_csv_value(operacion.saldo_referencia_riesgo),
@@ -415,6 +468,15 @@ async def import_operaciones_csv(
     db.add_all(operaciones)
     try:
         db.flush()
+        realized_delta = sum(
+            (Decimal(str(item.resultado or 0)) for item in operaciones),
+            Decimal("0"),
+        )
+        if realized_delta:
+            db.query(Cuenta_Trading).filter(Cuenta_Trading.id == cuenta.id).update(
+                {Cuenta_Trading.saldo_actual: func.coalesce(Cuenta_Trading.saldo_actual, 0) + realized_delta},
+                synchronize_session=False,
+            )
         for operacion in operaciones:
             if not operacion.notas:
                 continue

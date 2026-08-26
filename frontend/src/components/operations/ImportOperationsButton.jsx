@@ -201,7 +201,7 @@ const ImportOperationsButton = ({ cuentaId, disabled = false, onImported }) => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 16V4m0 0L8 8m4-4 4 4M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3" />
           </svg>
         )}
-        {isImporting ? 'Importando…' : 'Importar CSV'}
+        {isImporting ? 'Importando…' : 'CSV de EmoVest'}
       </button>
 
       {successMessage && (

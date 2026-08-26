@@ -11,12 +11,19 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Cuenta_Trading, Operacion, Usuario
+from models import Cuenta_Trading, Operacion, OperacionEjecucion, Usuario
 from routers.auth import get_current_user
 from rq_queue import dispatch_emociones_job, stage_emociones_job
 from storage import image_storage
 from trading_commissions import calculate_commission, calculate_gross_result, calculate_net_result, to_decimal
 from trading_risk import calculate_operation_risk
+from trading_operations import (
+    build_manual_executions,
+    legacy_exit_payload,
+    parse_salidas_json,
+    recalculate_operation,
+    serialize_execution,
+)
 
 router = APIRouter(prefix="/cuentas/{cuenta_id_trading}/operaciones", tags=["operaciones"])
 logger = logging.getLogger(__name__)
@@ -110,7 +117,17 @@ def serialize_operacion(cuenta_id: int, operacion: Operacion) -> dict:
     data = jsonable_encoder(operacion)
     screenshot_path = operacion.screenshot if isinstance(operacion.screenshot, str) else None
     data["screenshot"] = build_screenshot_url(cuenta_id, operacion.id, screenshot_path)
+    executions = sorted(operacion.ejecuciones, key=lambda item: (item.fecha_hora, item.id or 0))
+    data["entradas"] = [serialize_execution(item) for item in executions if item.rol == "ENTRY"]
+    data["salidas"] = [serialize_execution(item) for item in executions if item.rol == "EXIT"]
+    data["importada"] = any(item.origen == "BROKER" for item in executions)
     return data
+
+
+def operation_financial_total(operation: Operacion) -> Decimal:
+    if operation.ejecuciones:
+        return sum((to_decimal(item.resultado_neto or 0) for item in operation.ejecuciones), Decimal("0"))
+    return to_decimal(operation.resultado or 0)
 
 
 @router.get(
@@ -174,6 +191,7 @@ def create_operacion(
     resultado_bruto: Annotated[Optional[float], Form()] = None,
     # Kept temporarily for integrations that still submit the old gross result field.
     resultado: Annotated[Optional[float], Form()] = None,
+    salidas_json: Annotated[Optional[str], Form()] = None,
     ratio_rr: Annotated[Optional[float], Form()] = None,
     nivel_confianza: Annotated[Optional[int], Form()] = None,
     screenshot: UploadFile | None = File(default=None),
@@ -181,8 +199,6 @@ def create_operacion(
     current_user=Depends(get_current_user)
 ):
     cuenta = get_cuenta_usuario(db, cuenta_id_trading, current_user.id)
-
-    screenshot_path = image_storage.save_operation_image(screenshot) if screenshot else None
 
     nueva_operacion = Operacion(
         id_cuenta=cuenta.id,
@@ -197,26 +213,34 @@ def create_operacion(
         take_profit=take_profit,
         ratio_rr=ratio_rr,
         nivel_confianza=nivel_confianza,
-        screenshot=screenshot_path,
-    )
-    actualizar_riesgo_operacion(
-        nueva_operacion,
-        Decimal(str(cuenta.saldo_actual or Decimal("0"))),
+        screenshot=None,
     )
     resultado_manual = (
         to_decimal(resultado_bruto)
         if resultado_bruto is not None
         else (to_decimal(resultado) if resultado is not None else None)
     )
-    actualizar_resultados_operacion(nueva_operacion, cuenta, resultado_manual)
+    salidas = parse_salidas_json(salidas_json)
+    if salidas is None:
+        salidas = legacy_exit_payload(nueva_operacion, resultado_manual)
+    nueva_operacion.ejecuciones.extend(
+        build_manual_executions(nueva_operacion, cuenta, salidas, legacy_gross=resultado_manual)
+    )
+    recalculate_operation(nueva_operacion)
+    actualizar_riesgo_operacion(
+        nueva_operacion,
+        Decimal(str(cuenta.saldo_actual or Decimal("0"))),
+    )
+
+    screenshot_path = image_storage.save_operation_image(screenshot) if screenshot else None
+    nueva_operacion.screenshot = screenshot_path
 
     db.add(nueva_operacion)
     queued_job = None
     try:
         db.flush()
 
-        if nueva_operacion.resultado is not None:
-            actualizar_saldo_cuenta(db, cuenta.id, to_decimal(nueva_operacion.resultado))
+        actualizar_saldo_cuenta(db, cuenta.id, operation_financial_total(nueva_operacion))
 
         if notas:
             try:
@@ -293,6 +317,7 @@ async def update_operacion(
     resultado_bruto: Annotated[Optional[float], Form()] = None,
     # Kept temporarily for integrations that still submit the old gross result field.
     resultado: Annotated[Optional[float], Form()] = None,
+    salidas_json: Annotated[Optional[str], Form()] = None,
     ratio_rr: Annotated[Optional[float], Form()] = None,
     nivel_confianza: Annotated[Optional[int], Form()] = None,
     remove_screenshot: Annotated[bool, Form()] = False,
@@ -329,9 +354,6 @@ async def update_operacion(
     elif "resultado" in form_payload:
         resultado_bruto_enviado = to_decimal(resultado) if resultado is not None else None
 
-    for key, value in datos_filtrados.items():
-        setattr(op, key, value)
-
     campos_financieros = {
         "tipo_operacion",
         "cantidad",
@@ -339,11 +361,38 @@ async def update_operacion(
         "precio_salida",
         "resultado_bruto",
         "resultado",
+        "salidas_json",
     }
+    if any(item.origen == "BROKER" for item in op.ejecuciones) and campos_financieros & set(form_payload.keys()):
+        raise HTTPException(
+            status_code=409,
+            detail="Los datos financieros importados deben corregirse en el origen y volver a importarse",
+        )
+    for key, value in datos_filtrados.items():
+        setattr(op, key, value)
     if campos_financieros & set(form_payload.keys()):
-        resultado_anterior = to_decimal(op.resultado) if op.resultado is not None else Decimal("0")
-        actualizar_resultados_operacion(op, cuenta, resultado_bruto_enviado)
-        resultado_nuevo = to_decimal(op.resultado) if op.resultado is not None else Decimal("0")
+        resultado_anterior = operation_financial_total(op)
+        if "salidas_json" in form_payload:
+            salidas = parse_salidas_json(salidas_json) or []
+        else:
+            salidas = [
+                {
+                    "fecha_hora": item.fecha_hora.isoformat(),
+                    "cantidad": str(item.cantidad),
+                    "precio": str(item.precio) if item.precio is not None else str(op.precio_entrada),
+                    "resultado_bruto": str(item.resultado_bruto) if item.resultado_bruto is not None else None,
+                    "comision": str(-to_decimal(item.impacto_comision or 0)),
+                    "swap": str(item.impacto_swap or 0),
+                    "tasa": str(-to_decimal(item.impacto_tasa or 0)),
+                }
+                for item in op.ejecuciones
+                if item.rol == "EXIT"
+            ]
+            if not salidas:
+                salidas = legacy_exit_payload(op, resultado_bruto_enviado)
+        op.ejecuciones.clear()
+        op.ejecuciones.extend(build_manual_executions(op, cuenta, salidas, legacy_gross=resultado_bruto_enviado))
+        resultado_nuevo = recalculate_operation(op)
         actualizar_saldo_cuenta(db, cuenta.id, resultado_nuevo - resultado_anterior)
 
     saldo_referencia = Decimal(str(
@@ -413,8 +462,7 @@ def delete_operacion(
     if not op:
         raise HTTPException(status_code=404, detail="Operacion no encontrada")
 
-    if op.resultado is not None:
-        actualizar_saldo_cuenta(db, cuenta.id, -Decimal(str(op.resultado)))
+    actualizar_saldo_cuenta(db, cuenta.id, -operation_financial_total(op))
 
     screenshot_a_eliminar = op.screenshot if isinstance(op.screenshot, str) else None
 
