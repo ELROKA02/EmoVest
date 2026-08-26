@@ -54,7 +54,17 @@ El miedo, la euforia, la duda o el exceso de confianza no aparecen en la curva d
 
 La IA es opcional: tus cuentas, operaciones y estadísticas funcionan aunque no configures ningún proveedor.
 
-## ⚡ Empieza en 3 pasos
+## 🍎 Instalar EmoVest en macOS
+
+1. Descarga el archivo `.dmg` adecuado para tu Mac desde las [Releases de GitHub]([https://github.com/ELROKA02/EmoVest/releases](https://github.com/ELROKA02/EmoVest/actions/runs/32899322503)): `arm64` para Apple Silicon (M1 o posterior) o `x64` para Mac Intel.
+2. Abre el archivo descargado y arrastra `EmoVest.app` a la carpeta **Aplicaciones**.
+3. Abre EmoVest normalmente desde **Aplicaciones**.
+4. Si macOS lo bloquea, ve a **Ajustes del Sistema → Privacidad y seguridad**, busca el aviso de EmoVest y pulsa **Abrir igualmente**. Confirma con tu contraseña o Touch ID si te lo solicita.
+5. Vuelve a abrir EmoVest. Normalmente solo tendrás que confirmar este paso la primera vez.
+
+Para saber por qué puede aparecer este aviso y consultar la alternativa avanzada solo si fuera necesaria, lee la [guía de instalación y seguridad](docs/instalacion-y-seguridad.md).
+
+## 🪟 Instalación en Windows en 3 pasos
 
 1. ⬇️ [Descarga EmoVest para Windows](https://github.com/ELROKA02/EmoVest/releases/latest/download/EmoVest-Setup.exe).
 2. 🛠️ Ejecuta `EmoVest-Setup.exe` y completa el instalador.
@@ -113,12 +123,3 @@ Cada aportación ayuda a mantener y desarrollar este diario de trading open sour
 EmoVest se publica bajo la [licencia MIT](LICENSE).
 
 
-## 🍎 Instalar EmoVest en macOS
-
-1. Descarga el archivo `.dmg` adecuado para tu Mac desde las [Releases de GitHub](https://github.com/ELROKA02/EmoVest/releases): `arm64` para Apple Silicon (M1 o posterior) o `x64` para Mac Intel.
-2. Abre el archivo descargado y arrastra `EmoVest.app` a la carpeta **Aplicaciones**.
-3. Abre EmoVest normalmente desde **Aplicaciones**.
-4. Si macOS lo bloquea, ve a **Ajustes del Sistema → Privacidad y seguridad**, busca el aviso de EmoVest y pulsa **Abrir igualmente**. Confirma con tu contraseña o Touch ID si te lo solicita.
-5. Vuelve a abrir EmoVest. Normalmente solo tendrás que confirmar este paso la primera vez.
-
-Para saber por qué puede aparecer este aviso y consultar la alternativa avanzada solo si fuera necesaria, lee la [guía de instalación y seguridad](docs/instalacion-y-seguridad.md).
