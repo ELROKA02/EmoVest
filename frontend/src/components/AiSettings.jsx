@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../config';
 import { Spinner } from './ui';
 import ollamaLogo from '../assets/ollama-logo.png';
+import McpConnectionSettings from './McpConnectionSettings';
 
 const USE_CASES = [
   {
@@ -475,6 +476,8 @@ const AiSettings = () => {
           );
         })}
       </div>
+
+      <McpConnectionSettings />
     </section>
   );
 };
