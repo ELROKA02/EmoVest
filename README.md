@@ -56,7 +56,7 @@ La IA es opcional: tus cuentas, operaciones y estadísticas funcionan aunque no 
 
 ## 🍎 Instalar EmoVest en macOS
 
-1. Descarga el archivo `.dmg` adecuado para tu Mac desde las [Releases de GitHub]([https://github.com/ELROKA02/EmoVest/releases](https://github.com/ELROKA02/EmoVest/actions/runs/32899322503)): `arm64` para Apple Silicon (M1 o posterior) o `x64` para Mac Intel.
+1. Descarga el archivo `.dmg` adecuado para tu Mac desde las [Releases de GitHub](https://github.com/ELROKA02/EmoVest/actions/runs/32899322503): `arm64` para Apple Silicon (M1 o posterior) o `x64` para Mac Intel.
 2. Abre el archivo descargado y arrastra `EmoVest.app` a la carpeta **Aplicaciones**.
 3. Abre EmoVest normalmente desde **Aplicaciones**.
 4. Si macOS lo bloquea, ve a **Ajustes del Sistema → Privacidad y seguridad**, busca el aviso de EmoVest y pulsa **Abrir igualmente**. Confirma con tu contraseña o Touch ID si te lo solicita.
