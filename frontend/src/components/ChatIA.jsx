@@ -4,10 +4,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BorderBeam } from 'border-beam';
 import Sidebar from './Sidebar';
+import SiriOrb from './SiriOrb';
 import { apiFetch } from '../config';
 import useChatMemory from '../context/useChatMemory';
 import { fetchAndStoreUserName } from '../utils/userSession';
-import evaAvatar from '../assets/eva-avatar.png';
 
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
@@ -16,8 +16,6 @@ const ALLOWED_ATTACHMENT_TYPES = new Set([
 ]);
 const GENERIC_CHAT_ERROR = 'No se pudo completar la respuesta de EVA. Inténtalo de nuevo.';
 const WELCOME_TEXT = 'Hola, soy EVA. Puedo ayudarte a analizar tus resultados, operaciones y patrones emocionales. ¿Qué quieres revisar?';
-const EVA_AVATAR_BEAM_DURATION = 6;
-const randomAvatarBeamOffset = () => Math.random() * EVA_AVATAR_BEAM_DURATION;
 
 const getSpeechRecognition = () => {
   if (typeof window === 'undefined') return null;
@@ -272,7 +270,6 @@ const ChatIA = () => {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
-  const [avatarBeamOffset, setAvatarBeamOffset] = useState(randomAvatarBeamOffset);
   const [isListening, setIsListening] = useState(false);
   const [dictationError, setDictationError] = useState('');
   const [attachment, setAttachment] = useState(null);
@@ -349,22 +346,6 @@ const ChatIA = () => {
       behavior: isStreaming ? 'auto' : 'smooth',
     });
   }, [isStreaming, messages, statusText]);
-
-  useEffect(() => {
-    if (messages.length !== 0) return undefined;
-
-    let timeoutId;
-    const scheduleRandomBeamPosition = () => {
-      const waitTime = 7000 + Math.random() * 5000;
-      timeoutId = window.setTimeout(() => {
-        setAvatarBeamOffset(randomAvatarBeamOffset());
-        scheduleRandomBeamPosition();
-      }, waitTime);
-    };
-
-    scheduleRandomBeamPosition();
-    return () => window.clearTimeout(timeoutId);
-  }, [messages.length]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -780,7 +761,6 @@ const ChatIA = () => {
     ignoreRecognitionErrorRef.current = true;
     recognitionRef.current?.stop();
     setDictationError('');
-    setAvatarBeamOffset(randomAvatarBeamOffset());
     pendingAttachmentRef.current = null;
     clearChatMemory();
     setIsResetting(true);
@@ -906,24 +886,7 @@ const ChatIA = () => {
           >
             {messages.length === 0 ? (
               <div className="flex max-w-xl flex-col items-center">
-                <BorderBeam
-                  size="md"
-                  colorVariant="ocean"
-                  theme="dark"
-                  strength={1}
-                  duration={EVA_AVATAR_BEAM_DURATION}
-                  brightness={2.35}
-                  saturation={1.75}
-                  borderRadius={999}
-                  className="eva-avatar-border-beam rounded-full"
-                  style={{ animationDelay: `-${avatarBeamOffset}s, 0s` }}
-                >
-                  <img
-                    src={evaAvatar}
-                    alt="EVA, analista de inteligencia artificial"
-                    className="h-48 w-48 rounded-full border border-violet-200/60 object-cover shadow-[0_0_28px_rgba(96,165,250,0.5),0_0_85px_rgba(139,92,246,0.65)] sm:h-60 sm:w-60"
-                  />
-                </BorderBeam>
+                <SiriOrb className="h-48 w-48 sm:h-60 sm:w-60" />
                 <p className="mt-5 text-balance text-base leading-7 text-gray-200 sm:text-lg">
                   {WELCOME_TEXT}
                 </p>
@@ -938,7 +901,7 @@ const ChatIA = () => {
                     {message.role === 'error' ? (
                       <span className="font-bold" aria-hidden="true">!</span>
                     ) : (
-                      <img src={evaAvatar} alt="" className="h-full w-full object-cover" />
+                      <SiriOrb compact />
                     )}
                   </div>
                 )}
