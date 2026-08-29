@@ -47,6 +47,21 @@ def _key(value: str) -> str:
 
 ALIAS_LOOKUP = {alias: canonical for canonical, aliases in ALIASES.items() for alias in aliases}
 
+# MT5 reports can omit Fee, but every other value below is needed to prevent a
+# report with an unknown localized header from being interpreted as zero money.
+REQUIRED_DEALS_HEADERS = (
+    "time",
+    "deal",
+    "symbol",
+    "type",
+    "direction",
+    "volume",
+    "price",
+    "commission",
+    "swap",
+    "profit",
+)
+
 
 class _TableParser(HTMLParser):
     def __init__(self):
@@ -202,6 +217,33 @@ def parse_mt5_report(raw: bytes, timezone_name: str, resolutions: list[dict] | N
         raise HTTPException(status_code=422, detail="No se encontró la cuenta de origen en el informe MT5")
     account_hash = hashlib.sha256(f"{broker or ''}|{account}".encode()).hexdigest()
     fingerprint = hashlib.sha256(raw).hexdigest()
+    raw_headers = table[header_index]
+    missing_headers = [name for name in REQUIRED_DEALS_HEADERS if name not in headers]
+    if missing_headers:
+        return {
+            "provider": "METATRADER5",
+            "fingerprint": fingerprint,
+            "encoding": encoding,
+            "account": account,
+            "account_hash": account_hash,
+            "broker": broker,
+            "timezone": timezone_name,
+            "normalized_rows": [],
+            "proposed_operations": [],
+            "movements": [],
+            "skipped_open": [],
+            "errors": [],
+            "conflicts": [{
+                "reason": "La tabla Deals no contiene todas las cabeceras obligatorias",
+                "missing_headers": missing_headers,
+                "raw_headers": raw_headers,
+                "unrecognized_headers": [
+                    raw_header
+                    for raw_header, canonical_header in zip(raw_headers, headers)
+                    if raw_header and canonical_header is None
+                ],
+            }],
+        }
     normalized_rows = []
     errors = []
 

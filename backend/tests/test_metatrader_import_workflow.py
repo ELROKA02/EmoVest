@@ -25,8 +25,8 @@ REPORT = b"""<html><body>
 </table></body></html>"""
 
 
-def upload():
-    return UploadFile(BytesIO(REPORT), filename="report.html", headers=Headers({"content-type": "text/html"}))
+def upload(report: bytes = REPORT):
+    return UploadFile(BytesIO(report), filename="report.html", headers=Headers({"content-type": "text/html"}))
 
 
 class MetaTraderImportWorkflowTests(unittest.TestCase):
@@ -107,6 +107,71 @@ class MetaTraderImportWorkflowTests(unittest.TestCase):
         self.assertEqual(self.db.query(Operacion).count(), 1)
         self.db.refresh(self.account)
         self.assertEqual(self.account.saldo_actual, Decimal("1112.500000"))
+
+    def test_unsupported_profit_header_blocks_preview_and_commit(self):
+        report = REPORT.replace(b"<th>Profit</th>", b"<th>Beneficio neto</th>")
+        current_user = SimpleNamespace(id=self.user.id)
+
+        preview = asyncio.run(preview_metatrader(
+            cuenta_id_trading=self.account.id,
+            zona_horaria="UTC",
+            file=upload(report),
+            db=self.db,
+            current_user=current_user,
+        ))
+
+        self.assertFalse(preview["ready_to_commit"])
+        self.assertEqual(preview["summary"]["operations"], 0)
+        conflict = preview["conflicts"][0]
+        self.assertEqual(conflict["missing_headers"], ["profit"])
+        self.assertIn("Beneficio neto", conflict["raw_headers"])
+        self.assertIn("Beneficio neto", conflict["unrecognized_headers"])
+
+        with self.assertRaises(HTTPException) as blocked:
+            asyncio.run(commit_metatrader(
+                cuenta_id_trading=self.account.id,
+                zona_horaria="UTC",
+                expected_preview_token=preview["preview_token"],
+                file=upload(report),
+                resolution_json=None,
+                db=self.db,
+                current_user=current_user,
+            ))
+        self.assertEqual(blocked.exception.status_code, 422)
+        self.assertEqual(self.db.query(Operacion).count(), 0)
+        self.assertEqual(self.db.query(MovimientoCuenta).count(), 0)
+
+    def test_unsupported_commission_header_creates_no_records_or_balance_change(self):
+        report = REPORT.replace(b"<th>Commission</th>", b"<th>Comision neta</th>")
+        current_user = SimpleNamespace(id=self.user.id)
+        initial_balance = self.account.saldo_actual
+
+        preview = asyncio.run(preview_metatrader(
+            cuenta_id_trading=self.account.id,
+            zona_horaria="UTC",
+            file=upload(report),
+            db=self.db,
+            current_user=current_user,
+        ))
+        self.assertFalse(preview["ready_to_commit"])
+        self.assertEqual(preview["conflicts"][0]["missing_headers"], ["commission"])
+
+        with self.assertRaises(HTTPException) as blocked:
+            asyncio.run(commit_metatrader(
+                cuenta_id_trading=self.account.id,
+                zona_horaria="UTC",
+                expected_preview_token=preview["preview_token"],
+                file=upload(report),
+                resolution_json=None,
+                db=self.db,
+                current_user=current_user,
+            ))
+        self.assertEqual(blocked.exception.status_code, 422)
+        self.assertEqual(self.db.query(Operacion).count(), 0)
+        self.assertEqual(self.db.query(MovimientoCuenta).count(), 0)
+        self.assertEqual(self.db.query(Importacion).count(), 0)
+        self.db.refresh(self.account)
+        self.assertEqual(self.account.saldo_actual, initial_balance)
 
 
 if __name__ == "__main__":
