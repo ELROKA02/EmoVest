@@ -23,10 +23,9 @@ jobs:
       ${{ (github.event_name == 'release' && github.event.release.prerelease == false &&
           startsWith(github.event.release.tag_name, 'desktop-v')) ||
           github.event_name == 'workflow_dispatch' }}
-    name: macOS firmado ${{ matrix.name }}
+    name: macOS ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
-    environment: desktop-production
     strategy:
       fail-fast: false
       matrix:
@@ -43,11 +42,6 @@ jobs:
       APP_MODE: desktop
       PYTHONUTF8: "1"
       TAURI_TARGET_TRIPLE: ${{ matrix.target }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-      APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
 
     steps:
       - name: Resolver tag y versión
@@ -80,15 +74,6 @@ jobs:
             exit 1
           fi
 
-      - name: Validar credenciales Apple
-        run: |
-          for required in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_API_ISSUER APPLE_API_KEY APPLE_API_KEY_BASE64; do
-            if [[ -z "${!required}" ]]; then
-              echo "Falta el secreto obligatorio $required." >&2
-              exit 1
-            fi
-          done
-
       - name: Configurar herramientas de compilación
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
         with:
@@ -119,13 +104,6 @@ jobs:
           python3 -m pip install --disable-pip-version-check -r backend/requirements.txt
           pnpm --dir frontend install --frozen-lockfile
 
-      - name: Preparar credencial temporal de notarización
-        run: |
-          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
-          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -D > "$api_key_path"
-          chmod 600 "$api_key_path"
-          echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
-
       - name: Construir sidecar macOS
         run: ./scripts/build-macos-sidecar.sh
 
@@ -133,32 +111,17 @@ jobs:
         run: |
           printf '{"version":"%s"}\n' "${{ steps.release.outputs.version }}" > "$RUNNER_TEMP/tauri-macos-release.json"
 
-      - name: Construir y firmar la aplicación macOS
+      - name: Construir la aplicación macOS
         working-directory: frontend
         run: |
           pnpm tauri build --target "$TAURI_TARGET_TRIPLE" --bundles app --config "$RUNNER_TEMP/tauri-macos-release.json"
 
-      - name: Crear, firmar y notarizar el instalador DMG
+      - name: Crear el instalador DMG
         env:
           EMOVEST_DMG_VERSION: ${{ steps.release.outputs.version }}
-        run: |
-          ./scripts/create-macos-dmg.sh
-          bundle_root="frontend/src-tauri/target/$TAURI_TARGET_TRIPLE/release/bundle"
-          dmg="$(find "$bundle_root/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
-          signing_identity="$(security find-identity -v -p codesigning | sed -nE 's/.*"(Developer ID Application:.*)"/\1/p' | head -n 1)"
-          if [[ -z "$dmg" || -z "$signing_identity" ]]; then
-            echo 'No se pudo localizar el DMG o la identidad Developer ID Application.' >&2
-            exit 1
-          fi
-          codesign --force --sign "$signing_identity" "$dmg"
-          xcrun notarytool submit "$dmg" \
-            --key "$APPLE_API_KEY_PATH" \
-            --key-id "$APPLE_API_KEY" \
-            --issuer "$APPLE_API_ISSUER" \
-            --wait
-          xcrun stapler staple "$dmg"
+        run: ./scripts/create-macos-dmg.sh
 
-      - name: Verificar ticket y firma
+      - name: Verificar bundle e instalador macOS
         run: |
           bundle_root="frontend/src-tauri/target/$TAURI_TARGET_TRIPLE/release/bundle"
           app="$bundle_root/macos/EmoVest.app"
@@ -167,13 +130,6 @@ jobs:
             echo 'No se generó el .app y .dmg esperados.' >&2
             exit 1
           fi
-          codesign --verify --deep --strict --verbose=2 "$app"
-          codesign --verify --strict --verbose=2 "$app/Contents/MacOS/emovest-desktop"
-          codesign --verify --strict --verbose=2 "$app/Contents/MacOS/emovest-backend"
-          xcrun stapler validate "$app"
-          spctl --assess --type execute -vv "$app"
-          codesign --verify --verbose=2 "$dmg"
-          xcrun stapler validate "$dmg"
           EMOVEST_MACOS_ARCHITECTURE="${{ matrix.target == 'aarch64-apple-darwin' && 'arm64' || 'x86_64' }}" \
             ./scripts/test-macos-bundle.sh
 
@@ -184,8 +140,3 @@ jobs:
         run: |
           dmg="$(find "frontend/src-tauri/target/$TAURI_TARGET_TRIPLE/release/bundle/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
           gh release upload "$RELEASE_TAG" "$dmg#EmoVest-macOS-${{ matrix.artifact_suffix }}.dmg" --clobber
-
-      - name: Eliminar credencial temporal de notarización
-        if: always()
-        run: |
-          rm -f "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"

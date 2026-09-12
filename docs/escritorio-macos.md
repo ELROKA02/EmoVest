@@ -79,34 +79,21 @@ uno:
 6. verifica el disco, los binarios y la arquitectura del bundle;
 7. publica el `.dmg` como artefacto temporal de Actions durante 14 días.
 
-Estos artefactos son builds de CI sin firma de distribución. Son adecuados para
-pruebas internas, pero no deben publicarse como release estable: Gatekeeper
-puede advertir a la persona usuaria.
+Estos artefactos son builds sin firma de distribución. Gatekeeper puede
+advertir a la persona usuaria; en ese caso deberá abrir la app desde el Finder
+con Control-clic y elegir **Abrir**.
 
 ## Publicación para usuarios finales
 
-Antes de una release pública se debe añadir firma `Developer ID Application` y
-notarización de Apple al workflow. Apple exige ambos para distribuir un `.dmg`
-fuera de la App Store. Las credenciales necesarias son propiedad del titular de
-la cuenta Apple Developer y deben guardarse como secretos protegidos de GitHub;
-nunca se versionan ni se incluyen en artefactos de CI.
-
-Hasta que esas credenciales existan, el flujo automatiza builds verificables de
-desarrollo, pero no una distribución pública notarizada.
-
-Una vez configuradas, el workflow
+El workflow
 [desktop-macos-release.yml](../.github/workflows/desktop-macos-release.yml) se
 activa al publicar una release estable `desktop-vX.Y.Z` —o manualmente para un
-tag existente—, construye los dos targets, firma, notariza y adjunta los dos
-`.dmg` a esa release. No modifica `latest.json`, de modo que el updater Windows
-permanece aislado y no corre riesgo.
+tag existente—, construye los dos targets y adjunta los dos `.dmg` a esa
+release. No modifica `latest.json`, de modo que el updater Windows permanece
+aislado y no corre riesgo.
 
-Los secretos obligatorios del entorno protegido `desktop-production` son:
-`APPLE_CERTIFICATE` (P12 Developer ID Application en base64),
-`APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_ISSUER`, `APPLE_API_KEY` (Key ID) y
-`APPLE_API_KEY_BASE64` (la API key `.p8` de App Store Connect en base64). El
-workflow falla de forma explícita si falta alguno; nunca publica un instalador
-macOS sin firma ni notarización.
+Los instaladores se publican sin firma ni notarización de Apple, igual que los
+artefactos de CI. Si más adelante se configura una cuenta Apple Developer, el
+workflow puede ampliarse con firma `Developer ID Application` y notarización.
 
-Referencias: [DMG de Tauri](https://v2.tauri.app/distribute/dmg/) y [firma y
-notarización de macOS en Tauri](https://v2.tauri.app/distribute/sign/macos/).
+Referencia: [DMG de Tauri](https://v2.tauri.app/distribute/dmg/).
