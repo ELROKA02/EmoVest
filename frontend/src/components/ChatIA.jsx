@@ -897,13 +897,27 @@ const ChatIA = () => {
                 className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {message.role !== 'user' && (
-                  <div className={`mt-1 flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border ${message.role === 'error' ? 'border-red-400/30 bg-red-500/15 text-red-300' : 'border-purple-400/40 bg-purple-500/10 shadow-[0_0_18px_rgba(168,85,247,0.2)]'}`}>
-                    {message.role === 'error' ? (
+                  message.role === 'error' ? (
+                    <div className="mt-1 flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-red-400/30 bg-red-500/15 text-red-300">
                       <span className="font-bold" aria-hidden="true">!</span>
-                    ) : (
-                      <SiriOrb compact />
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <BorderBeam
+                      size="sm"
+                      colorVariant="ocean"
+                      theme="dark"
+                      strength={0.62}
+                      duration={3.6}
+                      brightness={1.35}
+                      saturation={1.15}
+                      borderRadius={999}
+                      className="eva-avatar-border-beam mt-1 h-10 w-10 flex-shrink-0 rounded-full"
+                    >
+                      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-purple-400/40 bg-purple-500/10 shadow-[0_0_18px_rgba(168,85,247,0.2)]">
+                        <SiriOrb compact />
+                      </div>
+                    </BorderBeam>
+                  )
                 )}
 
                 <div className={`relative min-w-0 max-w-[86%] rounded-2xl px-4 py-3 shadow-lg sm:max-w-[78%] ${

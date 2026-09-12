@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import CustomSelect from './CustomSelect';
 import AiSettings from './AiSettings';
+import McpConnectionSettings from './McpConnectionSettings';
 import { formatCurrency } from '../utils/currency';
 import { apiFetch } from '../config';
 import { Spinner, LoadingState, ErrorState, EmptyState } from './ui';
@@ -742,6 +743,7 @@ const PerfilUsuario = () => {
                     )}
                   </div>
 
+                  <McpConnectionSettings />
                   <AiSettings />
                   {/* Exportar / Importar operaciones (.csv) */}
                   <div className="pt-6 border-t border-white/10">

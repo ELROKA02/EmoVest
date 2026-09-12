@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/ELROKA02/EmoVest/releases/latest/download/EmoVest-Setup.exe"><img src="https://img.shields.io/badge/⬇️_Descargar_para_Windows-5b21b6?style=for-the-badge" alt="Descargar EmoVest para Windows"></a>
-  <a href="https://github.com/ELROKA02/EmoVest/releases/latest"><img src="https://img.shields.io/badge/Release-0.4.2-2563eb?style=for-the-badge" alt="Ver la última release"></a>
+  <a href="https://github.com/ELROKA02/EmoVest/releases/latest"><img src="https://img.shields.io/badge/Release-0.4.3-2563eb?style=for-the-badge" alt="Ver la última release"></a>
 </p>
 
 <p align="center">

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Liquid Orb</title>
+  <style>
+    html, body, canvas { width: 100%; height: 100%; margin: 0; }
+    html, body { overflow: hidden; background: #081421; }
+    canvas { display: block; }
+    #status { position: fixed; inset: 0; display: grid; place-items: center; color: transparent; }
+  </style>
+</head>
+<body>
+  <!-- Source: https://github.com/LerSent001/orb — see liquid-orb.LICENSE.txt -->
+  <canvas id="orb" aria-label="Animated liquid glass orb"></canvas>
+  <div id="status" hidden></div>
+  <script src="/liquid-orb-shell.js"></script>
+  <script type="module" src="/liquid-orb.js"></script>
+</body>
+</html>

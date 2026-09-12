@@ -45,6 +45,7 @@ docs/*
 
 # Artefactos locales de la edición de escritorio.
 .desktop-dev/
+orb-*.png
 frontend/src-tauri/target/
 frontend/src-tauri/binaries/*
 frontend/src-tauri/gen/

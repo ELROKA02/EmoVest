@@ -128,6 +128,7 @@ const OperacionesTrading = () => {
   const isMutatingRef = useRef(false);
   const operationImageUrlsRef = useRef(new Set());
   const [operaciones, setOperaciones] = useState([]);
+  const [operationPendingDeletion, setOperationPendingDeletion] = useState(null);
 
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Usuario');
   const selectedAccount = cuentas.find(cuenta => cuenta.id === cuentaSeleccionada);
@@ -545,22 +546,32 @@ const OperacionesTrading = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
+  const requestDelete = (operation) => {
+    if (loading || isMutatingRef.current) return;
+    setError(null);
+    setOperationPendingDeletion(operation);
+  };
+
+  const handleDelete = async () => {
     if (isMutatingRef.current) return;
-    if (!window.confirm('¿Estás seguro de eliminar esta operación?')) return;
+    const operation = operationPendingDeletion;
+    if (!operation || !cuentaSeleccionada) return;
 
     isMutatingRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const response = await apiFetch(`/cuentas/${cuentaSeleccionada}/operaciones/${id}`, {
+      const response = await apiFetch(`/cuentas/${cuentaSeleccionada}/operaciones/${operation.id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
       if (!response.ok) {
-        throw new Error('Error al eliminar operación');
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.detail || 'No se pudo eliminar la operación.');
       }
-      setOperaciones(operaciones.filter(op => op.id !== id));
+      setOperaciones((current) => current.filter((op) => op.id !== operation.id));
+      setOperationPendingDeletion(null);
+      await cargarOperacionesDeCuenta();
     } catch (err) {
       setError(err.message);
       console.error(err);
@@ -929,7 +940,8 @@ const OperacionesTrading = () => {
                               Editar
                             </button>
                             <button
-                              onClick={() => handleDelete(op.id)}
+                              type="button"
+                              onClick={() => requestDelete(op)}
                               disabled={loading}
                               className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 rounded-full text-sm transition-colors disabled:cursor-not-allowed"
                             >
@@ -1260,6 +1272,34 @@ const OperacionesTrading = () => {
               className="absolute right-4 top-4 rounded-full bg-white/10 px-3 py-2 text-xs text-white transition hover:bg-white/20"
             >Cerrar</button>
             <img src={previewImage} alt="Vista previa ampliada" className="mx-auto max-h-[80vh] w-full object-contain rounded-2xl" />
+          </div>
+        </div>
+      )}
+      {operationPendingDeletion && (
+        <div className="fixed inset-0 z-[10010] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-operation-title">
+          <div className="w-full max-w-md rounded-2xl border border-red-400/30 bg-[#1a2235] p-6 shadow-2xl">
+            <h2 id="delete-operation-title" className="text-xl font-bold text-white">Eliminar operación</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              Vas a eliminar <strong className="text-white">{operationPendingDeletion.tipo_operacion} {operationPendingDeletion.activo}</strong> del {new Date(operationPendingDeletion.fecha_hora).toLocaleString()}. Esta acción no se puede deshacer.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setOperationPendingDeletion(null)}
+                disabled={loading}
+                className="rounded-full bg-slate-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={loading}
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? 'Eliminando…' : 'Eliminar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

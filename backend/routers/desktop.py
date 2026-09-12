@@ -32,6 +32,10 @@ class UpdatePreparation(BaseModel):
     minimum_schema_revision: str = Field(min_length=1, max_length=128)
 
 
+class McpToolStateUpdate(BaseModel):
+    enabled: bool
+
+
 def _app_version(request: Request) -> str:
     return request.app.version
 
@@ -76,6 +80,71 @@ def desktop_diagnostics(request: Request, db: Session = Depends(get_db)):
         "jobs": queue["counts"],
         "queue_health": queue_health,
     }
+
+
+def _mcp_controller(request: Request):
+    controller = getattr(request.app.state, "mcp_controller", None)
+    if controller is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El controlador MCP todavía no está disponible.",
+        )
+    return controller
+
+
+@router.get("/mcp/status")
+async def mcp_status(request: Request):
+    return await _mcp_controller(request).status()
+
+
+@router.post("/mcp/start")
+async def start_mcp(request: Request):
+    runtime = await _mcp_controller(request).start()
+    if not runtime["running"]:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=runtime["last_error"] or "No se pudo iniciar el servidor MCP local.",
+        )
+    return runtime
+
+
+@router.post("/mcp/stop")
+async def stop_mcp(request: Request):
+    return await _mcp_controller(request).stop()
+
+
+@router.get("/mcp/tools")
+async def mcp_tool_states(request: Request):
+    return await _mcp_controller(request).tool_states()
+
+
+@router.put("/mcp/tools/{tool_name}")
+async def update_mcp_tool_state(tool_name: str, payload: McpToolStateUpdate, request: Request):
+    try:
+        return await _mcp_controller(request).set_tool_enabled(tool_name, payload.enabled)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.get("/mcp/confirmations")
+async def pending_mcp_confirmations(request: Request):
+    return await _mcp_controller(request).pending_confirmations()
+
+
+@router.post("/mcp/confirmations/{confirmation_id}/approve")
+async def approve_mcp_confirmation(confirmation_id: str, request: Request):
+    try:
+        return await _mcp_controller(request).approve_confirmation(confirmation_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.post("/mcp/confirmations/{confirmation_id}/reject")
+async def reject_mcp_confirmation(confirmation_id: str, request: Request):
+    try:
+        return await _mcp_controller(request).reject_confirmation(confirmation_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
 
 
 @router.post("/backup", status_code=status.HTTP_201_CREATED)

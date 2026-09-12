@@ -8,7 +8,10 @@ export default defineConfig({
   plugins: [react()],
   clearScreen: false,
   server: {
-    host: tauriDevHost || false,
+    // WebKit resuelve localhost a IPv4 en macOS; Vite, en cambio, puede
+    // escuchar solo en ::1. Fijamos loopback IPv4 para que la ventana Tauri
+    // siempre pueda cargar el frontend durante el desarrollo.
+    host: tauriDevHost || '127.0.0.1',
     port: 5173,
     strictPort: true,
     watch: {

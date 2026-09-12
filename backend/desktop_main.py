@@ -212,9 +212,11 @@ async def _serve() -> int:
     port = int(server_socket.getsockname()[1])
 
     from app import app
+    from mcp_server import McpServerController
 
     shutdown_requested = asyncio.Event()
     app.state.shutdown_requested = shutdown_requested
+    app.state.mcp_controller = McpServerController()
     loop = asyncio.get_running_loop()
     _register_parent_shutdown(
         lambda: loop.call_soon_threadsafe(shutdown_requested.set)
@@ -251,6 +253,7 @@ async def _serve() -> int:
         await server_task
     else:
         shutdown_task.cancel()
+    await app.state.mcp_controller.stop()
     return 0
 
 

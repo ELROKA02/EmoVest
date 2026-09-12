@@ -5,10 +5,8 @@
   "windows": [
     "main"
   ],
-  "platforms": [
-    "windows"
-  ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:event:default"
   ]
 }
