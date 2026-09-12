@@ -125,7 +125,10 @@ jobs:
 
       - name: Construir instalador macOS
         working-directory: frontend
-        run: pnpm tauri build --target "$TAURI_TARGET_TRIPLE" --bundles app,dmg
+        run: pnpm tauri build --target "$TAURI_TARGET_TRIPLE" --bundles app
+
+      - name: Crear instalador DMG macOS
+        run: ./scripts/create-macos-dmg.sh
 
       - name: Validar bundle e instalador macOS
         run: ./scripts/test-macos-bundle.sh

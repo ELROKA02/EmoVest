@@ -133,10 +133,30 @@ jobs:
         run: |
           printf '{"version":"%s"}\n' "${{ steps.release.outputs.version }}" > "$RUNNER_TEMP/tauri-macos-release.json"
 
-      - name: Construir, firmar y notarizar
+      - name: Construir y firmar la aplicación macOS
         working-directory: frontend
         run: |
-          pnpm tauri build --target "$TAURI_TARGET_TRIPLE" --bundles app,dmg --config "$RUNNER_TEMP/tauri-macos-release.json"
+          pnpm tauri build --target "$TAURI_TARGET_TRIPLE" --bundles app --config "$RUNNER_TEMP/tauri-macos-release.json"
+
+      - name: Crear, firmar y notarizar el instalador DMG
+        env:
+          EMOVEST_DMG_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          ./scripts/create-macos-dmg.sh
+          bundle_root="frontend/src-tauri/target/$TAURI_TARGET_TRIPLE/release/bundle"
+          dmg="$(find "$bundle_root/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          signing_identity="$(security find-identity -v -p codesigning | sed -nE 's/.*"(Developer ID Application:.*)"/\1/p' | head -n 1)"
+          if [[ -z "$dmg" || -z "$signing_identity" ]]; then
+            echo 'No se pudo localizar el DMG o la identidad Developer ID Application.' >&2
+            exit 1
+          fi
+          codesign --force --sign "$signing_identity" "$dmg"
+          xcrun notarytool submit "$dmg" \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" \
+            --wait
+          xcrun stapler staple "$dmg"
 
       - name: Verificar ticket y firma
         run: |
@@ -153,6 +173,7 @@ jobs:
           xcrun stapler validate "$app"
           spctl --assess --type execute -vv "$app"
           codesign --verify --verbose=2 "$dmg"
+          xcrun stapler validate "$dmg"
           EMOVEST_MACOS_ARCHITECTURE="${{ matrix.target == 'aarch64-apple-darwin' && 'arm64' || 'x86_64' }}" \
             ./scripts/test-macos-bundle.sh
 
