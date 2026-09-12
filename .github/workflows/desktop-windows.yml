@@ -303,7 +303,15 @@ jobs:
             Get-Content -Raw "frontend\src-tauri\tauri.conf.json" |
               ConvertFrom-Json
           ).version
-          if ([version]$env:VERSION -le [version]$baseVersion) {
+          if ($env:GITHUB_EVENT_NAME -eq "push" -and
+              [version]$env:VERSION -ne [version]$baseVersion) {
+            throw (
+              "La versión del tag desktop-v$($env:VERSION) debe coincidir " +
+              "con la versión de la aplicación $baseVersion."
+            )
+          }
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch" -and
+              [version]$env:VERSION -le [version]$baseVersion) {
             throw "La release debe ser posterior a la versión base $baseVersion."
           }
           $remoteTags = @(
