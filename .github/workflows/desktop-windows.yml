@@ -735,7 +735,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.release-build.outputs.version }}
         run: |
-          release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/desktop-v${VERSION}")"
+          release="$(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" |
+              jq -s --arg tag "desktop-v${VERSION}" '
+                add |
+                map(select(.tag_name == $tag)) |
+                if length == 1 then .[0] else error("No se encontró un único borrador para " + $tag) end
+              '
+          )"
           release_id="$(jq -r '.id' <<<"$release")"
           draft="$(jq -r '.draft' <<<"$release")"
           mapfile -t assets < <(jq -r '.assets[].name' <<<"$release" | sort)
