@@ -5,6 +5,10 @@
   "windows": [
     "main"
   ],
+  "platforms": [
+    "macOS",
+    "windows"
+  ],
   "permissions": [
     "core:default",
     "core:event:default"

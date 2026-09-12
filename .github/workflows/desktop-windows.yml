@@ -705,6 +705,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: desktop-production
     permissions:
+      actions: write
       contents: write
 
     steps:
@@ -762,3 +763,13 @@ jobs:
           gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
             -F draft=false \
             -f make_latest=true > /dev/null
+
+      - name: Publicar instaladores macOS en la release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.release-build.outputs.version }}
+        run: |
+          gh workflow run desktop-macos-release.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main \
+            -f "release_tag=desktop-v${VERSION}"

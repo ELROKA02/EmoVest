@@ -1,6 +1,6 @@
 [package]
 name = "emovest-desktop"
-version = "0.4.3"
+version = "0.4.4"
 description = "EmoVest desktop application"
 edition = "2021"
 

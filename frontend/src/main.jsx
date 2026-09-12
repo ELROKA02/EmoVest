@@ -16,25 +16,30 @@ const renderApp = () => {
   )
 }
 
+const renderBootstrapError = (error) => {
+  root.render(
+    <StrictMode>
+      <DesktopBootstrapError error={error} onRetry={retryDesktopBackend} />
+    </StrictMode>,
+  )
+}
+
 const bootstrap = async () => {
   try {
     await initializeApiRuntime()
     renderApp()
   } catch (error) {
-    root.render(
-      <StrictMode>
-        <DesktopBootstrapError
-          error={error}
-          onRetry={async () => {
-            try {
-              await invoke('restart_desktop_backend')
-            } finally {
-              window.location.reload()
-            }
-          }}
-        />
-      </StrictMode>,
-    )
+    renderBootstrapError(error)
+  }
+}
+
+const retryDesktopBackend = async () => {
+  try {
+    await invoke('restart_desktop_backend')
+    await initializeApiRuntime()
+    renderApp()
+  } catch (error) {
+    renderBootstrapError(error)
   }
 }
 
