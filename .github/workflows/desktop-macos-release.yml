@@ -139,4 +139,6 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           dmg="$(find "frontend/src-tauri/target/$TAURI_TARGET_TRIPLE/release/bundle/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
-          gh release upload "$RELEASE_TAG" "$dmg#EmoVest-macOS-${{ matrix.artifact_suffix }}.dmg" --clobber
+          release_dmg="$RUNNER_TEMP/EmoVest-macOS-${{ matrix.artifact_suffix }}.dmg"
+          cp "$dmg" "$release_dmg"
+          gh release upload "$RELEASE_TAG" "$release_dmg" --clobber

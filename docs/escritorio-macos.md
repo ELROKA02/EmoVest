@@ -17,9 +17,10 @@ Se construyen instaladores nativos separados para las dos arquitecturas de Mac:
 | Apple Silicon (M1 o posterior) | `aarch64-apple-darwin` | `EmoVest-macOS-arm64.dmg` |
 | Intel | `x86_64-apple-darwin` | `EmoVest-macOS-x64.dmg` |
 
-Cada `.dmg` contiene `EmoVest.app` y el sidecar correspondiente a su misma
-arquitectura. No hay traducción Rosetta como requisito para ninguna de las dos
-distribuciones.
+Cada `.dmg` muestra `EmoVest.app` y un acceso a **Aplicaciones**: hay que
+arrastrar la app sobre ese acceso y abrirla después desde Aplicaciones. El
+sidecar usa la misma arquitectura que la app; no hay traducción Rosetta como
+requisito para ninguna de las dos distribuciones.
 
 ## Desarrollo local
 
@@ -80,8 +81,9 @@ uno:
 7. publica el `.dmg` como artefacto temporal de Actions durante 14 días.
 
 Estos artefactos son builds sin firma de distribución. Gatekeeper puede
-advertir a la persona usuaria; en ese caso deberá abrir la app desde el Finder
-con Control-clic y elegir **Abrir**.
+advertir a la persona usuaria, pero el bundle se valida antes de crear el DMG
+para evitar el falso aviso de aplicación dañada. Si aparece la advertencia de
+origen, deberá abrirse desde Aplicaciones con Control-clic y elegir **Abrir**.
 
 ## Publicación para usuarios finales
 

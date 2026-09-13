@@ -30,6 +30,8 @@ for executable in "$main_executable" "$sidecar"; do
   fi
 done
 
+codesign --verify --deep --strict --verbose=2 "$app"
+
 mount_root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 mkdir -p "$mount_root"
 mount_dir="$(mktemp -d "$mount_root/emovest-dmg.XXXXXX")"
@@ -53,6 +55,13 @@ if [[ ! -x "$mounted_main" || ! -x "$mounted_sidecar" ]]; then
   echo 'El instalador montado no contiene los ejecutables esperados.' >&2
   exit 1
 fi
+
+if [[ ! -L "$mount_dir/Applications" ]] || [[ "$(readlink "$mount_dir/Applications")" != /Applications ]]; then
+  echo 'El instalador macOS no incluye el acceso a /Applications para arrastrar la app.' >&2
+  exit 1
+fi
+
+codesign --verify --deep --strict --verbose=2 "$mounted_app"
 
 for executable in "$mounted_main" "$mounted_sidecar"; do
   if ! lipo -archs "$executable" | tr ' ' '\n' | grep -qx "$architecture"; then

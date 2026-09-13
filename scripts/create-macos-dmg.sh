@@ -41,9 +41,26 @@ fi
 mkdir -p "$dmg_directory"
 rm -f "$dmg"
 
+# Tauri deja una firma ad-hoc parcial cuando se construye sin identidad Apple.
+# Antes de distribuir, se vuelve a firmar por completo para que Gatekeeper no
+# interprete el bundle como dañado. No sustituye la firma/notarización de Apple:
+# sigue siendo un instalador sin firmar de distribución.
+codesign --force --deep --sign - "$app"
+codesign --verify --deep --strict --verbose=2 "$app"
+
 # Evita el script create-dmg interno de Tauri: en macos-15-intel puede fallar al
-# montar la imagen temporal aunque la .app se haya construido correctamente.
-hdiutil create -volname 'EmoVest' -srcfolder "$app" -format UDZO -ov "$dmg"
+# montar la imagen temporal aunque la .app se haya construido correctamente. El
+# staging añade el acceso estándar a Aplicaciones para que Finder permita arrastrar
+# EmoVest.app a /Applications.
+staging_directory="$(mktemp -d "${TMPDIR:-/tmp}/emovest-dmg.XXXXXX")"
+cleanup() {
+  rm -rf "$staging_directory"
+}
+trap cleanup EXIT
+
+ditto "$app" "$staging_directory/EmoVest.app"
+ln -s /Applications "$staging_directory/Applications"
+hdiutil create -volname 'EmoVest' -srcfolder "$staging_directory" -format UDZO -ov "$dmg"
 hdiutil verify "$dmg"
 
 echo "DMG macOS creado: $dmg"
